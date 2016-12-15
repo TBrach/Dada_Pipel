@@ -365,36 +365,102 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         
         ##############################
-        ### Denoising (dada command for all samples)
+        ### Denoising (dada command for all samples) and bimeara identification
         ##############################
         
-        #### NB: write here an alternative if err_F and err_R were NULL and 
-        ## NSAM.LEARN = length(SampleNames)
-        ## AND 
+        #### NB: if all samples have been used to generate drp.learnR, dd.learnR, drp.learnF, dd.learnF, these should of course be used
+        # instead of running again through all samples, therefore the following if check
         
-        rm(drp.learnF, drp.learnR, dd.learnF, dd.learnR)
-        
-        mergers <- vector("list", length(SampleNames))
-        names(mergers) <- SampleNames
-        NoFilteredReads <- vector("numeric", length(SampleNames))
-        names(NoFilteredReads) <- SampleNames
-        bimFs <- vector("list", length(SampleNames))
-        names(bimFs) <- SampleNames
-        bimRs <- vector("list", length(SampleNames))
-        names(bimRs) <- SampleNames
-        
-        for(sam in SampleNames) {
-                cat("Processing:", sam, "\n")
-                cat(paste("\nDenoising sample:", sam), file = LogFile, append = TRUE)
-                derepF <- derepFastq(filtFs[[sam]])
-                NoFilteredReads[sam] <- sum(derepF$uniques)
-                ddF <- dada(derepF, err=err_F, multithread=TRUE) 
-                bimFs[[sam]] <- isBimeraDenovo(ddF, verbose=TRUE)
-                derepR <- derepFastq(filtRs[[sam]])
-                ddR <- dada(derepR, err=err_R, multithread=TRUE)
-                bimRs[[sam]] <- isBimeraDenovo(ddR, verbose=TRUE)
-                merger <- mergePairs(ddF, derepF, ddR, derepR, minOverlap = minOverlap, maxMismatch = maxMismatch)
-                mergers[[sam]] <- merger
+        if (NSAM.LEARN == length(SampleNames) & exists("drp.learnR", inherits = FALSE) & exists("drp.learnF", inherits = FALSE) &
+            exists("dd.learnR", inherits = FALSE) & exists("dd.learnF", inherits = FALSE)) {
+                # if drp.learnF and R have been generated in this function and all samples where used for doing so, then:
+                
+                #NB: the follwoing demands that the samples were denoised in the given order, i.e. just 1:NSAM.LEARN was used not the sample command!!
+                names(dd.learnF) <- SampleNames
+                names(drp.learnF) <- SampleNames
+                names(dd.learnR) <- SampleNames
+                names(drp.learnR) <- SampleNames
+                
+                ## only for the ReadSummary later
+                Uniques_F <- sapply(1:length(SampleNames), function(i) length(drp.learnF[[i]]$uniques))
+                Uniques_R <- sapply(1:length(SampleNames), function(i) length(drp.learnR[[i]]$uniques))
+                Denoised_F <- sapply(1:length(SampleNames), function(i) length(dd.learnF[[i]]$denoised))
+                Denoised_R <- sapply(1:length(SampleNames), function(i) length(dd.learnR[[i]]$denoised))
+                names(Uniques_F) <- SampleNames
+                names(Uniques_R) <- SampleNames
+                names(Denoised_F) <- SampleNames
+                names(Denoised_R) <- SampleNames
+                ##
+                
+                mergers <- vector("list", length(SampleNames))
+                names(mergers) <- SampleNames
+                NoFilteredReads <- vector("numeric", length(SampleNames))
+                names(NoFilteredReads) <- SampleNames
+                bimFs <- vector("list", length(SampleNames))
+                names(bimFs) <- SampleNames
+                bimRs <- vector("list", length(SampleNames))
+                names(bimRs) <- SampleNames
+                
+                for(sam in SampleNames) {
+                        cat("Processing:", sam, "\n")
+                        #cat(paste("\nDenoising sample:", sam), file = LogFile, append = TRUE)
+                        derepF <- drp.learnF[[sam]]
+                        NoFilteredReads[sam] <- sum(derepF$uniques)
+                        ddF <- dd.learnF[[sam]] 
+                        bimFs[[sam]] <- isBimeraDenovo(ddF, verbose=TRUE)
+                        derepR <- drp.learnR[[sam]]
+                        ddR <- dd.learnR[[sam]]
+                        bimRs[[sam]] <- isBimeraDenovo(ddR, verbose=TRUE)
+                        merger <- mergePairs(ddF, derepF, ddR, derepR, minOverlap = minOverlap, maxMismatch = maxMismatch)
+                        mergers[[sam]] <- merger
+                        
+                        rm(derepF, derepR, ddF, ddR, merger)
+                }
+                
+                rm(drp.learnF, drp.learnR, dd.learnF, dd.learnR)
+                
+        } else {
+                
+                rm(drp.learnF, drp.learnR, dd.learnF, dd.learnR)
+                
+                mergers <- vector("list", length(SampleNames))
+                names(mergers) <- SampleNames
+                NoFilteredReads <- vector("numeric", length(SampleNames))
+                names(NoFilteredReads) <- SampleNames
+                bimFs <- vector("list", length(SampleNames))
+                names(bimFs) <- SampleNames
+                bimRs <- vector("list", length(SampleNames))
+                names(bimRs) <- SampleNames
+                Uniques_F <- vector("numeric", length(SampleNames))
+                names(Uniques_F) <- SampleNames
+                Uniques_R <- vector("numeric", length(SampleNames))
+                names(Uniques_R) <- SampleNames
+                Denoised_F <- vector("numeric", length(SampleNames))
+                names(Denoised_F) <- SampleNames
+                Denoised_R <- vector("numeric", length(SampleNames))
+                names(Denoised_R) <- SampleNames
+                
+                for(sam in SampleNames) {
+                        cat("Processing:", sam, "\n")
+                        cat(paste("\nDenoising sample:", sam), file = LogFile, append = TRUE)
+                        derepF <- derepFastq(filtFs[[sam]])
+                        NoFilteredReads[sam] <- sum(derepF$uniques)
+                        ddF <- dada(derepF, err=err_F, multithread=TRUE) 
+                        bimFs[[sam]] <- isBimeraDenovo(ddF, verbose=TRUE)
+                        Uniques_F[sam] <- length(derepF$uniques)
+                        Denoised_F[sam] <- length(ddF$denoised)
+                        
+                        derepR <- derepFastq(filtRs[[sam]])
+                        ddR <- dada(derepR, err=err_R, multithread=TRUE)
+                        bimRs[[sam]] <- isBimeraDenovo(ddR, verbose=TRUE)
+                        Uniques_R[sam] <- length(derepR$uniques)
+                        Denoised_R[sam] <- length(ddR$denoised)
+                        merger <- mergePairs(ddF, derepF, ddR, derepR, minOverlap = minOverlap, maxMismatch = maxMismatch)
+                        mergers[[sam]] <- merger
+                        
+                        rm(derepF, derepR, ddF, ddR, merger)
+                }
+                
         }
         
         if(!all((sapply(1:length(mergers), function(i) dim(mergers[[i]])[1]))!=0)){
@@ -407,11 +473,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 stop("**In none of the samples merged amplicons could be found! maybe minOverlap too strict??**")
         }
         
-        rm(derepF, derepR, ddF, ddR, merger)
-        
-        message("*********************** all samples denoised ***********************
+        message("*********************** all samples denoised, bimeras identified, mergerd amplicons generated ***********************
                         ********************************************************************")
-        cat("\n*** all samples denoised ***", file = LogFile, append = TRUE)
+        cat("\n*** all samples denoised, bimeras identified, mergerd amplicons generated ***", file = LogFile, append = TRUE)
         TimePassed <- proc.time()-ptm
         cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
         
@@ -436,7 +500,26 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         seqtab <- makeSequenceTable(mergers.nochim)
         
-        save(seqtab, mergers, mergers.nochim, bimFs, bimRs, NoFilteredReads, file = file.path(DataFolder, "DenoiseData.RData"))
+        ## generate also a read summary data frame
+        QStatsList <- F_QualityStats
+        for (i in seq_along(QStatsList)) {
+                QStatsList[[i]]$Sample <- names(QStatsList[i])
+        }
+        ReadSummary <- do.call("rbind",QStatsList)
+        ReadSummary <- df.all[!duplicated(df.all$Sample), c("Sample", "NoReads")]
+        ReadSummary$Filtered <- NoFilteredReads
+        ReadSummary$Merged <- sapply(1:length(SampleNames), function(i) sum(mergers[[i]]$abundance))
+        ReadSummary$NoChimera <- sapply(1:length(SampleNames), function(i) sum(mergers.nochim[[i]]$abundance))
+        ReadSummary$Uniques_F <- Uniques_F
+        ReadSummary$Denoised_F <- Denoised_F
+        ReadSummary$bimera_F <- sapply(1:length(SampleNames), function(i) sum(bimFs[[i]]))
+        ReadSummary$Uniques_R <- Uniques_R
+        ReadSummary$Denoised_R <- Denoised_R
+        ReadSummary$bimera_R <- sapply(1:length(SampleNames), function(i) sum(bimRs[[i]]))
+        ReadSummary$Unique_Amplicons <- sapply(1:length(SampleNames), function(i) dim(mergers[[i]])[1])
+        ReadSummary$Unique_Amplicons_nochim <- sapply(1:length(SampleNames), function(i) dim(mergers.nochim[[i]])[1])
+        
+        save(seqtab, mergers, mergers.nochim, bimFs, bimRs, ReadSummary, file = file.path(DataFolder, "DenoisedData.RData"))
         
         message("*********************** Sequence table generated, Data saved ***********************
                         ********************************************************************")
@@ -447,18 +530,24 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ### Summary Plots
         ##############################
         
-        pdf(file = file.path(PlotFolder, "NoReads_AllSamples.pdf"), width = 17, height = 6)
+        # the width of the plots probably needs adjustment
+        width = 5 + 0.5*(length(SampleNames)/10)
+        
+        # Plot the number of reads at the different steps for each sample (see also ReadSummary)
+        pdf(file = file.path(PlotFolder, "NoReads_AllSamples.pdf"), width = width, height = 6)
         print(NoReads_Steps(QStatsList = F_QualityStats, NoFilteredReads = NoFilteredReads, mergers = mergers, mergers.nochim = mergers.nochim, SampleNames = SampleNames, sort = TRUE))
         dev.off()
         
+        # PLot the total number of amplicons against the number of unique amplicons for each sample
         FinalNumbers <- data.frame(Sample = rownames(seqtab), UniqueAmplicons = rowSums(seqtab != 0), NoAmplicons = rowSums(seqtab))
         
-        Tr <- TotalandUniqueAmplicons(FinalNumbers)
-        pdf(file = file.path(PlotFolder, "TotalvsUniqueAmplicons.pdf"), width = 17, height = 6)
+        Tr <- TotalandUniqueAmplicons(FinalNumbers = FinalNumbers, seqtab = seqtab)
+        pdf(file = file.path(PlotFolder, "TotalvsUniqueAmplicons.pdf"), width = width, height = 6)
         print(Tr)
         dev.off()
         
-        
+        # Plot a linear regression line to illustrate the possible association between the total number of amplicons and the number of 
+        # unique amplicons
         Tr2 <- ggplot(FinalNumbers, aes(x = NoAmplicons, y = UniqueAmplicons)) +
                 geom_point() +
                 geom_smooth(method = "lm", se = FALSE) +
@@ -471,14 +560,18 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         
         pdf(file = file.path(PlotFolder, "AssociationTotaltoUniqueAmplicons.pdf"), width = 7, height = 6)
-        print(Tr)
+        print(Tr2)
         dev.off()
         
+        # Plot a histogram illustrating in how many samples the amplicons are present
+        if(length(SampleNames) < 10) {binwidth = 1}
+        if(length(SampleNames) > 10 & length(SampleNames) < 100) {binwidth = 2}
+        if(length(SampleNames) > 100) {binwidth = 3}
         
         FinalNumbers2 <- data.frame(InNoSamples = colSums(seqtab != 0))
         
         Trr <- ggplot(data = FinalNumbers2, aes(x = InNoSamples))  + 
-                geom_histogram(binwidth = 3, col = "black", fill = "#E69F00")+
+                geom_histogram(binwidth = binwidth, col = "black", fill = "#E69F00")+
                 geom_rug() +
                 xlab("Present in No Samples") + 
                 ylab("Count") +

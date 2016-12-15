@@ -1,5 +1,5 @@
-source("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD_Dada/161107_Dada_PlotFunctions.R")
-source("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD_Dada/161209_DadaWrapFunction.R")
+source("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/161107_Dada_PlotFunctions.R")
+source("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/161209_DadaWrapFunction.R")
 # 
 # Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD",
 #            F_pattern = "*F.fastq.gz", R_pattern <- "*R.fastq.gz")
@@ -17,7 +17,7 @@ Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learnin
            maxEE = 1,
            maxN = 0,
            truncQ = 2,
-           NSAM.LEARN = NULL,
+           NSAM.LEARN = 2,
            err_F = NULL,
            err_R = NULL,
            minOverlap = 20,

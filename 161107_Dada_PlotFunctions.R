@@ -457,7 +457,7 @@ NoReads_Steps <- function(QStatsList = NULL, NoFilteredReads = NULL, mergers = N
 # NB: requires tidyr
 
 
-TotalandUniqueAmplicons <- function(FinalNumbers, sort =TRUE) {
+TotalandUniqueAmplicons <- function(FinalNumbers, seqtab, sort =TRUE) {
   
   ## show the final amplicon numbers in a plot
   FinalNumbers$TotalAmplicons <- FinalNumbers$NoAmplicons/100 
@@ -473,8 +473,6 @@ TotalandUniqueAmplicons <- function(FinalNumbers, sort =TRUE) {
     }
     
   }
-  
-  
   
   Tr <- ggplot(FinalNumbersL, aes(x = Sample, y = Number, col = Type)) +
     geom_point() +
@@ -493,3 +491,5 @@ TotalandUniqueAmplicons <- function(FinalNumbers, sort =TRUE) {
   return(Tr)
   
 }
+
+
