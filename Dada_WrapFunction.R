@@ -506,7 +506,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 QStatsList[[i]]$Sample <- names(QStatsList[i])
         }
         ReadSummary <- do.call("rbind",QStatsList)
-        ReadSummary <- df.all[!duplicated(df.all$Sample), c("Sample", "NoReads")]
+        ReadSummary <- ReadSummary[!duplicated(ReadSummary$Sample), c("Sample", "NoReads")]
         ReadSummary$Filtered <- NoFilteredReads
         ReadSummary$Merged <- sapply(1:length(SampleNames), function(i) sum(mergers[[i]]$abundance))
         ReadSummary$NoChimera <- sapply(1:length(SampleNames), function(i) sum(mergers.nochim[[i]]$abundance))
@@ -518,6 +518,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ReadSummary$bimera_R <- sapply(1:length(SampleNames), function(i) sum(bimRs[[i]]))
         ReadSummary$Unique_Amplicons <- sapply(1:length(SampleNames), function(i) dim(mergers[[i]])[1])
         ReadSummary$Unique_Amplicons_nochim <- sapply(1:length(SampleNames), function(i) dim(mergers.nochim[[i]])[1])
+        rownames(ReadSummary) <- NULL
         
         save(seqtab, mergers, mergers.nochim, bimFs, bimRs, ReadSummary, file = file.path(DataFolder, "DenoisedData.RData"))
         
