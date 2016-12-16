@@ -1,14 +1,34 @@
-#path <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD"
-#F_pattern <- "*F.fastq.gz"
-#R_pattern <- "*R.fastq.gz"
-
+#######################################
+### Dada2_wrap
+#######################################
 ## Input
-# path: The path to the folder with the fastq files: NB: currently only the version
-# where the path folder contains folders (named after the samples) that contain the fastq files
-# Further versions such as fastq files directly in the path folder should be added when
-# necessary
-
-# NB: the plots are currently assuming 250 nt
+# path: The path to the folder containing the sample folders with the fastq files: 
+# F_pattern: a regular expression to find the fastq files with the forward reads in the sample folders
+# R_pattern: a regular expression to find the fastq files with the reverse reads in the sample folders
+# path2: default = NULL, the function creates three folders Dada_Plots, it creates them by default in the path folder, when path2 is given 
+# the folders will instead be generated in path2
+# trimLeft: = trimLeft from the fastqPairedFilter command (how many nucleotids will be clipped from the beginning of the reads)
+# truncLen: = truncLen from the fastqPairedFilter command (where the reads will be truncated)
+# maxN: = maxN from the fastqPairedFilter command
+# maxEE: = maxEE from the fastqPairedFilter command, the maximum expected error allowed to let a read pass the filter
+# trunQ: = truncQ from the fastqPairedFilter command
+# NSAM.LEARN: default = NULL: the number of samples used to estimate the F and R error matrixes. When NULL all samples are used. 
+# Should account for a number of samples that in total have about 1 milliion filtered reads (number will be given in the log file)
+# err_F: the error matrix for the dada command for the forward reads. Default NULL then the error matrix will be estimated (using SelfConsit = TRUE)
+# err_R: analogous to err_F for the reverse reads
+# minOverlap: = minOverlap from the mergePairs command
+# maxMismatch: = maxMismatch from the mergePairs command
+## Output
+# PLOTS:
+# Several Plots saved as pdfs in generated Dada_Plots folder # NB: the plots are currently assuming 250 nt
+# DATA AND LOG FILE:
+# Data and the file DadaWrapper.log are saved in the generated folder: Dada_Data
+# DenoisedData.RData contains: seqtab (final sequence table), mergers, mergers.nochim, bimFs, bimRs, 
+# ReadSummary (data frame summarising the reads and amplicons at the different stages), SamplesFor_errF, SamplesFor_errR
+# QualityStats.RData contains PackageVersions, F_QualityStats, R_QualityStats
+# FILTERED FASTQ files
+# are stored in the generated folder Dada_FilteredFastqs
+# NB the filtered fastq files are currently named "SampleName"_F_Filtered.fastq.gz and "SampleName"_R_Filtered.fastq.gz
 
 Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                        trimLeft = c(10,10), truncLen = c(220, 160), 
@@ -75,19 +95,22 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         }
         
         
-        folders <- list.dirs(path, recursive = FALSE, full.names = FALSE) 
+        folders <- list.dirs(path, recursive = FALSE, full.names = FALSE)
         
         if(length(folders != 0)) {
                 
                 SampleNames <- folders
                 
-                if(sum(grepl("Dada", SampleNames)) != 0){
-                        warning("**There are folders with \"Dada\" in, so you might have run the function on the folder before\n.
-                                Folders without fastq files that fit the F and R patterns will cause an error below")
+                if(sum(grepl("^Dada", SampleNames)) != 0){
+                        warning("**There are folders starting with \"Dada\" in your path folder, maybe you have run the function on this path folder before\n.
+                                The folders starting with Dada will not be considered sample folders!!\n Files within Dada_Data Dada_FilteredFastqs and Dada_Plots will be overwritten**")
                 }
                 
-                F_fastq <- character(length = length(folders))
-                R_fastq <- character(length = length(folders))
+                # exclude Folders starting with "Dada" from the folders considered as sample fodlers
+                SampleNames <- SampleNames[-grep("^Dada", SampleNames)]
+                
+                F_fastq <- character(length = length(SampleNames))
+                R_fastq <- character(length = length(SampleNames))
                 
                 for (i in 1:length(SampleNames)) {
                         CurrentPath <- file.path(path, SampleNames[i])
@@ -121,6 +144,13 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ##############################
         
         DataFolder <- file.path(path2, "Dada_Data")
+        
+        ## Not sure if this is wanted, deleting all files that are already in the DataFolder folder
+        if(file.exists(DataFolder)){
+                file.remove(list.files(DataFolder, full.names = TRUE))
+        }
+        
+        
         dir.create(DataFolder, showWarnings = FALSE)
         
         LogFile <- file.path(DataFolder, "DadaWrapper.log")
@@ -221,6 +251,12 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ##############################
         
         PlotFolder <- file.path(path2, "Dada_Plots")
+        
+        ## Not sure if this is wanted, deleting all files that are already in the PlotFolder folder
+        if(file.exists(PlotFolder)){
+                file.remove(list.files(PlotFolder, full.names = TRUE))
+        }
+        
         dir.create(PlotFolder, showWarnings = FALSE)
         
         
@@ -229,7 +265,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         dev.off()
         
         pdf(file = file.path(PlotFolder, "MedianQScore_F_150to240.pdf"), width = 7, height = 6)
-        print(QS_Median_OverviewPlot(F_QualityStats, folders, xlim_low = 150, xlim_high = 240))
+        print(QS_Median_OverviewPlot(F_QualityStats, SampleNames, xlim_low = 150, xlim_high = 240))
         dev.off()
         
         pdf(file = file.path(PlotFolder, "MedianQScore_R_AllNucleotides.pdf"), width = 7, height = 6)
@@ -237,7 +273,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         dev.off()
         
         pdf(file = file.path(PlotFolder, "MedianQScore_R_150to240.pdf"), width = 7, height = 6)
-        print(QS_Median_OverviewPlot(R_QualityStats, folders, xlim_low = 150, xlim_high = 240))
+        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames, xlim_low = 150, xlim_high = 240))
         dev.off()
         
         message("*********************** Plots generated start filtering ***********************
@@ -250,6 +286,12 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ##############################
         
         FilteredFolder <- file.path(path2, "Dada_FilteredFastqs")
+        
+        ## Not sure if this is wanted, deleting all files that are already in the DataFolder folder
+        if(file.exists(FilteredFolder)){
+                file.remove(list.files(FilteredFolder, full.names = TRUE))
+        }
+        
         dir.create(FilteredFolder, showWarnings = FALSE)
         
         filtFs <- file.path(FilteredFolder, paste0(SampleNames, "_F_Filtered.fastq.gz"))
@@ -296,10 +338,19 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         message("Your NSAM.LEARN covered all samples, i.e. all samples are used for err_F estimation")
                 }
                 
+                # Random selection of samples used for err_F estimation unless all samples are used
                 
-                drp.learnF <- derepFastq(filtFs[1:NSAM.LEARN])
+                if(NSAM.LEARN == length(SampleNames)){
+                        SamplesFor_errF <- filtFs
+                } else {
+                        prng <- .Random.seed
+                        SamplesFor_errF <- sample(filtFs, NSAM.LEARN)
+                        attr(SamplesFor_errF, "seed") <- prng
+                }
                 
-                ReadsForErrFEstimation <- sum(sapply(1:NSAM.LEARN, function(x) sum(drp.learnF[[x]]$uniques)))
+                drp.learnF <- derepFastq(SamplesFor_errF)
+                
+                ReadsForErrFEstimation <- sum(sapply(1:length(drp.learnF), function(x) sum(drp.learnF[[x]]$uniques)))
                 
                 message(paste("**", ReadsForErrFEstimation, "reads will be used for err_F estimation **"))
                 
@@ -316,7 +367,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 message("*********************** err_F has been estimated ***********************
                 ********************************************************************")
                 cat("\n*** err_F has been estimated ***", file = LogFile, append = TRUE)
-                cat(paste("\nSamples used for err_F estimation: ", NSAM.LEARN), file = LogFile, append = TRUE)
+                cat(paste("\nNumber of samples used for err_F estimation: ", NSAM.LEARN), file = LogFile, append = TRUE)
+                cat("\nSamples used for err_F estimation: \n", file = LogFile, append = TRUE)
+                cat(paste(SampleNames[sort(match(names(SamplesFor_errF), SampleNames))]), file = LogFile, append = TRUE)
                 cat(paste("\nReads used for err_F estimation: ", ReadsForErrFEstimation), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
                 cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
@@ -338,10 +391,18 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         message("Your NSAM.LEARN covered all samples, i.e. all samples are used for err_R estimation")
                 }
                 
+                # Random selection of samples used for err_F estimation unless all samples are used
+                if(NSAM.LEARN == length(SampleNames)){
+                        SamplesFor_errR <- filtRs
+                } else {
+                        prng <- .Random.seed
+                        SamplesFor_errR <- sample(filtRs, NSAM.LEARN)
+                        attr(SamplesFor_errR, "seed") <- prng
+                }
                 
-                drp.learnR <- derepFastq(filtRs[1:NSAM.LEARN])
+                drp.learnR <- derepFastq(SamplesFor_errR)
                 
-                ReadsForErrREstimation <- sum(sapply(1:NSAM.LEARN, function(x) sum(drp.learnR[[x]]$uniques)))
+                ReadsForErrREstimation <- sum(sapply(1:length(drp.learnR), function(x) sum(drp.learnR[[x]]$uniques)))
                 
                 message(paste("**", ReadsForErrREstimation, "reads will be used for err_R estimation **"))
                 
@@ -356,12 +417,15 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 message("*********************** err_R has been estimated ***********************
                         ********************************************************************")
                 cat("\n*** err_R has been estimated ***", file = LogFile, append = TRUE)
-                cat(paste("\nSamples used for err_R estimation: ", NSAM.LEARN), file = LogFile, append = TRUE)
+                cat(paste("\nNumber of samples used for err_R estimation: ", NSAM.LEARN), file = LogFile, append = TRUE)
+                cat("\nSamples used for err_R estimation: \n", file = LogFile, append = TRUE)
+                cat(paste(SampleNames[sort(match(names(SamplesFor_errR), SampleNames))]), file = LogFile, append = TRUE)
                 cat(paste("\nReads used for err_R estimation: ", ReadsForErrREstimation), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
                 cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
-                
+
         }
+        
         
         
         ##############################
@@ -520,7 +584,11 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ReadSummary$Unique_Amplicons_nochim <- sapply(1:length(SampleNames), function(i) dim(mergers.nochim[[i]])[1])
         rownames(ReadSummary) <- NULL
         
-        save(seqtab, mergers, mergers.nochim, bimFs, bimRs, ReadSummary, file = file.path(DataFolder, "DenoisedData.RData"))
+        if(!exists("SamplesFor_errF")){SamplesFor_errF = NULL}
+        if(!exists("SamplesFor_errR")){SamplesFor_errR = NULL}
+        
+        save(seqtab, mergers, mergers.nochim, bimFs, bimRs, ReadSummary, SamplesFor_errF,
+             SamplesFor_errR, file = file.path(DataFolder, "DenoisedData.RData"))
         
         message("*********************** Sequence table generated, Data saved ***********************
                         ********************************************************************")
