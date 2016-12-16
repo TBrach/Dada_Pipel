@@ -1,11 +1,13 @@
 #######################################
-### Dada2_wrap
+### FUNCTION: Dada2_wrap
 #######################################
+
+# Function that runs the dada2 pipeline up to the sequence table (seqtab)
 ## Input
 # path: The path to the folder containing the sample folders with the fastq files: 
 # F_pattern: a regular expression to find the fastq files with the forward reads in the sample folders
 # R_pattern: a regular expression to find the fastq files with the reverse reads in the sample folders
-# path2: default = NULL, the function creates three folders Dada_Plots, it creates them by default in the path folder, when path2 is given 
+# path2: default = NULL, the function creates three folders Dada_Plots, Dada_Data and Dada_FilteredFastqs, it creates them by default in the path folder, when path2 is given 
 # the folders will instead be generated in path2
 # trimLeft: = trimLeft from the fastqPairedFilter command (how many nucleotids will be clipped from the beginning of the reads)
 # truncLen: = truncLen from the fastqPairedFilter command (where the reads will be truncated)
@@ -64,12 +66,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         message("*********************** All packages loaded ***********************
                 ********************************************************************")
-        
-        
-        ## tidyr
-        # library(tidyr)
-        ##############################
-        
+
         ##############################
         ### save the package Versions
         ##############################
@@ -81,9 +78,6 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                                                   packageVersion("dplyr")))
         
         message(paste(PackageVersions$Package, ": ", PackageVersions$Version, "; ", sep= ""))
-        ##############################
-        
-        
         
         
         ##############################
@@ -107,7 +101,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 
                 # exclude Folders starting with "Dada" from the folders considered as sample fodlers
-                SampleNames <- SampleNames[-grep("^Dada", SampleNames)]
+                if(length(grep("^Dada", SampleNames))!=0) {
+                        SampleNames <- SampleNames[-grep("^Dada", SampleNames)]
+                }
                 
                 F_fastq <- character(length = length(SampleNames))
                 R_fastq <- character(length = length(SampleNames))
@@ -177,7 +173,6 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ##############################
         
         ## Collect quality Score data of the fastQ files and store a data.frame for each sample in the lists FW_QualityStats and RV_QualityStats ####################
-        
         
         F_QualityStats <- list()
         R_QualityStats <- list()
@@ -323,7 +318,6 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         cat("\n*** Filtering Done ***", file = LogFile, append = TRUE)
         cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
         
-        
         ##############################
         ### Estimate err_F matrix
         ##############################
@@ -350,7 +344,11 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 
                 drp.learnF <- derepFastq(SamplesFor_errF)
                 
-                ReadsForErrFEstimation <- sum(sapply(1:length(drp.learnF), function(x) sum(drp.learnF[[x]]$uniques)))
+                if(class(drp.learnF) == "list") {
+                        ReadsForErrFEstimation <- sum(sapply(1:length(drp.learnF), function(x) sum(drp.learnF[[x]]$uniques)))
+                } else {
+                        ReadsForErrFEstimation <- sum(drp.learnF$uniques)
+                }
                 
                 message(paste("**", ReadsForErrFEstimation, "reads will be used for err_F estimation **"))
                 
@@ -358,10 +356,18 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 # ## NB: The determined error rates are all identical, so here samples were pooled that is why it took so long
                 # identical(dd.learnF[[1]]$err_out, dd.learnF[[2]]$err_out, dd.learnF[[3]]$err_out)
                 
-                err_F <- dd.learnF[[1]]$err_out
+                if(class(dd.learnF) == "list") {
+                        err_F <- dd.learnF[[1]]$err_out
+                } else {
+                        err_F <- dd.learnF$err_out
+                }
                 
                 pdf(file = file.path(PlotFolder, "errorRates_F_Sample1.pdf"), width = 10, height = 10)
-                print(plotErrors(dd.learnF[[1]], nominalQ=TRUE))
+                if(class(dd.learnF) == "list") {
+                        print(plotErrors(dd.learnF[[1]], nominalQ=TRUE))
+                } else {
+                        print(plotErrors(dd.learnF, nominalQ=TRUE))
+                }
                 dev.off()
                 
                 message("*********************** err_F has been estimated ***********************
@@ -402,16 +408,28 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 
                 drp.learnR <- derepFastq(SamplesFor_errR)
                 
-                ReadsForErrREstimation <- sum(sapply(1:length(drp.learnR), function(x) sum(drp.learnR[[x]]$uniques)))
+                if(class(drp.learnR) == "list") {
+                        ReadsForErrREstimation <- sum(sapply(1:length(drp.learnR), function(x) sum(drp.learnR[[x]]$uniques)))
+                } else {
+                        ReadsForErrREstimation <- sum(drp.learnR$uniques)
+                }
                 
                 message(paste("**", ReadsForErrREstimation, "reads will be used for err_R estimation **"))
                 
                 dd.learnR <- dada(drp.learnR, err=NULL, selfConsist=TRUE, multithread=TRUE)
                 
-                err_R <- dd.learnR[[1]]$err_out
+                if(class(dd.learnR) == "list") {
+                        err_R <- dd.learnR[[1]]$err_out
+                } else {
+                        err_R <- dd.learnR$err_out
+                }
                 
                 pdf(file = file.path(PlotFolder, "errorRates_R_Sample1.pdf"), width = 10, height = 10)
-                print(plotErrors(dd.learnR[[1]], nominalQ=TRUE))
+                if(class(dd.learnR) == "list") {
+                        print(plotErrors(dd.learnR[[1]], nominalQ=TRUE))
+                } else {
+                        print(plotErrors(dd.learnR, nominalQ=TRUE))
+                }
                 dev.off()
                 
                 message("*********************** err_R has been estimated ***********************
@@ -426,8 +444,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
 
         }
         
-        
-        
+
         ##############################
         ### Denoising (dada command for all samples) and bimeara identification
         ##############################
@@ -656,3 +673,235 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         dev.off()
         
 }
+
+
+
+#######################################
+### FUNCTION: Dada2_QualityCheck
+#######################################
+
+# runs the first part of the Dada2_wrap function, creating the quality plots and data. Based on these one can decide on the filtering
+# parameters when using the Dada2_wrap function subsequently
+## Input
+# path: The path to the folder containing the sample folders with the fastq files: 
+# F_pattern: a regular expression to find the fastq files with the forward reads in the sample folders
+# R_pattern: a regular expression to find the fastq files with the reverse reads in the sample folders
+# path2: default = NULL, the function creates the folders Dada_Plots and Dada_Data, it creates them by default in the path folder, when path2 is given 
+# the folders will instead be generated in path2
+## Output
+# PLOTS:
+# Quality Plots saved as pdfs in the generated Dada_Plots folder # NB: the plots are currently assuming 250 nt
+# DATA:
+# saved in the Dada_Data folder:
+# QualityStats.RData contains PackageVersions, F_QualityStats, and R_QualityStats
+
+Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
+        
+        ##############################
+        ### call the required packages
+        ##############################
+        
+        ## dada2:
+        # source("https://bioconductor.org/biocLite.R")
+        try(library(dada2), biocLite("dada2"))
+        
+        ## Short Read
+        try(library(ShortRead), biocLite("ShortRead"))
+        
+        ## ggplot2
+        try(library(ggplot2), install.packages("ggplot2"))
+        
+        ## dplyr
+        try(library(dplyr), install.packages("dplyr"))
+        
+        ## dplyr
+        try(library(tidyr), install.packages("tidyr"))
+        
+        
+        message("*********************** All packages loaded ***********************
+                ********************************************************************")
+        
+        ##############################
+        ### save the package Versions
+        ##############################
+        # NB: outputs an error and stops function if a Package is not installed
+        PackageVersions <- data.frame(Package = c("dada2", "ShortRead", "ggplot2", "dplyr"),
+                                      Version = c(packageVersion("dada2"),
+                                                  packageVersion("ShortRead"),
+                                                  packageVersion("ggplot2"),
+                                                  packageVersion("dplyr")))
+        
+        message(paste(PackageVersions$Package, ": ", PackageVersions$Version, "; ", sep= ""))
+        
+        ##############################
+        ### Construct character vectors to the FW and RV fastq files
+        ##############################
+        if(is.null(path2)){
+                
+                path2 = path
+        }
+        
+        
+        folders <- list.dirs(path, recursive = FALSE, full.names = FALSE)
+        
+        if(length(folders != 0)) {
+                
+                SampleNames <- folders
+                
+                if(sum(grepl("^Dada", SampleNames)) != 0){
+                        warning("**There are folders starting with \"Dada\" in your path folder, maybe you have run the function on this path folder before\n.
+                                The folders starting with Dada will not be considered sample folders!!\n Files within Dada_Data Dada_FilteredFastqs and Dada_Plots will be overwritten**")
+                }
+                
+                # exclude Folders starting with "Dada" from the folders considered as sample fodlers
+                if(length(grep("^Dada", SampleNames))!=0) {
+                        SampleNames <- SampleNames[-grep("^Dada", SampleNames)]
+                }
+                
+                F_fastq <- character(length = length(SampleNames))
+                R_fastq <- character(length = length(SampleNames))
+                
+                for (i in 1:length(SampleNames)) {
+                        CurrentPath <- file.path(path, SampleNames[i])
+                        
+                        if(sum(grepl(F_pattern, list.files(CurrentPath))) == 0) {
+                                stop(paste("F_pattern fits no file in ", CurrentPath))
+                        }
+                        if(sum(grepl(F_pattern, list.files(CurrentPath))) > 1) {
+                                stop(paste("F_pattern fits several files in ", CurrentPath))
+                        }
+                        if(sum(grepl(R_pattern, list.files(CurrentPath))) == 0) {
+                                stop(paste("R_pattern fits no file in ", CurrentPath))
+                        }
+                        if(sum(grepl(R_pattern, list.files(CurrentPath))) > 1) {
+                                stop(paste("R_pattern fits several files in ", CurrentPath))
+                        }
+                        F_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(F_pattern, list.files(CurrentPath))])
+                        R_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(R_pattern, list.files(CurrentPath))])
+                        
+                }
+                
+                # silly check
+                if (!identical(length(F_fastq), length(R_fastq))) {
+                        stop("Number of F and R fastq files differs? But why???")
+                }
+                
+                }
+        
+        
+        ##############################
+        ### Determine the quality scores and save the stats in Data folder
+        ##############################
+        
+        DataFolder <- file.path(path2, "Dada_Data")
+        
+        ## Not sure if this is wanted, deleting all files that are already in the DataFolder folder
+        if(file.exists(DataFolder)){
+                file.remove(list.files(DataFolder, full.names = TRUE))
+        }
+        
+        dir.create(DataFolder, showWarnings = FALSE)
+        
+        ## Collect quality Score data of the fastQ files and store a data.frame for each sample in the lists FW_QualityStats and RV_QualityStats ####################
+        
+        F_QualityStats <- list()
+        R_QualityStats <- list()
+        
+        for (i in seq_along(F_fastq)) {
+                
+                Current_FWfq <- F_fastq[i]
+                Current_dfFW <- qa(Current_FWfq, n = 1e06)[["perCycle"]]$quality
+                # df is a data frame containing for each cycle (nt) the distribution of Quality scores
+                Current_dfFW <- dplyr::group_by(Current_dfFW, Cycle)
+                
+                Current_dfQStatsFW <- dplyr::summarise(
+                        Current_dfFW,
+                        NoReads = sum(Count),
+                        Mean_QS = sum(Count*Score)/sum(Count),
+                        SD_QS = sqrt(sum(Count*((Score-Mean_QS)^2))/(NoReads-1)),
+                        Median_QS = Score[which(cumsum(Count)/sum(Count) >= .5)][[1]],
+                        q25_QS = Score[which(cumsum(Count)/sum(Count) >= .25)][[1]],
+                        q75_QS = Score[which(cumsum(Count)/sum(Count) >= .75)][[1]])
+                
+                ## Check that all reads are of same length
+                x <- range(Current_dfQStatsFW$NoReads)
+                if (!all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5)) {
+                        stop("Not all reads of same length in file", F_fastq[i])
+                }
+                
+                F_QualityStats[[i]] <- as.data.frame(Current_dfQStatsFW)
+                # as.data.frame to un-dplyr the data.frame
+                
+                ####### collect the same stats for the RV FastQ files
+                Current_RVfq <- R_fastq[i]
+                Current_dfRV <- qa(Current_RVfq, n = 1e06)[["perCycle"]]$quality
+                
+                Current_dfRV <- dplyr::group_by(Current_dfRV, Cycle)
+                
+                Current_dfQStatsRV <- dplyr::summarise(
+                        Current_dfRV,
+                        NoReads = sum(Count),
+                        Mean_QS = sum(Count*Score)/sum(Count),
+                        SD_QS = sqrt(sum(Count*((Score-Mean_QS)^2))/(NoReads-1)),
+                        Median_QS = Score[which(cumsum(Count)/sum(Count) >= .5)][[1]],
+                        q25_QS = Score[which(cumsum(Count)/sum(Count) >= .25)][[1]],
+                        q75_QS = Score[which(cumsum(Count)/sum(Count) >= .75)][[1]])
+                
+                ## Check that all reads are of same length
+                x <- range(Current_dfQStatsRV$NoReads)
+                if (!all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5)) {
+                        stop("Not all reads of same length in file", R_fastq[i])
+                }
+                
+                R_QualityStats[[i]] <- as.data.frame(Current_dfQStatsRV)
+                
+                rm(Current_FWfq, Current_dfFW, Current_dfQStatsFW,
+                   Current_RVfq, Current_dfRV, Current_dfQStatsRV, x)
+                
+        }
+        
+        # add the sample names as names to the lists:
+        names(F_QualityStats) <- SampleNames
+        names(R_QualityStats) <- SampleNames
+        
+        save(PackageVersions, F_QualityStats, R_QualityStats, file = file.path(DataFolder, "QualityStats.RData"))
+        
+        message("*********************** Quality Stats Collected ***********************
+                ********************************************************************")
+        
+        ##############################
+        ### Generate and save some quality plots
+        ##############################
+        
+        PlotFolder <- file.path(path2, "Dada_Plots")
+        
+        ## Not sure if this is wanted, deleting all files that are already in the PlotFolder folder
+        if(file.exists(PlotFolder)){
+                file.remove(list.files(PlotFolder, full.names = TRUE))
+        }
+        
+        dir.create(PlotFolder, showWarnings = FALSE)
+        
+        
+        pdf(file = file.path(PlotFolder, "MedianQScore_F_AllNucleotides.pdf"), width = 7, height = 6)
+        print(QS_Median_OverviewPlot(F_QualityStats, SampleNames))
+        dev.off()
+        
+        pdf(file = file.path(PlotFolder, "MedianQScore_F_150to240.pdf"), width = 7, height = 6)
+        print(QS_Median_OverviewPlot(F_QualityStats, SampleNames, xlim_low = 150, xlim_high = 240))
+        dev.off()
+        
+        pdf(file = file.path(PlotFolder, "MedianQScore_R_AllNucleotides.pdf"), width = 7, height = 6)
+        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames))
+        dev.off()
+        
+        pdf(file = file.path(PlotFolder, "MedianQScore_R_150to240.pdf"), width = 7, height = 6)
+        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames, xlim_low = 150, xlim_high = 240))
+        dev.off()
+        
+        message("*********************** Quality plots generated ***********************
+                ********************************************************************")
+}
+
+
+
