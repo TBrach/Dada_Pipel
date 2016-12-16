@@ -1,14 +1,13 @@
-source("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/161107_Dada_PlotFunctions.R")
-source("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/161209_DadaWrapFunction.R")
-# 
-# Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD",
-#            F_pattern = "*F.fastq.gz", R_pattern <- "*R.fastq.gz")
+### Sourcing the plot and the wrapper function
 
-#source("/home/jvb740/DanFunD_Dada/161107_Dada_PlotFunctions.R")
-#source("/home/jvb740/DanFunD_Dada/161209_DadaWrapFunction.R")
+# ATTENTION: change pathToFunctions here if necessary#
+pathToFunctions <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel"
 
+source(file.path(pathToFunctions, "Dada_PlotFunctions.R"))
+source(file.path(pathToFunctions, "Dada_WrapFunction.R"))
+
+### Calling the wrap function (Adjust INPUTS)
 Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD",
-           #path = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD",
            F_pattern = "1.fq.gz", 
            R_pattern = "2.fq.gz",
            path2 = NULL,
@@ -22,3 +21,6 @@ Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learnin
            err_R = NULL,
            minOverlap = 20,
            maxMismatch = 0)
+
+## Then call on terminal
+# Rsript DadaWrapper.R
