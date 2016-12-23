@@ -240,6 +240,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 ********************************************************************")
         
         cat("\n*** Quality Stats Collected ***", file = LogFile, append = TRUE)
+        cat("\n*** Start generating Quality Plots ***", file = LogFile, append = TRUE)
         
         ##############################
         ### Generate and save some quality plots
@@ -275,6 +276,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 ********************************************************************")
         
         cat("\n*** Quality Plots generated ***", file = LogFile, append = TRUE)
+        cat("\n*** Start Filtering ***", file = LogFile, append = TRUE)
         
         ##############################
         ### Filtering
@@ -298,6 +300,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         for(i in seq_along(F_fastq)) {
                 
                 message(paste("**Filtering sample No:", i, "called:", SampleNames[i]), " **")
+                cat(paste("\n**Filtering sample No:", i, "called:", SampleNames[i]), file = LogFile, append = TRUE)
                 fastqPairedFilter(c(F_fastq[i], R_fastq[i]), c(filtFs[i], filtRs[i]), trimLeft = trimLeft, 
                                   truncLen = truncLen, maxN = maxN, maxEE = maxEE, truncQ = truncQ, 
                                   compress=TRUE, verbose=TRUE)
@@ -317,6 +320,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         cat("\n*** Filtering Done ***", file = LogFile, append = TRUE)
         cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
+        cat("\n*** Start estimating err_F if not given ***", file = LogFile, append = TRUE)
         
         ##############################
         ### Estimate err_F matrix
@@ -370,6 +374,8 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 dev.off()
                 
+                save(err_F, PackageVersions, F_QualityStats, R_QualityStats, file = file.path(DataFolder, "QualityStats.RData"))
+                
                 message("*********************** err_F has been estimated ***********************
                 ********************************************************************")
                 cat("\n*** err_F has been estimated ***", file = LogFile, append = TRUE)
@@ -379,6 +385,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 cat(paste("\nReads used for err_F estimation: ", ReadsForErrFEstimation), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
                 cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
+                cat("\n*** Start estimating err_R if not given ***", file = LogFile, append = TRUE)
                 
         }
         
@@ -432,6 +439,8 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 dev.off()
                 
+                save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, file = file.path(DataFolder, "QualityStats.RData"))
+                
                 message("*********************** err_R has been estimated ***********************
                         ********************************************************************")
                 cat("\n*** err_R has been estimated ***", file = LogFile, append = TRUE)
@@ -441,6 +450,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 cat(paste("\nReads used for err_R estimation: ", ReadsForErrREstimation), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
                 cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
+                cat("\n*** Start denoising data, bimera detection, and merging of reads into amplicons***", file = LogFile, append = TRUE)
 
         }
         
@@ -559,6 +569,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         cat("\n*** all samples denoised, bimeras identified, mergerd amplicons generated ***", file = LogFile, append = TRUE)
         TimePassed <- proc.time()-ptm
         cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
+        cat("\n*** Start removing bimera ***", file = LogFile, append = TRUE)
         
         
         ##############################
@@ -573,6 +584,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         message("*********************** Bimeras removed ***********************
                         ********************************************************************")
         cat("\n*** bimeras removed ***", file = LogFile, append = TRUE)
+        cat("\n*** Start generating Sequence table ***", file = LogFile, append = TRUE)
         
         
         ##############################
@@ -610,7 +622,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         message("*********************** Sequence table generated, Data saved ***********************
                         ********************************************************************")
         cat("\n*** Sequence table generated, Data saved ***", file = LogFile, append = TRUE)
-        
+        cat("\n*** Start generating Summary Plots ***", file = LogFile, append = TRUE)
         
         ##############################
         ### Summary Plots
@@ -671,7 +683,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         pdf(file = file.path(PlotFolder, "HistogramAmpliconsinNoSamples.pdf"), width = 7, height = 6)
         print(Trr)
         dev.off()
-        
+        cat("\n*** Summary Plots generated, Function done ***", file = LogFile, append = TRUE)
 }
 
 
@@ -745,48 +757,48 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
         folders <- list.dirs(path, recursive = FALSE, full.names = FALSE)
         
         if(length(folders != 0)) {
-                
-                SampleNames <- folders
-                
-                if(sum(grepl("^Dada", SampleNames)) != 0){
-                        warning("**There are folders starting with \"Dada\" in your path folder, maybe you have run the function on this path folder before\n.
+          
+          SampleNames <- folders
+          
+          if(sum(grepl("^Dada", SampleNames)) != 0){
+            warning("**There are folders starting with \"Dada\" in your path folder, maybe you have run the function on this path folder before\n.
                                 The folders starting with Dada will not be considered sample folders!!\n Files within Dada_Data Dada_FilteredFastqs and Dada_Plots will be overwritten**")
-                }
-                
-                # exclude Folders starting with "Dada" from the folders considered as sample fodlers
-                if(length(grep("^Dada", SampleNames))!=0) {
-                        SampleNames <- SampleNames[-grep("^Dada", SampleNames)]
-                }
-                
-                F_fastq <- character(length = length(SampleNames))
-                R_fastq <- character(length = length(SampleNames))
-                
-                for (i in 1:length(SampleNames)) {
-                        CurrentPath <- file.path(path, SampleNames[i])
-                        
-                        if(sum(grepl(F_pattern, list.files(CurrentPath))) == 0) {
-                                stop(paste("F_pattern fits no file in ", CurrentPath))
-                        }
-                        if(sum(grepl(F_pattern, list.files(CurrentPath))) > 1) {
-                                stop(paste("F_pattern fits several files in ", CurrentPath))
-                        }
-                        if(sum(grepl(R_pattern, list.files(CurrentPath))) == 0) {
-                                stop(paste("R_pattern fits no file in ", CurrentPath))
-                        }
-                        if(sum(grepl(R_pattern, list.files(CurrentPath))) > 1) {
-                                stop(paste("R_pattern fits several files in ", CurrentPath))
-                        }
-                        F_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(F_pattern, list.files(CurrentPath))])
-                        R_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(R_pattern, list.files(CurrentPath))])
-                        
-                }
-                
-                # silly check
-                if (!identical(length(F_fastq), length(R_fastq))) {
-                        stop("Number of F and R fastq files differs? But why???")
-                }
-                
-                }
+          }
+          
+          # exclude Folders starting with "Dada" from the folders considered as sample fodlers
+          if(length(grep("^Dada", SampleNames))!=0) {
+            SampleNames <- SampleNames[-grep("^Dada", SampleNames)]
+          }
+          
+          F_fastq <- character(length = length(SampleNames))
+          R_fastq <- character(length = length(SampleNames))
+          
+          for (i in 1:length(SampleNames)) {
+            CurrentPath <- file.path(path, SampleNames[i])
+            
+            if(sum(grepl(F_pattern, list.files(CurrentPath))) == 0) {
+              stop(paste("F_pattern fits no file in ", CurrentPath))
+            }
+            if(sum(grepl(F_pattern, list.files(CurrentPath))) > 1) {
+              stop(paste("F_pattern fits several files in ", CurrentPath))
+            }
+            if(sum(grepl(R_pattern, list.files(CurrentPath))) == 0) {
+              stop(paste("R_pattern fits no file in ", CurrentPath))
+            }
+            if(sum(grepl(R_pattern, list.files(CurrentPath))) > 1) {
+              stop(paste("R_pattern fits several files in ", CurrentPath))
+            }
+            F_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(F_pattern, list.files(CurrentPath))])
+            R_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(R_pattern, list.files(CurrentPath))])
+            
+          }
+          
+          # silly check
+          if (!identical(length(F_fastq), length(R_fastq))) {
+            stop("Number of F and R fastq files differs? But why???")
+          }
+          
+        }
         
         
         ##############################
@@ -800,7 +812,7 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
                 file.remove(list.files(DataFolder, full.names = TRUE))
         }
         
-        dir.create(DataFolder, showWarnings = FALSE)
+        dir.create(DataFolder, showWarnings = TRUE)
         
         ## Collect quality Score data of the fastQ files and store a data.frame for each sample in the lists FW_QualityStats and RV_QualityStats ####################
         
