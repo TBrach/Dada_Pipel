@@ -1,0 +1,99 @@
+---
+title: "Taxonomic assignation"
+author: "Camila"
+date: "December 15, 2016"
+output: html_document
+---
+#Required packages
+
+```{r}
+library(phyloseq); packageVersion("phyloseq")
+library(ggplot2); packageVersion("ggplot2")
+
+```
+
+# Questions
+
+- how dependent are the results on the training data (i.e. Silva or other)
+- can you improve the plots
+
+# Background
+
+- minBoot: default = 50, is the minimum number out of 100 bootstraps that return the same genus (taxonomy) for a sequence so the sequence is assigned that taxonomy
+
+#Taxonomic assignation
+```{r}
+PathToRefs <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/AssignTaxonomy"
+RefDataBase <- "silva_nr_v123_train_set.fa.gz"
+
+RefDB <- file.path(PathToRefs, RefDataBase)
+
+if(!file.exists(RefDB)){
+        stop("could not find the reference database for assignTaxonomy")
+}
+
+SpeciesDB <- "silva_species_assignment_v123.fa.gz"
+SpecDB <- file.path(PathToRefs, SpeciesDB)
+
+if(!file.exists(SpecDB)){
+        stop("could not find the reference database for addSpecies")
+}
+
+# seqs<-c(colnames(seqtab))
+ptm <- proc.time()
+taxa <- assignTaxonomy(seqtab, refFasta = RefDB,verbose = TRUE, minBoot=80) 
+proc.time() - ptm
+
+ptm <- proc.time()
+taxa.50 <- assignTaxonomy(seqtab, refFasta = RefDB,verbose = TRUE, minBoot=50) 
+proc.time() - ptm
+
+
+# NB: taxa is matrix nrows is number of sequences, ncol is number of taxonomic levels
+identical(colnames(seqtab), rownames(taxa)) # TRUE
+identical(colnames(seqtab), rownames(taxa.50)) # TRUE
+
+## record percentage of NA at genus level
+PerCGenusNATaxa <- 100*(sum(is.na(taxa[, "Genus"]))/nrow(taxa)) # almost 40 %
+PerCGenusNATaxa.50 <- 100*(sum(is.na(taxa.50[, "Genus"]))/nrow(taxa.50)) # still 20 %
+## also NA at family level??
+PerCFamilyNATaxa <- 100*(sum(is.na(taxa[, "Family"]))/nrow(taxa)) # yes even here 12 %
+PerCFamilyNATaxa.50 <- 100*(sum(is.na(taxa.50[, "Family"]))/nrow(taxa.50)) # 5%
+
+## add the species level
+# ATTENTION: these takes long: 
+ptm <- proc.time()
+genus.species <- addSpecies(taxa,refFasta = SpecDB,verbose = TRUE, allowMultiple = 3)
+proc.time() - ptm
+# only 84 out of 847 were assigned to species level and only 76 of which had previously assigned Genera that fitted the species
+# NB!!: Note that only those genus-species binomials which are consistent with the genus assigned in the provided taxonomy table are retained in the output.
+NotNA <- !is.na(genus.species[,7])
+genus.species[NotNA,7]
+# shows you that some have indeed double assignemnts
+
+
+save(taxa, taxa.50, genus.species, file = file.path(PathToRefs, "TaxonomicData.RData"))
+
+proc.time() - ptm
+```
+
+#Plot
+
+```{r}
+
+# Make a data.frame holding the sample data
+ps <- phyloseq(otu_table(seqtab, taxa_are_rows=FALSE), tax_table(genus.species))
+ps
+
+top50 <- names(sort(taxa_sums(ps), decreasing=TRUE))[1:50] #Choose the number of main sequences ("OTUs") that you want to analysis along all samples
+ps.top50 <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU))# transforms the sample counts of a taxa abundance matrix 
+ps.top50<- prune_taxa(top50, ps.top50) #keep the information of the selected sequences
+Taxa_plot<-plot_bar(ps.top50, x="Sample", fill="Family") # you can also plot by  "Phylum", "Class", "Order", "Genus" or "Specie"
+Taxa_plot
+pdf(file = "Family_abundance.pdf", width = 15, height = 9)
+Taxa_plot
+dev.off()
+```
+
+
+
