@@ -1,0 +1,44 @@
+---
+title: "Taxonomic assignation"
+author: "Camila"
+date: "December 15, 2016"
+output: html_document
+---
+#Required packages
+
+```{r}
+library(phyloseq); packageVersion("phyloseq")
+library(ggplot2); packageVersion("ggplot2")
+
+```
+
+#Taxonomic assignation
+```{r}
+ptm <- proc.time()
+seqs<-c(colnames(seqtab))
+taxa<-assignTaxonomy(seqs,"/home/xhf865/DanFun/silva_nr_v123_train_set.fa.gz",verbose = TRUE, minBoot=80) 
+genus.species <- addSpecies(taxa,"/home/xhf865/DanFun/silva_species_assignment_v123.fa.gz",verbose = TRUE)
+colnames(genus.species) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Specie")
+proc.time() - ptm
+```
+
+#Plot
+
+```{r}
+
+# Make a data.frame holding the sample data
+ps <- phyloseq(otu_table(seqtab, taxa_are_rows=FALSE), tax_table(genus.species))
+ps
+
+top50 <- names(sort(taxa_sums(ps), decreasing=TRUE))[1:50] #Choose the number of main sequences ("OTUs") that you want to analysis along all samples
+ps.top50 <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU))# transforms the sample counts of a taxa abundance matrix 
+ps.top50<- prune_taxa(top50, ps.top50) #keep the information of the selected sequences
+Taxa_plot<-plot_bar(ps.top50, x="Sample", fill="Family") # you can also plot by  "Phylum", "Class", "Order", "Genus" or "Specie"
+Taxa_plot
+pdf(file = "Family_abundance.pdf", width = 15, height = 9)
+Taxa_plot
+dev.off()
+```
+
+
+
