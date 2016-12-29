@@ -261,7 +261,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         TimePassed <- proc.time()-ptm
         cat("\nTime after Quality Stats collection: ", file = LogFile, append = TRUE)
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
-        cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
+        cat(paste("Time Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
         cat("\n*** Start generating Quality Plots ***", file = LogFile, append = TRUE)
         
         ##############################
@@ -369,7 +369,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         cat("\nTime after filtering step: ", file = LogFile, append = TRUE)
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
         TimePassed <- proc.time()-ptm
-        cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
+        cat(paste("Time Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
         cat("\n*** Start estimating err_F if not given ***", file = LogFile, append = TRUE)
         
         ##############################
@@ -436,7 +436,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 TimePassed <- proc.time()-ptm
                 cat("\nTime after err_F estimation: ", file = LogFile, append = TRUE)
                 cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
-                cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
+                cat(paste("Time Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
                 cat("\n*** Start estimating err_R if not given ***", file = LogFile, append = TRUE)
                 
         }
@@ -501,7 +501,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 TimePassed <- proc.time()-ptm
                 cat("\nTime after err_F estimation: ", file = LogFile, append = TRUE)
                 cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
-                cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
+                cat(paste("Time Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
                 cat("\n*** Start denoising data, bimera detection, and merging of reads into amplicons***", file = LogFile, append = TRUE)
                 
         }
@@ -631,7 +631,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         TimePassed <- proc.time()-ptm
         cat("\nTime after denoising: ", file = LogFile, append = TRUE)
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
-        cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
+        cat(paste("Time Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
         cat("\n*** Start removing bimera ***", file = LogFile, append = TRUE)
         
         
