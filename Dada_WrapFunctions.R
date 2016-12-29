@@ -160,19 +160,16 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
         cat("Package Versions: ", file = LogFile, append = TRUE)
         cat(paste(PackageVersions$Package, ": ", PackageVersions$Version, "; ", sep= ""), file = LogFile, append = TRUE)
-        # cat("\n Inputs: ", file = LogFile, append = TRUE)
-        # cat(paste("path: ", path, "\n"), file = LogFile, append = TRUE)
-        # cat(paste("path2: ", path2, "\n"), file = LogFile, append = TRUE)
-        # cat(paste("F_pattern: ", F_pattern, "\n"), file = LogFile, append = TRUE)
-        # cat(paste("R_pattern: ", R_pattern, "\n"), file = LogFile, append = TRUE)
-        # cat(paste("trimLeft: ", trimLeft[1], trimLeft[2], "\n"), file = LogFile, append = TRUE)
-        # cat(paste("tuncLen: ", tuncLen[1], tuncLen[2], "\n"), file = LogFile, append = TRUE)
-        # cat(paste("maxN: ", maxN, "\n"), file = LogFile, append = TRUE)
-        # cat(paste("maxEE: ", maxEE, "\n"), file = LogFile, append = TRUE)
-        # cat(paste("trunQ: ", trunQ, "\n"), file = LogFile, append = TRUE)
-        # cat(paste("NSAM.LEARN: ", NSAM.LEARN, "\n"), file = LogFile, append = TRUE)
-        # cat(paste("err_F: ", R_pattern, "\n"), file = LogFile, append = TRUE)
-        # 
+        
+        
+        ## Collect inputs in a data frame for saving it later
+        Input <- list(path = path, F_pattern = F_pattern, R_pattern = R_pattern, path2 = path2,
+                      trimLeft = trimLeft, truncLen = truncLen, 
+                      maxN = maxN, maxEE = maxEE, truncQ = truncQ,
+                      NSAM.LEARN = NSAM.LEARN, err_F = err_F, err_R = err_R,
+                      minOverlap = minOverlap, maxMismatch = maxMismatch, F_QualityStats = F_QualityStats,
+                      R_QualityStats = R_QualityStats, filtFs = filtFs, filtRs = filtRs)
+        
         
         ##############################
         ### Determine the quality scores and save the stats in Data folder
@@ -251,14 +248,14 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 
         }
         
-        save(PackageVersions, F_QualityStats, R_QualityStats, file = file.path(DataFolder, "QualityStats.RData"))
+        save(PackageVersions, F_QualityStats, R_QualityStats, Input, file = file.path(DataFolder, "QualityStats.RData"))
         
         message("*********************** Quality Stats Collected ***********************
                 ********************************************************************")
         
         cat("\n*** Quality Stats Collected ***", file = LogFile, append = TRUE)
         TimePassed <- proc.time()-ptm
-        cat("\nTime after Quality Stats collection: ", file = LogFile)
+        cat("\nTime after Quality Stats collection: ", file = LogFile, append = TRUE)
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
         cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
         cat("\n*** Start generating Quality Plots ***", file = LogFile, append = TRUE)
@@ -363,9 +360,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         }
         
         
-        save(PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, file = file.path(DataFolder, "QualityStats.RData"))
+        save(PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
         
-        cat("\nTime after filtering step: ", file = LogFile)
+        cat("\nTime after filtering step: ", file = LogFile, append = TRUE)
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
         TimePassed <- proc.time()-ptm
         cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
@@ -423,7 +420,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 dev.off()
                 
-                save(err_F, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, file = file.path(DataFolder, "QualityStats.RData"))
+                save(err_F, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
                 
                 message("*********************** err_F has been estimated ***********************
                 ********************************************************************")
@@ -433,7 +430,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 cat(paste(SampleNames[sort(match(names(SamplesFor_errF), SampleNames))]), file = LogFile, append = TRUE)
                 cat(paste("\nReads used for err_F estimation: ", ReadsForErrFEstimation), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
-                cat("\nTime after err_F estimation: ", file = LogFile)
+                cat("\nTime after err_F estimation: ", file = LogFile, append = TRUE)
                 cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
                 cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
                 cat("\n*** Start estimating err_R if not given ***", file = LogFile, append = TRUE)
@@ -490,7 +487,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 dev.off()
                 
-                save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, file = file.path(DataFolder, "QualityStats.RData"))
+                save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
                 
                 message("*********************** err_R has been estimated ***********************
                         ********************************************************************")
@@ -500,7 +497,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 cat(paste(SampleNames[sort(match(names(SamplesFor_errR), SampleNames))]), file = LogFile, append = TRUE)
                 cat(paste("\nReads used for err_R estimation: ", ReadsForErrREstimation), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
-                cat("\nTime after err_F estimation: ", file = LogFile)
+                cat("\nTime after err_F estimation: ", file = LogFile, append = TRUE)
                 cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
                 cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
                 cat("\n*** Start denoising data, bimera detection, and merging of reads into amplicons***", file = LogFile, append = TRUE)
@@ -514,6 +511,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         #### NB: if all samples have been used to generate drp.learnR, dd.learnR, drp.learnF, dd.learnF, these should of course be used
         # instead of running again through all samples, therefore the following if check
+        
+        message("*********************** Start denoising and bimera detection ***********************
+                        ********************************************************************")
         
         if (NSAM.LEARN == length(SampleNames) & exists("drp.learnR", inherits = FALSE) & exists("drp.learnF", inherits = FALSE) &
             exists("dd.learnR", inherits = FALSE) & exists("dd.learnF", inherits = FALSE)) {
@@ -621,7 +621,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         ********************************************************************")
         cat("\n*** all samples denoised, bimeras identified, mergerd amplicons generated ***", file = LogFile, append = TRUE)
         TimePassed <- proc.time()-ptm
-        cat("\nTime after denoising: ", file = LogFile)
+        cat("\nTime after denoising: ", file = LogFile, append = TRUE)
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
         cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
         cat("\n*** Start removing bimera ***", file = LogFile, append = TRUE)
@@ -846,13 +846,12 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
                         F_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(F_pattern, list.files(CurrentPath))])
                         R_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(R_pattern, list.files(CurrentPath))])
                         
-                }
-                else {
-                        
-                        stop("No sample folders were found in the given path! Currently the Dada2_wrap function can only handle the situation where the fastq files are in separate folders for each sample.
-                             These folders have to be in the \"path\" folder. Other situations have to be added.")
-                }
+                } 
                 
+        } else {
+                
+                stop("No sample folders were found in the given path! Currently the Dada2_wrap function can only handle the situation where the fastq files are in separate folders for each sample.
+                     These folders have to be in the \"path\" folder. Other situations have to be added.")
         }
         
         
