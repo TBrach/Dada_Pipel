@@ -239,21 +239,25 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 names(F_QualityStats) <- SampleNames
                 names(R_QualityStats) <- SampleNames
                 
+                message("*********************** Quality Stats Collected ***********************
+                ********************************************************************")
+                cat("\n*** Quality Stats Collected ***", file = LogFile, append = TRUE)
+                
         } else {
                 
-                if(names(F_QualityStats) != SampleNames | names(R_QualityStats) != SampleNames) {
+                if((names(F_QualityStats) != SampleNames) || (names(R_QualityStats) != SampleNames)) {
                         
                         stop("The given F_QualityStats or R_QualityStats do not fit to the SampleNames in path!")
                 }
                 
+                message("*********************** Quality Stats given ***********************
+                ********************************************************************")
+                cat("\n*** Quality Stats given***", file = LogFile, append = TRUE)
+                
         }
         
         save(PackageVersions, F_QualityStats, R_QualityStats, Input, file = file.path(DataFolder, "QualityStats.RData"))
-        
-        message("*********************** Quality Stats Collected ***********************
-                ********************************************************************")
-        
-        cat("\n*** Quality Stats Collected ***", file = LogFile, append = TRUE)
+
         TimePassed <- proc.time()-ptm
         cat("\nTime after Quality Stats collection: ", file = LogFile, append = TRUE)
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
@@ -328,7 +332,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 
                 # check if files have been created
-                if(!all(file.exists(filtFs)) & !all(file.exists(filtRs))) {
+                if(!all(file.exists(filtFs)) && !all(file.exists(filtRs))) {
                         cat("\n*** ERROR: Not all filtered files were created, maybe trimming impossible***", file = LogFile, append = TRUE)
                         stop("** Not all filtered files were created, maybe trimming impossible")
                         
@@ -340,13 +344,13 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 
         } else {
                 
-                if(names(filtFs) != SampleNames | names(filtRs) != SampleNames) {
+                if((names(filtFs) != SampleNames) || (names(filtRs) != SampleNames)) {
                         
                         cat("\n*** ERROR: The given filtFs or filtRs do not have sample names!***", file = LogFile, append = TRUE)
                         stop("The given filtFs or filtRs do not have sample names!")
                 }
                 
-                if(!all(file.exists(filtFs)) & !all(file.exists(filtRs))) {
+                if(!all(file.exists(filtFs)) && !all(file.exists(filtRs))) {
                         cat("\n*** ERROR: Not all files in the given filtFs or filtRs existed***", file = LogFile, append = TRUE)
                         stop("** Not all files in the given filtFs or filtRs existed")
                         
@@ -487,8 +491,6 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 dev.off()
                 
-                save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
-                
                 message("*********************** err_R has been estimated ***********************
                         ********************************************************************")
                 cat("\n*** err_R has been estimated ***", file = LogFile, append = TRUE)
@@ -504,6 +506,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 
         }
         
+        save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
         
         ##############################
         ### Denoising (dada command for all samples) and bimeara identification
@@ -515,8 +518,8 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         message("*********************** Start denoising and bimera detection ***********************
                         ********************************************************************")
         
-        if (NSAM.LEARN == length(SampleNames) & exists("drp.learnR", inherits = FALSE) & exists("drp.learnF", inherits = FALSE) &
-            exists("dd.learnR", inherits = FALSE) & exists("dd.learnF", inherits = FALSE)) {
+        if (NSAM.LEARN == length(SampleNames) && exists("drp.learnR", inherits = FALSE) && exists("drp.learnF", inherits = FALSE) &&
+            exists("dd.learnR", inherits = FALSE) && exists("dd.learnF", inherits = FALSE)) {
                 # if drp.learnF and R have been generated in this function and all samples where used for doing so, then:
                 
                 #NB: the follwoing demands that the samples were denoised in the given order, i.e. just 1:NSAM.LEARN was used not the sample command!!
@@ -560,12 +563,17 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         
                         rm(derepF, derepR, ddF, ddR, merger)
                 }
-                
+
                 rm(drp.learnF, drp.learnR, dd.learnF, dd.learnR)
                 
         } else {
                 
-                rm(drp.learnF, drp.learnR, dd.learnF, dd.learnR)
+                if (exists("drp.learnF", inherits = FALSE) && exists("dd.learnF", inherits = FALSE)) {
+                        rm(drp.learnF, dd.learnF)
+                }
+                if (exists("drp.learnR", inherits = FALSE) && exists("dd.learnR", inherits = FALSE)) {
+                        rm(drp.learnR, dd.learnR)
+                }
                 
                 mergers <- vector("list", length(SampleNames))
                 names(mergers) <- SampleNames
@@ -633,7 +641,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         mergers.nochim <- mergers
         for (i in seq_along(mergers)) {
-                mergers.nochim[[i]] <- mergers[[i]][!bimFs[[i]][mergers[[i]]$forward] & !bimRs[[i]][mergers[[i]]$reverse],]
+                mergers.nochim[[i]] <- mergers[[i]][!bimFs[[i]][mergers[[i]]$forward] && !bimRs[[i]][mergers[[i]]$reverse],]
         }
         
         message("*********************** Bimeras removed ***********************
@@ -718,7 +726,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         # Plot a histogram illustrating in how many samples the amplicons are present
         if(length(SampleNames) < 10) {binwidth = 1}
-        if(length(SampleNames) > 10 & length(SampleNames) < 100) {binwidth = 2}
+        if(length(SampleNames) > 10 && length(SampleNames) < 100) {binwidth = 2}
         if(length(SampleNames) > 100) {binwidth = 3}
         
         FinalNumbers2 <- data.frame(InNoSamples = colSums(seqtab != 0))
