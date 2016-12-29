@@ -20,6 +20,8 @@
 # err_R: analogous to err_F for the reverse reads
 # minOverlap: = minOverlap from the mergePairs command
 # maxMismatch: = maxMismatch from the mergePairs command
+# F_QualityStats and R_QualityStats: NULL by default, if given e.g. from Dada_QualityCheck the quality stats collection part is jumped over
+# filtFs and filtRs: NULL by default, if given and FilteredFolder with files exist, Filtering can be jumped over.
 ## Output
 # PLOTS:
 # Several Plots saved as pdfs in generated Dada_Plots folder # NB: the plots are currently assuming 250 nt
@@ -39,9 +41,11 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                        err_F = NULL,
                        err_R = NULL,
                        minOverlap = 20,
-                       maxMismatch = 0) {
-        
-        ptm <- proc.time()
+                       maxMismatch = 0,
+                       F_QualityStats = NULL,
+                       R_QualityStats = NULL,
+                       filtFs = NULL,
+                       filtRs = NULL) {
         
         ##############################
         ### call the required packages
@@ -66,7 +70,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         message("*********************** All packages loaded ***********************
                 ********************************************************************")
-
+        
         ##############################
         ### save the package Versions
         ##############################
@@ -83,6 +87,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ##############################
         ### Construct character vectors to the FW and RV fastq files
         ##############################
+        
         if(is.null(path2)){
                 
                 path2 = path
@@ -91,7 +96,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         folders <- list.dirs(path, recursive = FALSE, full.names = FALSE)
         
-        if(length(folders != 0)) {
+        if(length(folders) != 0) {
                 
                 SampleNames <- folders
                 
@@ -128,11 +133,10 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         
                 }
                 
-                # silly check
-                if (!identical(length(F_fastq), length(R_fastq))) {
-                        stop("Number of F and R fastq files differs? But why???")
-                }
+        } else {
                 
+                stop("No sample folders were found in the given path! Currently the Dada2_wrap function can only handle the situation where the fastq files are in separate folders for each sample.
+                     These folders have to be in the \"path\" folder. Other situations have to be added.")
         }
         
         ##############################
@@ -141,13 +145,15 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         DataFolder <- file.path(path2, "Dada_Data")
         
-        ## Not sure if this is wanted, deleting all files that are already in the DataFolder folder
+        ## ATTENTION: FUNCTION DELETES ALL FILES ALREADY PRESRENT in DataFolder
         if(file.exists(DataFolder)){
                 file.remove(list.files(DataFolder, full.names = TRUE))
         }
         
         
         dir.create(DataFolder, showWarnings = FALSE)
+        
+        ptm <- proc.time()
         
         LogFile <- file.path(DataFolder, "DadaWrapper.log")
         cat("Time after package installation: ", file = LogFile)
@@ -174,65 +180,76 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         ## Collect quality Score data of the fastQ files and store a data.frame for each sample in the lists FW_QualityStats and RV_QualityStats ####################
         
-        F_QualityStats <- list()
-        R_QualityStats <- list()
-        
-        for (i in seq_along(F_fastq)) {
+        if(is.null(F_QualityStats) | is.null(R_QualityStats)) {
                 
-                Current_FWfq <- F_fastq[i]
-                Current_dfFW <- qa(Current_FWfq, n = 1e06)[["perCycle"]]$quality
-                # df is a data frame containing for each cycle (nt) the distribution of Quality scores
-                Current_dfFW <- dplyr::group_by(Current_dfFW, Cycle)
+                F_QualityStats <- list()
+                R_QualityStats <- list()
                 
-                Current_dfQStatsFW <- dplyr::summarise(
-                        Current_dfFW,
-                        NoReads = sum(Count),
-                        Mean_QS = sum(Count*Score)/sum(Count),
-                        SD_QS = sqrt(sum(Count*((Score-Mean_QS)^2))/(NoReads-1)),
-                        Median_QS = Score[which(cumsum(Count)/sum(Count) >= .5)][[1]],
-                        q25_QS = Score[which(cumsum(Count)/sum(Count) >= .25)][[1]],
-                        q75_QS = Score[which(cumsum(Count)/sum(Count) >= .75)][[1]])
-                
-                ## Check that all reads are of same length
-                x <- range(Current_dfQStatsFW$NoReads)
-                if (!all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5)) {
-                        stop("Not all reads of same length in file", F_fastq[i])
+                for (i in seq_along(F_fastq)) {
+                        
+                        Current_FWfq <- F_fastq[i]
+                        Current_dfFW <- qa(Current_FWfq, n = 1e06)[["perCycle"]]$quality
+                        # df is a data frame containing for each cycle (nt) the distribution of Quality scores
+                        Current_dfFW <- dplyr::group_by(Current_dfFW, Cycle)
+                        
+                        Current_dfQStatsFW <- dplyr::summarise(
+                                Current_dfFW,
+                                NoReads = sum(Count),
+                                Mean_QS = sum(Count*Score)/sum(Count),
+                                SD_QS = sqrt(sum(Count*((Score-Mean_QS)^2))/(NoReads-1)),
+                                Median_QS = Score[which(cumsum(Count)/sum(Count) >= .5)][[1]],
+                                q25_QS = Score[which(cumsum(Count)/sum(Count) >= .25)][[1]],
+                                q75_QS = Score[which(cumsum(Count)/sum(Count) >= .75)][[1]])
+                        
+                        ## Check that all reads are of same length
+                        x <- range(Current_dfQStatsFW$NoReads)
+                        if (!all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5)) {
+                                stop("Not all reads of same length in file", F_fastq[i])
+                        }
+                        
+                        F_QualityStats[[i]] <- as.data.frame(Current_dfQStatsFW)
+                        # as.data.frame to un-dplyr the data.frame
+                        
+                        ####### collect the same stats for the RV FastQ files
+                        Current_RVfq <- R_fastq[i]
+                        Current_dfRV <- qa(Current_RVfq, n = 1e06)[["perCycle"]]$quality
+                        
+                        Current_dfRV <- dplyr::group_by(Current_dfRV, Cycle)
+                        
+                        Current_dfQStatsRV <- dplyr::summarise(
+                                Current_dfRV,
+                                NoReads = sum(Count),
+                                Mean_QS = sum(Count*Score)/sum(Count),
+                                SD_QS = sqrt(sum(Count*((Score-Mean_QS)^2))/(NoReads-1)),
+                                Median_QS = Score[which(cumsum(Count)/sum(Count) >= .5)][[1]],
+                                q25_QS = Score[which(cumsum(Count)/sum(Count) >= .25)][[1]],
+                                q75_QS = Score[which(cumsum(Count)/sum(Count) >= .75)][[1]])
+                        
+                        ## Check that all reads are of same length
+                        x <- range(Current_dfQStatsRV$NoReads)
+                        if (!all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5)) {
+                                stop("Not all reads of same length in file", R_fastq[i])
+                        }
+                        
+                        R_QualityStats[[i]] <- as.data.frame(Current_dfQStatsRV)
+                        
+                        rm(Current_FWfq, Current_dfFW, Current_dfQStatsFW,
+                           Current_RVfq, Current_dfRV, Current_dfQStatsRV, x)
+                        
                 }
                 
-                F_QualityStats[[i]] <- as.data.frame(Current_dfQStatsFW)
-                # as.data.frame to un-dplyr the data.frame
+                # add the sample names as names to the lists:
+                names(F_QualityStats) <- SampleNames
+                names(R_QualityStats) <- SampleNames
                 
-                ####### collect the same stats for the RV FastQ files
-                Current_RVfq <- R_fastq[i]
-                Current_dfRV <- qa(Current_RVfq, n = 1e06)[["perCycle"]]$quality
+        } else {
                 
-                Current_dfRV <- dplyr::group_by(Current_dfRV, Cycle)
-                
-                Current_dfQStatsRV <- dplyr::summarise(
-                        Current_dfRV,
-                        NoReads = sum(Count),
-                        Mean_QS = sum(Count*Score)/sum(Count),
-                        SD_QS = sqrt(sum(Count*((Score-Mean_QS)^2))/(NoReads-1)),
-                        Median_QS = Score[which(cumsum(Count)/sum(Count) >= .5)][[1]],
-                        q25_QS = Score[which(cumsum(Count)/sum(Count) >= .25)][[1]],
-                        q75_QS = Score[which(cumsum(Count)/sum(Count) >= .75)][[1]])
-                
-                ## Check that all reads are of same length
-                x <- range(Current_dfQStatsRV$NoReads)
-                if (!all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5)) {
-                        stop("Not all reads of same length in file", R_fastq[i])
+                if(names(F_QualityStats) != SampleNames | names(R_QualityStats) != SampleNames) {
+                        
+                        stop("The given F_QualityStats or R_QualityStats do not fit to the SampleNames in path!")
                 }
-                
-                R_QualityStats[[i]] <- as.data.frame(Current_dfQStatsRV)
-                
-                rm(Current_FWfq, Current_dfFW, Current_dfQStatsFW,
-                   Current_RVfq, Current_dfRV, Current_dfQStatsRV, x)
                 
         }
-        
-        # add the sample names as names to the lists:
-        names(F_QualityStats) <- SampleNames
-        names(R_QualityStats) <- SampleNames
         
         save(PackageVersions, F_QualityStats, R_QualityStats, file = file.path(DataFolder, "QualityStats.RData"))
         
@@ -240,6 +257,10 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 ********************************************************************")
         
         cat("\n*** Quality Stats Collected ***", file = LogFile, append = TRUE)
+        TimePassed <- proc.time()-ptm
+        cat("\nTime after Quality Stats collection: ", file = LogFile)
+        cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
+        cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
         cat("\n*** Start generating Quality Plots ***", file = LogFile, append = TRUE)
         
         ##############################
@@ -248,7 +269,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         PlotFolder <- file.path(path2, "Dada_Plots")
         
-        ## Not sure if this is wanted, deleting all files that are already in the PlotFolder folder
+        ## ATTENTION: FUNCTION DELETES ALL FILES ALREADY PRESRENT in PlotFolder
         if(file.exists(PlotFolder)){
                 file.remove(list.files(PlotFolder, full.names = TRUE))
         }
@@ -284,42 +305,70 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         FilteredFolder <- file.path(path2, "Dada_FilteredFastqs")
         
-        ## Not sure if this is wanted, deleting all files that are already in the DataFolder folder
-        if(file.exists(FilteredFolder)){
-                file.remove(list.files(FilteredFolder, full.names = TRUE))
-        }
         
-        dir.create(FilteredFolder, showWarnings = FALSE)
-        
-        filtFs <- file.path(FilteredFolder, paste0(SampleNames, "_F_Filtered.fastq.gz"))
-        filtRs <- file.path(FilteredFolder, paste0(SampleNames, "_R_Filtered.fastq.gz"))
-        names(filtFs) <- SampleNames
-        names(filtRs) <- SampleNames
-        
-        
-        for(i in seq_along(F_fastq)) {
+        if(is.null(filtFs) | is.null(filtRs)){
                 
-                message(paste("**Filtering sample No:", i, "called:", SampleNames[i]), " **")
-                cat(paste("\n**Filtering sample No:", i, "called:", SampleNames[i]), file = LogFile, append = TRUE)
-                fastqPairedFilter(c(F_fastq[i], R_fastq[i]), c(filtFs[i], filtRs[i]), trimLeft = trimLeft, 
-                                  truncLen = truncLen, maxN = maxN, maxEE = maxEE, truncQ = truncQ, 
-                                  compress=TRUE, verbose=TRUE)
-        }
-        
-        TimePassed <- proc.time()-ptm
-        
-        # check if files have been created
-        if(!all(file.exists(filtFs)) & !all(file.exists(filtRs))) {
-                cat("\n*** ERROR: Not all filtered files were created, maybe trimming impossible***", file = LogFile, append = TRUE)
-                stop("** Not all filtered files were created, maybe trimming impossible")
+                ## Not sure if this is wanted, deleting all files that are already in the DataFolder folder
+                if(file.exists(FilteredFolder)){
+                        file.remove(list.files(FilteredFolder, full.names = TRUE))
+                }
                 
-        }
-        
-        message("*********************** Filtering Done ***********************
+                dir.create(FilteredFolder, showWarnings = FALSE)
+                
+                filtFs <- file.path(FilteredFolder, paste0(SampleNames, "_F_Filtered.fastq.gz"))
+                filtRs <- file.path(FilteredFolder, paste0(SampleNames, "_R_Filtered.fastq.gz"))
+                names(filtFs) <- SampleNames
+                names(filtRs) <- SampleNames
+                
+                
+                for(i in seq_along(F_fastq)) {
+                        
+                        message(paste("**Filtering sample No:", i, "called:", SampleNames[i]), " **")
+                        cat(paste("\n**Filtering sample No:", i, "called:", SampleNames[i]), file = LogFile, append = TRUE)
+                        fastqPairedFilter(c(F_fastq[i], R_fastq[i]), c(filtFs[i], filtRs[i]), trimLeft = trimLeft, 
+                                          truncLen = truncLen, maxN = maxN, maxEE = maxEE, truncQ = truncQ, 
+                                          compress=TRUE, verbose=TRUE)
+                }
+                
+                # check if files have been created
+                if(!all(file.exists(filtFs)) & !all(file.exists(filtRs))) {
+                        cat("\n*** ERROR: Not all filtered files were created, maybe trimming impossible***", file = LogFile, append = TRUE)
+                        stop("** Not all filtered files were created, maybe trimming impossible")
+                        
+                }
+                
+                message("*********************** Filtering Done ***********************
                 ********************************************************************")
+                cat("\n*** Filtering Done ***", file = LogFile, append = TRUE)
+                
+        } else {
+                
+                if(names(filtFs) != SampleNames | names(filtRs) != SampleNames) {
+                        
+                        cat("\n*** ERROR: The given filtFs or filtRs do not have sample names!***", file = LogFile, append = TRUE)
+                        stop("The given filtFs or filtRs do not have sample names!")
+                }
+                
+                if(!all(file.exists(filtFs)) & !all(file.exists(filtRs))) {
+                        cat("\n*** ERROR: Not all files in the given filtFs or filtRs existed***", file = LogFile, append = TRUE)
+                        stop("** Not all files in the given filtFs or filtRs existed")
+                        
+                }
+                
+                message("*********************** Filtered files were given ***********************
+                ********************************************************************")
+                cat("\n*** Filtered files were given ***", file = LogFile, append = TRUE)
+                
+                
+        }
         
-        cat("\n*** Filtering Done ***", file = LogFile, append = TRUE)
-        cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
+        
+        save(PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, file = file.path(DataFolder, "QualityStats.RData"))
+        
+        cat("\nTime after filtering step: ", file = LogFile)
+        cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
+        TimePassed <- proc.time()-ptm
+        cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
         cat("\n*** Start estimating err_F if not given ***", file = LogFile, append = TRUE)
         
         ##############################
@@ -374,7 +423,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 dev.off()
                 
-                save(err_F, PackageVersions, F_QualityStats, R_QualityStats, file = file.path(DataFolder, "QualityStats.RData"))
+                save(err_F, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, file = file.path(DataFolder, "QualityStats.RData"))
                 
                 message("*********************** err_F has been estimated ***********************
                 ********************************************************************")
@@ -384,7 +433,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 cat(paste(SampleNames[sort(match(names(SamplesFor_errF), SampleNames))]), file = LogFile, append = TRUE)
                 cat(paste("\nReads used for err_F estimation: ", ReadsForErrFEstimation), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
-                cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
+                cat("\nTime after err_F estimation: ", file = LogFile)
+                cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
+                cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
                 cat("\n*** Start estimating err_R if not given ***", file = LogFile, append = TRUE)
                 
         }
@@ -439,7 +490,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 dev.off()
                 
-                save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, file = file.path(DataFolder, "QualityStats.RData"))
+                save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, file = file.path(DataFolder, "QualityStats.RData"))
                 
                 message("*********************** err_R has been estimated ***********************
                         ********************************************************************")
@@ -449,12 +500,14 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 cat(paste(SampleNames[sort(match(names(SamplesFor_errR), SampleNames))]), file = LogFile, append = TRUE)
                 cat(paste("\nReads used for err_R estimation: ", ReadsForErrREstimation), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
-                cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
+                cat("\nTime after err_F estimation: ", file = LogFile)
+                cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
+                cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
                 cat("\n*** Start denoising data, bimera detection, and merging of reads into amplicons***", file = LogFile, append = TRUE)
-
+                
         }
         
-
+        
         ##############################
         ### Denoising (dada command for all samples) and bimeara identification
         ##############################
@@ -568,7 +621,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         ********************************************************************")
         cat("\n*** all samples denoised, bimeras identified, mergerd amplicons generated ***", file = LogFile, append = TRUE)
         TimePassed <- proc.time()-ptm
-        cat(paste("\nTime Passed: ", TimePassed[3]), file = LogFile, append = TRUE)
+        cat("\nTime after denoising: ", file = LogFile)
+        cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
+        cat(paste("\nTime Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
         cat("\n*** Start removing bimera ***", file = LogFile, append = TRUE)
         
         
@@ -756,48 +811,48 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
         
         folders <- list.dirs(path, recursive = FALSE, full.names = FALSE)
         
-        if(length(folders != 0)) {
-          
-          SampleNames <- folders
-          
-          if(sum(grepl("^Dada", SampleNames)) != 0){
-            warning("**There are folders starting with \"Dada\" in your path folder, maybe you have run the function on this path folder before\n.
+        if(length(folders) != 0) {
+                
+                SampleNames <- folders
+                
+                if(sum(grepl("^Dada", SampleNames)) != 0){
+                        warning("**There are folders starting with \"Dada\" in your path folder, maybe you have run the function on this path folder before\n.
                                 The folders starting with Dada will not be considered sample folders!!\n Files within Dada_Data Dada_FilteredFastqs and Dada_Plots will be overwritten**")
-          }
-          
-          # exclude Folders starting with "Dada" from the folders considered as sample fodlers
-          if(length(grep("^Dada", SampleNames))!=0) {
-            SampleNames <- SampleNames[-grep("^Dada", SampleNames)]
-          }
-          
-          F_fastq <- character(length = length(SampleNames))
-          R_fastq <- character(length = length(SampleNames))
-          
-          for (i in 1:length(SampleNames)) {
-            CurrentPath <- file.path(path, SampleNames[i])
-            
-            if(sum(grepl(F_pattern, list.files(CurrentPath))) == 0) {
-              stop(paste("F_pattern fits no file in ", CurrentPath))
-            }
-            if(sum(grepl(F_pattern, list.files(CurrentPath))) > 1) {
-              stop(paste("F_pattern fits several files in ", CurrentPath))
-            }
-            if(sum(grepl(R_pattern, list.files(CurrentPath))) == 0) {
-              stop(paste("R_pattern fits no file in ", CurrentPath))
-            }
-            if(sum(grepl(R_pattern, list.files(CurrentPath))) > 1) {
-              stop(paste("R_pattern fits several files in ", CurrentPath))
-            }
-            F_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(F_pattern, list.files(CurrentPath))])
-            R_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(R_pattern, list.files(CurrentPath))])
-            
-          }
-          
-          # silly check
-          if (!identical(length(F_fastq), length(R_fastq))) {
-            stop("Number of F and R fastq files differs? But why???")
-          }
-          
+                }
+                
+                # exclude Folders starting with "Dada" from the folders considered as sample fodlers
+                if(length(grep("^Dada", SampleNames))!=0) {
+                        SampleNames <- SampleNames[-grep("^Dada", SampleNames)]
+                }
+                
+                F_fastq <- character(length = length(SampleNames))
+                R_fastq <- character(length = length(SampleNames))
+                
+                for (i in 1:length(SampleNames)) {
+                        CurrentPath <- file.path(path, SampleNames[i])
+                        
+                        if(sum(grepl(F_pattern, list.files(CurrentPath))) == 0) {
+                                stop(paste("F_pattern fits no file in ", CurrentPath))
+                        }
+                        if(sum(grepl(F_pattern, list.files(CurrentPath))) > 1) {
+                                stop(paste("F_pattern fits several files in ", CurrentPath))
+                        }
+                        if(sum(grepl(R_pattern, list.files(CurrentPath))) == 0) {
+                                stop(paste("R_pattern fits no file in ", CurrentPath))
+                        }
+                        if(sum(grepl(R_pattern, list.files(CurrentPath))) > 1) {
+                                stop(paste("R_pattern fits several files in ", CurrentPath))
+                        }
+                        F_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(F_pattern, list.files(CurrentPath))])
+                        R_fastq[i] <- file.path(CurrentPath, list.files(CurrentPath)[grepl(R_pattern, list.files(CurrentPath))])
+                        
+                }
+                else {
+                        
+                        stop("No sample folders were found in the given path! Currently the Dada2_wrap function can only handle the situation where the fastq files are in separate folders for each sample.
+                             These folders have to be in the \"path\" folder. Other situations have to be added.")
+                }
+                
         }
         
         
