@@ -4,7 +4,7 @@ author: "Camila"
 date: "December 15, 2016"
 output: html_document
 ---
-#Required packages
+# Required packages
 
 ```{r}
 library(phyloseq); packageVersion("phyloseq")
@@ -12,20 +12,84 @@ library(ggplot2); packageVersion("ggplot2")
 
 ```
 
+# Links
+
+- <http://benjjneb.github.io/dada2/assign.html#species-assignment>
+- The phyloseq website
+    - <https://joey711.github.io/phyloseq/>
+
 # Questions
 
-- how dependent are the results on the training data (i.e. Silva or other)
-- can you improve the plots
+- how dependent are the results on the training data (i.e. Silva or other database)?
+- can you improve the plots, phyloseq training
+- what allowMultiple should we use
 
 # Background
 
 - minBoot: default = 50, is the minimum number out of 100 bootstraps that return the same genus (taxonomy) for a sequence so the sequence is assigned that taxonomy
+- For human microbiome data and V4 sequencing, we typically see a bit under half of the abundant ribosomal sequence variants (RSVs) assigned unambiguously to species-level, and a bit under 2/3rds assigned ambiguously (ie. allowing multiple species assignment). This fraction drops off in less sampled environments and for rare RSVs.
 
-#Taxonomic assignation
+# Analyse a bit your seqtab, Do you want to exclude rare sequences?
+
+```{r}
+FinalNumbers <- data.frame(Sample = rownames(seqtab), UniqueAmplicons = rowSums(seqtab != 0), NoAmplicons = rowSums(seqtab))
+
+
+AmpliconDistribution <- as.data.frame(table(colSums(seqtab != 0)))
+colnames(AmpliconDistribution) <- c("InNoSamples", "Amplicons")
+# add the precentage reached when leaving sequences in that are in at least n samples
+AmpliconDistribution$CumSum <- rev(cumsum(rev(AmpliconDistribution$Amplicons)))
+AmpliconDistribution$CumPerC <- rev(cumsum(rev(AmpliconDistribution$Amplicons/ncol(seqtab))))
+
+# Distribution plot
+Tr <- ggplot(AmpliconDistribution, aes(x = InNoSamples, y = Amplicons))
+Tr <- Tr + geom_point(col = "#E69F00", size = 3) +
+        xlab("In Number of Samples") +
+        theme_bw() +
+        theme(panel.grid.minor = element_blank(),
+              panel.grid.major.y = element_blank(),
+              panel.grid.major.x = element_line(color = "#999999", size = .15))
+
+# CumpPerC plot: CAN be used to decide on how many samples an Amplicon needs to present to stay (assuming you want to keep a certain % of amplicons)
+Tr1 <- ggplot(AmpliconDistribution, aes(x = InNoSamples, y = CumPerC))
+Tr1 <- Tr1 + geom_point(col = "#E69F00", size = 3) +
+        xlab("In Number of Samples") +
+        theme_bw() +
+        theme(panel.grid.minor = element_blank(),
+              panel.grid.major.y = element_blank(),
+              panel.grid.major.x = element_line(color = "#999999", size = .15))
+
+
+
+## In case you prefer a histogram
+# FinalNumbers2 <- data.frame(InNoSamples = colSums(seqtab != 0))
+# 
+# if(nrow(seqtab) < 10) {binwidth = 1}
+# if(nrow(seqtab) > 10 && length(SampleNames) < 100) {binwidth = 2}
+# if(nrow(seqtab) > 100) {binwidth = 3}
+#         
+# Trr <- ggplot(data = FinalNumbers2, aes(x = InNoSamples))  + 
+#         geom_histogram(binwidth = binwidth, col = "black", fill = "#E69F00")+
+#         geom_rug() +
+#         xlab("Present in No Samples") + 
+#         ylab("Count") +
+#         theme_bw() + 
+#         ggtitle(paste("Total No of unique amplicons:", dim(seqtab)[2], "Only in 1 sample:", sum(FinalNumbers2 ==1))) +
+#         theme(panel.grid.minor = element_blank(),
+#               panel.grid.major.y = element_blank(),
+#               panel.grid.major.x = element_line(color = "#999999", size = .15)) +
+#         coord_cartesian(ylim = c(0,150))
+##########
+
+
+```
+
+
+# Define the Paths to the reference fastq files
+
 ```{r}
 PathToRefs <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/AssignTaxonomy"
 RefDataBase <- "silva_nr_v123_train_set.fa.gz"
-
 RefDB <- file.path(PathToRefs, RefDataBase)
 
 if(!file.exists(RefDB)){
@@ -38,61 +102,145 @@ SpecDB <- file.path(PathToRefs, SpeciesDB)
 if(!file.exists(SpecDB)){
         stop("could not find the reference database for addSpecies")
 }
+```
 
+# Use assignTaxonomy for taxonomic assignment down to genus for your seqtab
+
+```{r}
 # seqs<-c(colnames(seqtab))
+## ATTENTION: takes a bit less than a minute per 100 sequences, so for 3600 sequences it takes just below 30 minutes
 ptm <- proc.time()
-taxa <- assignTaxonomy(seqtab, refFasta = RefDB,verbose = TRUE, minBoot=80) 
+taxa.80 <- assignTaxonomy(seqtab, refFasta = RefDB,verbose = TRUE, minBoot=80) 
 proc.time() - ptm
 
 ptm <- proc.time()
 taxa.50 <- assignTaxonomy(seqtab, refFasta = RefDB,verbose = TRUE, minBoot=50) 
 proc.time() - ptm
 
-
-# NB: taxa is matrix nrows is number of sequences, ncol is number of taxonomic levels
-identical(colnames(seqtab), rownames(taxa)) # TRUE
+# NB: taxa.80 is a matrix: nrows is number of sequences, ncol is number of taxonomic levels (usually 6: Kingdom, Phylum, Class, Order, Family, Genus)
+identical(colnames(seqtab), rownames(taxa.80)) # TRUE
 identical(colnames(seqtab), rownames(taxa.50)) # TRUE
-
-## record percentage of NA at genus level
-PerCGenusNATaxa <- 100*(sum(is.na(taxa[, "Genus"]))/nrow(taxa)) # almost 40 %
-PerCGenusNATaxa.50 <- 100*(sum(is.na(taxa.50[, "Genus"]))/nrow(taxa.50)) # still 20 %
-## also NA at family level??
-PerCFamilyNATaxa <- 100*(sum(is.na(taxa[, "Family"]))/nrow(taxa)) # yes even here 12 %
-PerCFamilyNATaxa.50 <- 100*(sum(is.na(taxa.50[, "Family"]))/nrow(taxa.50)) # 5%
-
-## add the species level
-# ATTENTION: these takes long: 
-ptm <- proc.time()
-genus.species <- addSpecies(taxa,refFasta = SpecDB,verbose = TRUE, allowMultiple = 3)
-proc.time() - ptm
-# only 84 out of 847 were assigned to species level and only 76 of which had previously assigned Genera that fitted the species
-# NB!!: Note that only those genus-species binomials which are consistent with the genus assigned in the provided taxonomy table are retained in the output.
-NotNA <- !is.na(genus.species[,7])
-genus.species[NotNA,7]
-# shows you that some have indeed double assignemnts
-
-
-save(taxa, taxa.50, genus.species, file = file.path(PathToRefs, "TaxonomicData.RData"))
-
-proc.time() - ptm
 ```
 
-#Plot
+
+# Use addSpecies to add species level to the taxa matrixes
+
+- The addSpecies command takes pretty long, so better on the server
 
 ```{r}
+# ATTENTION: these takes long: 
+ptm <- proc.time()
+taxa.80.species <- addSpecies(taxa.80,refFasta = SpecDB,verbose = TRUE, allowMultiple = 3)
+proc.time() - ptm
 
-# Make a data.frame holding the sample data
-ps <- phyloseq(otu_table(seqtab, taxa_are_rows=FALSE), tax_table(genus.species))
+
+# ATTENTION: these takes long: 
+ptm <- proc.time()
+taxa.50.species <- addSpecies(taxa.50,refFasta = SpecDB,verbose = TRUE, allowMultiple = 3)
+proc.time() - ptm
+
+
+save(taxa.80, taxa.50, taxa.80.species, taxa.50.species, file = file.path(PathToRefs, "TaxonomicData.RData"))
+```
+
+
+# Exploratory Analysis of the Taxa tables
+
+## Overview of taxa matrices 
+
+```{r}
+# check that addSpecies does not change the Kingdom to Genus levels
+identical(taxa.80.species[,1:6], taxa.80) #TRUE
+
+# look at the Genus-species with multiple species assignment
+unname(taxa.80.species[grep(pattern = "/", taxa.80.species[,'Species']), c('Genus', 'Species')])
+```
+
+## Determine for each taxonomic level the percentage of sequences that could not be attributed unambiguously with the used minBoot
+
+- you need to source Dada_TaxonomyFunctions.R for the following functions
+
+```{r}
+# Number and percentage of assigned taxonomic levels for all amplicons
+NAPerC.80 <- NAPerCForTaxLevel(taxa.80.species)
+NAPerC.50 <- NAPerCForTaxLevel(taxa.50.species)
+
+# Number and percentage of assigned taxonomic levels related to the penetrance of the amplicons
+TLvsPenetrance.80 <- TaxLevelvsPenetrance(taxa = taxa.80.species, seqtab = seqtab)
+
+# Taxonomic assignments compared to the abundance of the sequences
+TLvsAb.80 <- TaxLevelvsAbundance(taxa = taxa.80.species, seqtab = seqtab, Level = "Genus")
+
+TLvsAb.80[[2]]
+
+
+# Extra training
+M1 <- mergers.nochim[[1]]
+Uniques <- getUniques(M1)
+# same as M1$abundance
+identical(M1$abundance, unname(Uniques))
+```
+
+
+# Going into phyloseq 
+```{r}
+## Generate sample data
+# sample_data in phyloseq is just a data.frame with rownames = Sample names where information on these samples is stored
+# e.g
+SampleNames <- rownames(seqtab)
+Age <- sample(x = 20:70, size = length(SampleNames), replace = TRUE)
+samdf <- data.frame(Sample = SampleNames, Age = Age)
+samdf$Above50 <- Age > 50
+rownames(samdf) <- SampleNames
+rbinom(n = length(SampleNames), size = 1, prob = .5)
+
+# Generate the phyloseq file
+ps <- phyloseq(otu_table(seqtab, taxa_are_rows=FALSE), tax_table(taxa.80.species), sample_data(samdf))
 ps
+ntaxa(ps)
+nsamples(ps)
+sample_names(ps)
+sample_variables(ps)
+get_variable(ps, sample_variables(ps)[2])
+sample_data(ps)$Age
+rank_names(ps)
+colnames(tax_table(ps))
+get_taxa_unique(ps, "Phylum")
+sample_sums(ps)
+taxa_sums(ps) # abundance of the taxa over all samples (sum)
+get_taxa(ps, i = sample_names(ps)[1]) # so i = 1 refers to a sample
+get_sample(ps, taxa_names(ps)[1])
 
-top50 <- names(sort(taxa_sums(ps), decreasing=TRUE))[1:50] #Choose the number of main sequences ("OTUs") that you want to analysis along all samples
-ps.top50 <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU))# transforms the sample counts of a taxa abundance matrix 
-ps.top50<- prune_taxa(top50, ps.top50) #keep the information of the selected sequences
-Taxa_plot<-plot_bar(ps.top50, x="Sample", fill="Family") # you can also plot by  "Phylum", "Class", "Order", "Genus" or "Specie"
-Taxa_plot
-pdf(file = "Family_abundance.pdf", width = 15, height = 9)
-Taxa_plot
-dev.off()
+
+plot_richness(ps)
+plot_richness(ps, measures = "Observed")
+plot_richness(ps, measures = "Shannon")
+
+Tr <- plot_richness(ps, measures = "Observed")
+Tr <- Tr + 
+        theme_bw() + 
+        ylab("Richness") +
+        geom_point(col = "#E69F00", size = 3)
+
+
+# example of using only the taxa that are present in at least 2 samples
+Above2Taxa <- taxa_names(ps)[colSums(otu_table(ps) != 0) > 1]
+psTop <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
+psTop = prune_taxa(Above2Taxa, psTop)
+sample_sums(psTop) # NOTE if you do it this way around: the relative abundances do not sum to 1
+plot_bar(psTop, x="Sample", fill="Family")
+plot_bar(psTop, x="Sample", fill="Phylum")
+
+psTop2 = prune_taxa(Above2Taxa, ps)
+psTop2 <- transform_sample_counts(psTop2, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
+sample_sums(psTop2) # sum to 1
+plot_bar(psTop2, x="Sample", fill="Family")
+plot_bar(psTop2, x="Sample", fill="Phylum")
+
+
+
+
+
 ```
 
 
