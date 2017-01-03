@@ -29,34 +29,83 @@ library(ggplot2); packageVersion("ggplot2")
 - minBoot: default = 50, is the minimum number out of 100 bootstraps that return the same genus (taxonomy) for a sequence so the sequence is assigned that taxonomy
 - For human microbiome data and V4 sequencing, we typically see a bit under half of the abundant ribosomal sequence variants (RSVs) assigned unambiguously to species-level, and a bit under 2/3rds assigned ambiguously (ie. allowing multiple species assignment). This fraction drops off in less sampled environments and for rare RSVs.
 
+# In case you restart, load your data
+
+```{r}
+
+datapath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD_243_maxEE-1"
+load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
+
+load(file.path(datapath, "TaxAssign/TaxonomicData.RData"))
+
+
+```
+
 # Analyse a bit your seqtab, Do you want to exclude rare sequences?
 
 ```{r}
 FinalNumbers <- data.frame(Sample = rownames(seqtab), UniqueAmplicons = rowSums(seqtab != 0), NoAmplicons = rowSums(seqtab))
+FinalNumbersSeq <- data.frame(Sequence = colnames(seqtab), InNumberSamples = colSums(seqtab != 0), TotalAmplicons = colSums(seqtab))
+FinalNumbersSeq <- group_by(FinalNumbersSeq, InNumberSamples)
+AmpliconDistribution <- dplyr::summarise(FinalNumbersSeq, UniqueAmplicons = n(), TotalAmplicons = sum(TotalAmplicons))
+# compare, table could also provide you the unique amplicons
+#AmpliconDistr <- as.data.frame(table(colSums(seqtab != 0)))
 
 
-AmpliconDistribution <- as.data.frame(table(colSums(seqtab != 0)))
-colnames(AmpliconDistribution) <- c("InNoSamples", "Amplicons")
-# add the precentage reached when leaving sequences in that are in at least n samples
-AmpliconDistribution$CumSum <- rev(cumsum(rev(AmpliconDistribution$Amplicons)))
-AmpliconDistribution$CumPerC <- rev(cumsum(rev(AmpliconDistribution$Amplicons/ncol(seqtab))))
+AmpliconDistribution$CumSumUnique <- rev(cumsum(rev(AmpliconDistribution$UniqueAmplicons)))
+AmpliconDistribution$CumPerCUnique <- rev(cumsum(rev(AmpliconDistribution$UniqueAmplicons/ncol(seqtab))))
+AmpliconDistribution$CumSumTotal <- rev(cumsum(rev(AmpliconDistribution$TotalAmplicons)))
+AmpliconDistribution$CumPerCTotal <- rev(cumsum(rev(AmpliconDistribution$TotalAmplicons/sum(colSums(seqtab)))))
 
-# Distribution plot
-Tr <- ggplot(AmpliconDistribution, aes(x = InNoSamples, y = Amplicons))
+
+## Distribution plots
+
+# The number of samples the unique amplicons are present in
+Tr <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = UniqueAmplicons))
 Tr <- Tr + geom_point(col = "#E69F00", size = 3) +
-        xlab("In Number of Samples") +
+        xlab("Present in Number of Samples") +
+        ylab("Unique Amplicons") +
         theme_bw() +
         theme(panel.grid.minor = element_blank(),
               panel.grid.major.y = element_blank(),
               panel.grid.major.x = element_line(color = "#999999", size = .15))
 
-# CumpPerC plot: CAN be used to decide on how many samples an Amplicon needs to present to stay (assuming you want to keep a certain % of amplicons)
-Tr1 <- ggplot(AmpliconDistribution, aes(x = InNoSamples, y = CumPerC))
+# Cumulative Percentage of Unique Amplicons
+Tr1 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCUnique))
 Tr1 <- Tr1 + geom_point(col = "#E69F00", size = 3) +
-        xlab("In Number of Samples") +
+        xlab("Present in Number of Samples") +
+        ylab("Cumulative Percentage of unique Amplicons") +
         theme_bw() +
         theme(panel.grid.minor = element_blank(),
               panel.grid.major.y = element_blank(),
+              panel.grid.major.x = element_line(color = "#999999", size = .15))
+
+# The number of samples the total amplicons are present in
+Tr2 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = TotalAmplicons))
+Tr2 <- Tr2 + geom_point(col = "#E69F00", size = 3) +
+        xlab("Present in Number of Samples") +
+        ylab("Total Amplicons") +
+        theme_bw() +
+        theme(panel.grid.minor = element_blank(),
+              panel.grid.major.y = element_blank(),
+              panel.grid.major.x = element_line(color = "#999999", size = .15))
+
+# Cumulative Percentage of Total Amplicons
+# probably the best plot to decide on the number of samples an amplicon is supposed to be present to be kept
+TenPercentValue <- ceiling(0.1*dim(seqtab)[1])
+Diff <- AmpliconDistribution$InNumberSamples - TenPercentValue
+index <- which.max(Diff[Diff<0]) + which.min(Diff[Diff>=0])
+PCKeptAtTenPCValue <- AmpliconDistribution$CumPerCTotal[index]
+Tr3 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCTotal))
+Tr3 <- Tr3 + geom_point(col = "#E69F00", size = 3) +
+        xlab("Present in Number of Samples") +
+        ylab("Cumulative Percentage of total Amplicons") +
+        geom_hline(yintercept = PCKeptAtTenPCValue, lty =  "dashed") +
+        geom_vline(xintercept = TenPercentValue, lty = 'dashed') +
+        ggtitle(paste("Total Amplicons", AmpliconDistribution$CumSumTotal[1], "; 10%:", index, "samples;", round(PCKeptAtTenPCValue, 3), "% of Total Amplicons remain")) +
+        theme_bw() +
+        theme(panel.grid.minor = element_blank(),
+              panel.grid.major.y = element_line(color = "#999999", size = .15),
               panel.grid.major.x = element_line(color = "#999999", size = .15))
 
 
@@ -84,7 +133,6 @@ Tr1 <- Tr1 + geom_point(col = "#E69F00", size = 3) +
 
 ```
 
-
 # Define the Paths to the reference fastq files
 
 ```{r}
@@ -103,6 +151,8 @@ if(!file.exists(SpecDB)){
         stop("could not find the reference database for addSpecies")
 }
 ```
+
+# NB: the next three steps can be jumbed over if taxa.80 and taxa.80.species and co have already been collected, therefore commented
 
 # Use assignTaxonomy for taxonomic assignment down to genus for your seqtab
 
