@@ -314,63 +314,68 @@ get_sample(ps, taxa_names(ps)[1])
 
 ```{r}
 AlphaDiv <- estimate_richness(ps, measures = c("Shannon", "Chao1", "Observed"))
+### SEE Einschub below, based on vegan package, would be very easy to calculate these measures self, but function is fine
+# just change the rownames
 
-#### Einschub
-## Understand the function:
-# it complains about missing singletons, which is the case when !any(otu_table(physeq) == 1) is TRUE
-# NB: the function is basically fully based on the vegan package
-renamevec = c("Observed", "Chao1", "ACE", "Shannon", "Simpson",
-              "InvSimpson", "Fisher")
-names(renamevec) <- c("S.obs", "S.chao1", "S.ACE", "shannon",
-                      "simpson", "invsimpson", "fisher")
-outlist = vector("list")
 
-## Richness, Chao1, ACE
-## NB: c("Chao1", "Observed", "ACE") are determined with the vegan::estimateR function
-AlphaMeasures <- vegan::estimateR(as(otu_table(ps), "matrix"))
-outlist <- c(outlist, list(t(data.frame(AlphaMeasures))))
-# NB: Observed = Rhichness is just
-Richness <- rowSums(as(otu_table(ps), "matrix") != 0)
-## Chao1 makes use of singletons and doubletons see <http://www.coloss.org/beebook/I/gut-symbionts/2/2/4>
-# I had no singletons, so here the same as richness
-# just to clarify what se.chao1 is: it is the standard error of the estimation probably.
-seqtab2 <- seqtab
-seqtab2[seqtab2 > 2 & seqtab2 < 10] <- 1 # introduce singletons
-AlphaMs <- vegan::estimateR(seqtab2)
-AlphaMs <- t(data.frame(AlphaMs))
-# try to get the estimator
-# from the vegan vignette: f1^2/2*f2 * N-1/N
-SampleCorrection <- (nrow(seqtab2)-1)/nrow(seqtab2)
-Estimator <- (rowSums(seqtab2 == 1))^2/(2*(rowSums(seqtab2 == 2)))
-
-# NB: Chao1 is not Rhichness anymore, 
-## Shannon Diversity, (also Simpson) are from the vegan::diversity function
-
-if ("Shannon" %in% measures) {
-        outlist <- c(outlist, list(shannon = vegan::diversity(OTU, index = "shannon")))
-}
-# Basically just: $-sum(p_{i}*log(p_{i})$.
-# e.g.:
-STRA <- seqtab/rowSums(seqtab)
-STRA1 <- STRA*(-1)*(log(STRA))
-ShDiv <- rowSums(STRA1, na.rm = TRUE)
-identical(ShDiv, vegan::diversity(seqtab, index = "shannon")) # TRUE!
-
-# NB also Simpson would be easy
-Simpson <- vegan::diversity(seqtab, index = "simpson")
-STRA2 <- STRA*STRA
-SimDiv <- 1-rowSums(STRA2, na.rm = TRUE)
-identical(Simpson, SimDiv) # TRUE
-
-## then the function simply combines the data in a data.frame
-out = do.call("cbind", outlist)
-namechange = intersect(colnames(out), names(renamevec))
-colnames(out)[colnames(out) %in% namechange] <- renamevec[namechange]
-colkeep = sapply(paste0("(se\\.){0,}", measures), grep, colnames(out),
-                 ignore.case = TRUE)
-out = out[, sort(unique(unlist(colkeep))), drop = FALSE]
-out <- as.data.frame(out)
-###### Ende Einschub
+# #### Einschub
+# ## Understand the function:
+# # it complains about missing singletons, which is the case when !any(otu_table(physeq) == 1) is TRUE
+# # NB: the function is basically fully based on the vegan package
+# renamevec = c("Observed", "Chao1", "ACE", "Shannon", "Simpson",
+#               "InvSimpson", "Fisher")
+# names(renamevec) <- c("S.obs", "S.chao1", "S.ACE", "shannon",
+#                       "simpson", "invsimpson", "fisher")
+# outlist = vector("list")
+# 
+# ## Richness, Chao1, ACE
+# ## NB: c("Chao1", "Observed", "ACE") are determined with the vegan::estimateR function
+# AlphaMeasures <- vegan::estimateR(as(otu_table(ps), "matrix"))
+# outlist <- c(outlist, list(t(data.frame(AlphaMeasures))))
+# # NB: Observed = Rhichness is just
+# Richness <- rowSums(as(otu_table(ps), "matrix") != 0)
+# ## Chao1 makes use of singletons and doubletons see <http://www.coloss.org/beebook/I/gut-symbionts/2/2/4>
+# # I had no singletons, so here the same as richness
+# # just to clarify what se.chao1 is: it is the standard error of the estimation probably.
+# seqtab2 <- seqtab
+# seqtab2[seqtab2 > 2 & seqtab2 < 10] <- 1 # introduce singletons
+# AlphaMs <- vegan::estimateR(seqtab2)
+# AlphaMs <- t(data.frame(AlphaMs))
+# # try to get the estimator
+# # from the vegan vignette: f1^2/2*f2 * N-1/N
+# Estimator <- ((rowSums(seqtab2 == 1))*((rowSums(seqtab2 == 1))-1))/(2*((rowSums(seqtab2 == 2))+1))
+# Chao1 <- Richness+Estimator
+# ## NB: the Variance (Standard Error) estimation is also given in the vignette!
+# 
+# 
+# # NB: Chao1 is not Rhichness anymore, 
+# ## Shannon Diversity, (also Simpson) are from the vegan::diversity function
+# 
+# if ("Shannon" %in% measures) {
+#         outlist <- c(outlist, list(shannon = vegan::diversity(OTU, index = "shannon")))
+# }
+# # Basically just: $-sum(p_{i}*log(p_{i})$.
+# # e.g.:
+# STRA <- seqtab/rowSums(seqtab)
+# STRA1 <- STRA*(-1)*(log(STRA))
+# ShDiv <- rowSums(STRA1, na.rm = TRUE)
+# identical(ShDiv, vegan::diversity(seqtab, index = "shannon")) # TRUE!
+# 
+# # NB also Simpson would be easy
+# Simpson <- vegan::diversity(seqtab, index = "simpson")
+# STRA2 <- STRA*STRA
+# SimDiv <- 1-rowSums(STRA2, na.rm = TRUE)
+# identical(Simpson, SimDiv) # TRUE
+# 
+# ## then the function simply combines the data in a data.frame
+# out = do.call("cbind", outlist)
+# namechange = intersect(colnames(out), names(renamevec))
+# colnames(out)[colnames(out) %in% namechange] <- renamevec[namechange]
+# colkeep = sapply(paste0("(se\\.){0,}", measures), grep, colnames(out),
+#                  ignore.case = TRUE)
+# out = out[, sort(unique(unlist(colkeep))), drop = FALSE]
+# out <- as.data.frame(out)
+# ###### Ende Einschub
 
 
 
