@@ -1,0 +1,234 @@
+---
+title: "Taxonomic assignation"
+author: "Camila"
+date: "December 15, 2016"
+output: html_document
+---
+# Required packages
+
+```{r}
+library(phyloseq); packageVersion("phyloseq")
+library(ggplot2); packageVersion("ggplot2")
+library(dplyr); packageVersion("dplyr")
+
+```
+
+# Links
+
+- <http://benjjneb.github.io/dada2/assign.html#species-assignment>
+- The phyloseq website
+    - <https://joey711.github.io/phyloseq/>
+
+# Questions
+
+- how dependent are the results on the training data (i.e. Silva or other database)?
+- can you improve the plots, phyloseq training
+- what allowMultiple should we use
+
+# Background
+
+- minBoot: default = 50, is the minimum number out of 100 bootstraps that return the same genus (taxonomy) for a sequence so the sequence is assigned that taxonomy
+- Results of richness estimates (for example) are probably unreliable, or wrong, if you have already trimmed low-abundance taxa from the data.
+
+# Load seqtab and taxonomy data and source functions
+
+```{r}
+
+datapath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD_243_maxEE-1"
+load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
+
+load(file.path(datapath, "TaxAssign/TaxonomicData.RData"))
+
+functionpath <- "."
+
+source(file.path(functionpath, "Dada_TaxonomyFunctions.R"))
+source(file.path(functionpath, "Dada_PlotFunctions.R"))
+
+## At this point you should have seqtab and taxa.species
+taxa.species <- taxa.80.species
+rm(taxa.50, taxa.80, taxa.80.species, taxa.50.species, bimFs, bimRs, mergers, mergers.nochim)
+
+```
+
+# Explore seqtab, Do you later want to exclude rare amplicons?
+
+```{r}
+
+TrList <- AmpliconDistribution(seqtab, PCentage = 15)
+
+TrList[[4]]
+# shows you for example that if you only keep the amplicons that were present in at least 15% of the samples you still keep over 80% of the amplicons
+TrList[[5]]
+
+```
+
+
+
+# Possibility to remove rare amplicons before goint to phyloseq (not a good idea for richness)
+
+
+```{r}
+
+# seqtab.kept <- KeepAmplicons(taxa = taxa.species, seqtab = seqtab, Percentage = 10)[[2]]
+# taxa.species <- KeepAmplicons(taxa = taxa.species, seqtab = seqtab, Percentage = 10)[[1]]
+# seqtab <- seqtab.kept
+# rm(seqtab.kept)
+```
+
+# Short Exploratory Analysis of the Taxa tables
+
+## Determine for each taxonomic level the percentage of sequences that could not be attributed unambiguously with the used minBoot
+
+
+```{r}
+# Number and percentage of assigned taxonomic levels for all amplicons
+NAPerC <- NAPerCForTaxLevel(taxa.species)
+
+NAPerC
+
+
+# look at the Genus-species with multiple species assignment
+unname(taxa.species[grep(pattern = "/", taxa.species[,'Species']), c('Genus', 'Species')])
+
+# # Number and percentage of assigned taxonomic levels related to the penetrance of the amplicons
+# TLvsPenetrance <- TaxLevelvsPenetrance(taxa = taxa.species, seqtab = seqtab)
+
+# Taxonomic assignments compared to the abundance of the sequences
+TLvsAb <- TaxLevelvsAbundance(taxa = taxa.species, seqtab = seqtab, Level = "Genus")
+
+TLvsAb[[2]]
+# could be done for other levels
+```
+
+- without removal of rare amplicons we get less than 10% of amplicons assigned to species levels
+- For human microbiome data and V4 sequencing, we typically see a bit under half of the abundant ribosomal sequence variants (RSVs) assigned unambiguously to species-level, and a bit under 2/3rds assigned ambiguously (ie. allowing multiple species assignment). This fraction drops off in less sampled environments and for rare RSVs.
+    - **question is what is abundant here, but seems we have less**
+
+
+# Analyses in Phyloseq
+
+## Generate the phyloseq object
+```{r}
+## Generate mock sample data
+# sample_data in phyloseq is just a data.frame with rownames = Sample names where information on these samples is stored
+# e.g
+SampleNames <- rownames(seqtab)
+Age <- sample(x = 20:70, size = length(SampleNames), replace = TRUE)
+samdf <- data.frame(Sample = SampleNames, Age = Age)
+samdf$Above50 <- Age > 50
+rownames(samdf) <- SampleNames
+
+
+# Generate the phyloseq file
+ps <- phyloseq(otu_table(seqtab, taxa_are_rows=FALSE), tax_table(taxa.species), sample_data(samdf))
+ps
+
+# # some playing with phyloseq
+# ntaxa(ps)
+# nsamples(ps)
+# sample_names(ps)
+# sample_variables(ps)
+# get_variable(ps, sample_variables(ps)[2])
+# sample_data(ps)$Age
+# rank_names(ps)
+# colnames(tax_table(ps))
+# get_taxa_unique(ps, "Phylum")
+# sample_sums(ps)
+# taxa_sums(ps) # abundance of the taxa over all samples (sum)
+# get_taxa(ps, i = sample_names(ps)[1]) # so i = 1 refers to a sample
+# get_sample(ps, taxa_names(ps)[1])
+
+```
+
+
+## Analyse alpha-diversity (especially Richness, Shannon, and Chao1)
+
+```{r}
+## Get DataFrame with the alpha diversity measures
+# NB: I use the estimate_richness function here (that is also used in plot_richness from phyloseq).
+# all these alpha diversity measures are simple, see commented "Einschub" below
+AlphaDiv <- estimate_richness(ps, measures = c("Shannon", "Chao1", "Observed"))
+rownames(AlphaDiv) <- sample_names(ps)
+
+
+# ######################### Einschub  ################## 
+# calculating alpha diversity measures self and understanding estimate_richness better
+# ## Understand the function complain:
+# # it complains about missing singletons, which is the case when !any(otu_table(physeq) == 1) is TRUE
+
+#### Richness, Chao1, ACE
+# ## estimate_richness uses the estimateR function from the  vegan package
+# AlphaMeasures <- vegan::estimateR(as(otu_table(ps), "matrix"))
+# AlphaMeasures <- t(data.frame(AlphaMeasures))
+
+## Richness:
+# Richness <- rowSums(as(otu_table(ps), "matrix") != 0)
+
+## Chao1:
+# Chao1 makes use of singletons and doubletons see vignette of vegan package and maybe <http://www.coloss.org/beebook/I/gut-symbionts/2/2/4>
+# we had no singletons, so here the same as richness
+# se.chao1 is the standard error of the chao1
+# here how to calculate chao1 yourself with singletons
+# seqtab2 <- seqtab
+# seqtab2[seqtab2 > 2 & seqtab2 < 10] <- 1 # introduce singletons
+# Estimator <- ((rowSums(seqtab2 == 1))*((rowSums(seqtab2 == 1))-1))/(2*((rowSums(seqtab2 == 2))+1))
+# Chao1 <- Richness+Estimator
+# ## NB: the Variance (Standard Error) estimation is also given in the vignette but I was to lazy to do that here too
+# I think Chao1 is pretty silly, isn't it?
+# 
+
+### Shannon diversity, also simpson uses vegan::diversity function
+# vegan::diversity(OTU, index = "shannon") 
+
+# ## Shannon self
+# Basically just: $-sum(p_{i}*log(p_{i})$.
+# # e.g.:
+# STRA <- seqtab/rowSums(seqtab)
+# STRA1 <- STRA*(-1)*(log(STRA))
+# ShDiv <- rowSums(STRA1, na.rm = TRUE)
+# identical(ShDiv, vegan::diversity(seqtab, index = "shannon")) # TRUE!
+
+# ## Simpson would be easy
+# Simpson <- vegan::diversity(seqtab, index = "simpson")
+# STRA2 <- STRA*STRA
+# SimDiv <- 1-rowSums(STRA2, na.rm = TRUE)
+# identical(Simpson, SimDiv) # TRUE
+# 
+# ###### Ende Einschub ##########################################
+
+
+## Illustrate alpha diversity measures
+## I use plotAlphaDiversity function which is related to plot_richness from phyloseq (but also offers boxplots and
+# always gives each plot individually in a list instead of facet_wraps)
+
+
+TrList <- plotAlphaDiversity(ps, x = "samples", measures = c("Observed", "Shannon", "Chao1"), color = "Above50")
+
+# alternatively List of Boxplots using group
+TrListBP <- plotAlphaDiversity(ps, x = "Above50", color = "Above50", group = "Above50", measures = c("Observed", "Shannon", "Chao1"))
+
+
+#### RESTART Here with a plot sequencing depth to alpha diversity correlation
+
+# example of using only the taxa that are present in at least 2 samples
+Above2Taxa <- taxa_names(ps)[colSums(otu_table(ps) != 0) > 1]
+psTop <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
+psTop = prune_taxa(Above2Taxa, psTop)
+sample_sums(psTop) # NOTE if you do it this way around: the relative abundances do not sum to 1
+plot_bar(psTop, x="Sample", fill="Family")
+plot_bar(psTop, x="Sample", fill="Phylum")
+
+psTop2 = prune_taxa(Above2Taxa, ps)
+psTop2 <- transform_sample_counts(psTop2, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
+sample_sums(psTop2) # sum to 1
+plot_bar(psTop2, x="Sample", fill="Family")
+plot_bar(psTop2, x="Sample", fill="Phylum")
+
+
+
+
+
+```
+
+
+

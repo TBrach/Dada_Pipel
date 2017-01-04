@@ -458,38 +458,257 @@ NoReads_Steps <- function(QStatsList = NULL, NoFilteredReads = NULL, mergers = N
 
 
 TotalandUniqueAmplicons <- function(FinalNumbers, seqtab, sort =TRUE) {
-  
-  ## show the final amplicon numbers in a plot
-  FinalNumbers$TotalAmplicons <- FinalNumbers$NoAmplicons/100 
-  
-  FinalNumbersL <- tidyr::gather(FinalNumbers, key = Type, value = Number, -Sample, -NoAmplicons)
-  
-  if(sort) {
-    
-    FinalNumbersL <- dplyr::arrange(FinalNumbersL, desc(NoAmplicons))
-    LevelsWant <- as.character(FinalNumbersL$Sample)
-    for (i in seq_along(LevelsWant)) {
-      FinalNumbersL$Sample <- relevel(FinalNumbersL$Sample, ref = LevelsWant[i])
-    }
-    
-  }
-  
-  Tr <- ggplot(FinalNumbersL, aes(x = Sample, y = Number, col = Type)) +
-    geom_point() +
-    scale_color_manual(values = c("#E69F00", "#009E73"), labels = c("TotalAmplicons/100", "UniqueAmplicons"))+
-    ylab("No Amplicons") + 
-    xlab("") +
-    #scale_y_continuous(breaks = c(100, 200, 300, 400), labels = c("100\n(10000)", "200\n(20000)", "300\n(30000)", "400\n(40000)")) +
-    ggtitle(paste("No unique amplicons in all samples",dim(seqtab)[2]))+
-    theme_bw() + 
-    theme(panel.grid.minor = element_blank(),
-          panel.grid.major.y = element_blank(),
-          panel.grid.major.x = element_line(color = "#999999", size = .15),
-          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
-          legend.title = element_blank())
-  
-  return(Tr)
-  
+        
+        ## show the final amplicon numbers in a plot
+        FinalNumbers$TotalAmplicons <- FinalNumbers$NoAmplicons/100 
+        
+        FinalNumbersL <- tidyr::gather(FinalNumbers, key = Type, value = Number, -Sample, -NoAmplicons)
+        
+        if(sort) {
+                
+                FinalNumbersL <- dplyr::arrange(FinalNumbersL, desc(NoAmplicons))
+                LevelsWant <- as.character(FinalNumbersL$Sample)
+                for (i in seq_along(LevelsWant)) {
+                        FinalNumbersL$Sample <- relevel(FinalNumbersL$Sample, ref = LevelsWant[i])
+                }
+                
+        }
+        
+        Tr <- ggplot(FinalNumbersL, aes(x = Sample, y = Number, col = Type)) +
+                geom_point() +
+                scale_color_manual(values = c("#E69F00", "#009E73"), labels = c("TotalAmplicons/100", "UniqueAmplicons"))+
+                ylab("No Amplicons") + 
+                xlab("") +
+                #scale_y_continuous(breaks = c(100, 200, 300, 400), labels = c("100\n(10000)", "200\n(20000)", "300\n(30000)", "400\n(40000)")) +
+                ggtitle(paste("No unique amplicons in all samples",dim(seqtab)[2]))+
+                theme_bw() + 
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15),
+                      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
+                      legend.title = element_blank())
+        
+        return(Tr)
+        
 }
 
+
+#######################################
+#### AmpliconDistribution
+#######################################
+## REQUIRES dplyr
+## Input:
+# Seqtab: seqtab from dada2 wrapper
+# PCentage: illustrates in how many amplicons you would keep if only considering amplicons that are present in at least PCentage of the samples
+## Output: 
+# TrList: List of four Trelis objects, plus AmpliconDistribution data.frame
+
+
+AmpliconDistribution <- function(seqtab, PCentage = 10) {
+        
+        FinalNumbersSeq <- data.frame(Sequence = colnames(seqtab), InNumberSamples = colSums(seqtab != 0), TotalAmplicons = colSums(seqtab))
+        FinalNumbersSeq <- group_by(FinalNumbersSeq, InNumberSamples)
+        AmpliconDistribution <- dplyr::summarise(FinalNumbersSeq, UniqueAmplicons = n(), TotalAmplicons = sum(TotalAmplicons))
+        AmpliconDistribution$CumSumUnique <- rev(cumsum(rev(AmpliconDistribution$UniqueAmplicons)))
+        AmpliconDistribution$CumPerCUnique <- rev(cumsum(rev(AmpliconDistribution$UniqueAmplicons/ncol(seqtab))))
+        AmpliconDistribution$CumSumTotal <- rev(cumsum(rev(AmpliconDistribution$TotalAmplicons)))
+        AmpliconDistribution$CumPerCTotal <- rev(cumsum(rev(AmpliconDistribution$TotalAmplicons/sum(colSums(seqtab)))))
+        
+        PCValue <- ceiling((PCentage/100)*dim(seqtab)[1])
+        Diff <- AmpliconDistribution$InNumberSamples - PCValue
+        index <- which.max(Diff[Diff<0]) + which.min(Diff[Diff>=0])
+        PCKeptAtPCValue <- AmpliconDistribution$CumPerCTotal[index]
+        
+        # The number of samples the unique amplicons are present in
+        Tr <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = UniqueAmplicons))
+        Tr <- Tr + geom_point(col = "#E69F00", size = 3) +
+                xlab("Present in Number of Samples") +
+                ylab("Unique Amplicons") +
+                theme_bw() +
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15))
+        
+        # Cumulative Percentage of Unique Amplicons
+        Tr1 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCUnique))
+        Tr1 <- Tr1 + geom_point(col = "#E69F00", size = 3) +
+                xlab("Present in Number of Samples") +
+                ylab("Cumulative Percentage of unique Amplicons") +
+                theme_bw() +
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15))
+        
+        # The number of samples the total amplicons are present in
+        Tr2 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = TotalAmplicons))
+        Tr2 <- Tr2 + geom_point(col = "#E69F00", size = 3) +
+                xlab("Present in Number of Samples") +
+                ylab("Total Amplicons") +
+                theme_bw() +
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15))
+        
+        Tr3 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCTotal))
+        Tr3 <- Tr3 + geom_point(col = "#E69F00", size = 3) +
+                xlab("Present in Number of Samples") +
+                ylab("Cumulative Percentage of total Amplicons") +
+                geom_hline(yintercept = PCKeptAtPCValue, lty =  "dashed") +
+                geom_vline(xintercept = PCValue, lty = 'dashed') +
+                ggtitle(paste("Total Amplicons", AmpliconDistribution$CumSumTotal[1], ";", PCentage, "%:", index, "samples;", round(PCKeptAtPCValue, 3), "% of Total Amplicons remain")) +
+                theme_bw() +
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_line(color = "#999999", size = .15),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15))
+        
+        TrList <- list(Tr, Tr1, Tr2, Tr3, AmpliconDistribution)
+        
+        return(TrList)
+        
+}
+
+#######################################
+#### plotAlphaDiversity
+#######################################
+# Function related to plot_richness from phyloseq but plots each measure individually and outputs a Trlist
+
+plotAlphaDiversity <- function(physeq, measures = NULL, x = "samples", color = NULL, shape = NULL,
+                               group = NULL, defCol = "#E69F00"){
+        
+        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+        
+        AlphaDiv <- estimate_richness(physeq, measures = measures)
+        measures = colnames(AlphaDiv)
+        ses = colnames(AlphaDiv)[grep("^se\\.", colnames(AlphaDiv))]
+        measures = measures[!measures %in% ses]
+        
+        if (!is.null(sample_data(physeq, errorIfNULL = FALSE))) {
+                DF <- data.frame(AlphaDiv, sample_data(physeq))
+        } else {
+                DF <- data.frame(AlphaDiv)
+        }
+        
+        DF$samples <- sample_names(physeq)
+        
+        if (!is.null(x)) {
+                if (x %in% c("sample", "samples", "sample_names", "sample.names", "Sample", "Samples")) {
+                        x <- "samples"
+                }
+        } else {
+                x <- "samples"
+        }
+        
+        if(!is.null(group)){
+
+                # # OLD VERSION COmmented out
+                # DF <- dplyr::group_by_(DF, group)
+                # 
+                # DF1 <- dplyr::summarise_each_(DF, funs(mean, sd), measures)
+                # 
+                # measures1 <- paste(measures, "_mean", sep = "")
+                # measures2 <- paste(measures, "_sd", sep = "")
+                # 
+                # TrList <- list()
+                # 
+                # for (i in 1:length(measures)) {
+                #         
+                #         aes_map = aes_string(x = group, y = measures1[i], shape = shape, color = color)
+                #         
+                #         if(is.null(color)){
+                #                 Tr = ggplot(DF1, aes_map) + geom_point(na.rm = TRUE, col = defCol, size = 3)
+                #         } else {
+                #                 
+                #                 Tr = ggplot(DF1, aes_map) + geom_point(na.rm = TRUE, size = 3)
+                #         }
+                #         
+                #         Tr = Tr + geom_errorbar(aes_string(ymax = paste(measures1[i], "+", measures2[i], sep =""), ymin = paste(measures1[i], "-", measures2[i], sep ="")), width = 0.1)
+                #         
+                #         Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
+                #         
+                #         Tr = Tr + theme(panel.grid.minor = element_blank(),
+                #                         panel.grid.major.y = element_blank(),
+                #                         panel.grid.major.x = element_line(color = "#999999", size = .15))
+                #         
+                #         TrList[[i]] <- Tr
+                #         
+                # }
+                
+                TrList <- list()
+                
+                for (i in 1:length(measures)) {
+                        
+                        aes_map = aes_string(x = group, y = measures[i], shape = shape, color = color, group = group)
+                        
+                        if(is.null(color)){
+                                Tr = ggplot(DF, aes_map) + geom_boxplot(na.rm = TRUE, col = defCol)
+                        } else {
+                                
+                                Tr = ggplot(DF, aes_map) + geom_boxplot(na.rm = TRUE)
+                        }
+                        
+                        Tr = Tr + geom_jitter(width = .2, alpha = 0.65)
+                        
+                        Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
+                        
+                        Tr <- Tr + theme_bw()
+                        
+                        Tr = Tr + theme(panel.grid.minor = element_blank(),
+                                        panel.grid.major.y = element_blank(),
+                                        panel.grid.major.x = element_line(color = "#999999", size = .15))
+                        
+                        TrList[[i]] <- Tr
+                        
+                }
+                
+                
+
+        } else {
+                
+                TrList <- list()
+                
+                for (i in 1:length(measures)) {
+                        
+                        aes_map = aes_string(x = x, y = measures[i], shape = shape, color = color)
+                        
+                        if(is.null(color)){
+                                Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE, col = defCol)
+                        } else {
+                                
+                                Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE)
+                        }
+                        
+                        
+                        if (measures[i] == "Chao1") {
+                                Tr = Tr + geom_errorbar(aes(ymax = Chao1 + se.chao1, ymin = Chao1 -
+                                                                    se.chao1), width = 0.1)
+                        }
+                        if (measures[i] == "ACE") {
+                                Tr = Tr + geom_errorbar(aes(ymax = ACE + se.ACE, ymin = ACE -
+                                                                    se.ACE), width = 0.1)
+                        }
+                        
+                        Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
+                        
+                        Tr <- Tr + theme_bw()
+                        
+                        Tr = Tr + theme(panel.grid.minor = element_blank(),
+                                        panel.grid.major.y = element_blank(),
+                                        panel.grid.major.x = element_line(color = "#999999", size = .15),
+                                        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6))
+                        
+                        TrList[[i]] <- Tr
+                        
+                }
+                
+                
+                
+        }
+        
+        
+        
+        names(TrList) <- measures
+        return(TrList)
+        
+}
+        
 

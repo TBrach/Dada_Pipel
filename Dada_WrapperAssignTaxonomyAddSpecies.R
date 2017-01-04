@@ -6,6 +6,10 @@ functpath <- ""
 
 source(file.path(functpath, "Dada_TaxonomyFunctions.R"))
 
+if(!exists("seqtab")){
+        stop("no seqtab has been loaded")
+}
+
 assignTaxonomyaddSpecies(seqtab, 
                          minBoot = 80,
                          allowMultiple = 3,
