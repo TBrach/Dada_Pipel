@@ -28,8 +28,10 @@ library(ggplot2); packageVersion("ggplot2")
 
 - minBoot: default = 50, is the minimum number out of 100 bootstraps that return the same genus (taxonomy) for a sequence so the sequence is assigned that taxonomy
 - For human microbiome data and V4 sequencing, we typically see a bit under half of the abundant ribosomal sequence variants (RSVs) assigned unambiguously to species-level, and a bit under 2/3rds assigned ambiguously (ie. allowing multiple species assignment). This fraction drops off in less sampled environments and for rare RSVs.
+    - **question is what is abundant here, but seems we have less**
+- Results of richness estimates (for example) are probably unreliable, or wrong, if you have already trimmed low-abundance taxa from the data.
 
-# In case you restart, load your data
+# In case you restart, load your data and source functions
 
 ```{r}
 
@@ -38,10 +40,12 @@ load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
 
 load(file.path(datapath, "TaxAssign/TaxonomicData.RData"))
 
+source("Dada_TaxonomyFunctions.R")
+
 
 ```
 
-# Analyse a bit your seqtab, Do you want to exclude rare sequences?
+# Explore seqtab, Do you want to exclude rare amplicons?
 
 ```{r}
 FinalNumbers <- data.frame(Sample = rownames(seqtab), UniqueAmplicons = rowSums(seqtab != 0), NoAmplicons = rowSums(seqtab))
@@ -107,6 +111,7 @@ Tr3 <- Tr3 + geom_point(col = "#E69F00", size = 3) +
         theme(panel.grid.minor = element_blank(),
               panel.grid.major.y = element_line(color = "#999999", size = .15),
               panel.grid.major.x = element_line(color = "#999999", size = .15))
+rm(TenPercentValue, Diff, index, PCKeptAtTenPCValue)
 
 
 
@@ -133,23 +138,36 @@ Tr3 <- Tr3 + geom_point(col = "#E69F00", size = 3) +
 
 ```
 
+
+# NB before you do the taxonomic asssignment you could exclude rare amplicons to save a lot of processing time
+
+- I checked, it makes almost no difference if you kick the rare amplicons out already from seqtab here, e.g.
+
+```{r}
+
+# kept.taxa.50.species <- KeepAmplicons(taxa = taxa.50.species, seqtab = seqtab)
+# seqtab.kept <- kept.taxa.50.species[[2]]
+# # then save seqtab and make the following assignments with this smaller seqtab
+# #save(seqtab.kept, file = file.path("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD_243_maxEE-1/TaxAssign", "SeqTabKept.RData")) 
+```
+
 # Define the Paths to the reference fastq files
 
 ```{r}
-PathToRefs <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/AssignTaxonomy"
-RefDataBase <- "silva_nr_v123_train_set.fa.gz"
-RefDB <- file.path(PathToRefs, RefDataBase)
-
-if(!file.exists(RefDB)){
-        stop("could not find the reference database for assignTaxonomy")
-}
-
-SpeciesDB <- "silva_species_assignment_v123.fa.gz"
-SpecDB <- file.path(PathToRefs, SpeciesDB)
-
-if(!file.exists(SpecDB)){
-        stop("could not find the reference database for addSpecies")
-}
+# PathToRefs <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/AssignTaxonomy"
+# RefDataBase <- "silva_nr_v123_train_set.fa.gz"
+# RefDB <- file.path(PathToRefs, RefDataBase)
+# 
+# if(!file.exists(RefDB)){
+#         stop("could not find the reference database for assignTaxonomy")
+# }
+# 
+# SpeciesDB <- "silva_species_assignment_v123.fa.gz"
+# SpecDB <- file.path(PathToRefs, SpeciesDB)
+# 
+# if(!file.exists(SpecDB)){
+#         stop("could not find the reference database for addSpecies")
+# }
 ```
 
 # NB: the next three steps can be jumbed over if taxa.80 and taxa.80.species and co have already been collected, therefore commented
@@ -157,19 +175,19 @@ if(!file.exists(SpecDB)){
 # Use assignTaxonomy for taxonomic assignment down to genus for your seqtab
 
 ```{r}
-# seqs<-c(colnames(seqtab))
-## ATTENTION: takes a bit less than a minute per 100 sequences, so for 3600 sequences it takes just below 30 minutes
-ptm <- proc.time()
-taxa.80 <- assignTaxonomy(seqtab, refFasta = RefDB,verbose = TRUE, minBoot=80) 
-proc.time() - ptm
-
-ptm <- proc.time()
-taxa.50 <- assignTaxonomy(seqtab, refFasta = RefDB,verbose = TRUE, minBoot=50) 
-proc.time() - ptm
-
-# NB: taxa.80 is a matrix: nrows is number of sequences, ncol is number of taxonomic levels (usually 6: Kingdom, Phylum, Class, Order, Family, Genus)
-identical(colnames(seqtab), rownames(taxa.80)) # TRUE
-identical(colnames(seqtab), rownames(taxa.50)) # TRUE
+# # seqs<-c(colnames(seqtab))
+# ## ATTENTION: takes a bit less than a minute per 100 sequences, so for 3600 sequences it takes just below 30 minutes
+# ptm <- proc.time()
+# taxa.80 <- assignTaxonomy(seqtab, refFasta = RefDB,verbose = TRUE, minBoot=80) 
+# proc.time() - ptm
+# 
+# ptm <- proc.time()
+# taxa.50 <- assignTaxonomy(seqtab, refFasta = RefDB,verbose = TRUE, minBoot=50) 
+# proc.time() - ptm
+# 
+# # NB: taxa.80 is a matrix: nrows is number of sequences, ncol is number of taxonomic levels (usually 6: Kingdom, Phylum, Class, Order, Family, Genus)
+# identical(colnames(seqtab), rownames(taxa.80)) # TRUE
+# identical(colnames(seqtab), rownames(taxa.50)) # TRUE
 ```
 
 
@@ -178,23 +196,38 @@ identical(colnames(seqtab), rownames(taxa.50)) # TRUE
 - The addSpecies command takes pretty long, so better on the server
 
 ```{r}
-# ATTENTION: these takes long: 
-ptm <- proc.time()
-taxa.80.species <- addSpecies(taxa.80,refFasta = SpecDB,verbose = TRUE, allowMultiple = 3)
-proc.time() - ptm
-
-
-# ATTENTION: these takes long: 
-ptm <- proc.time()
-taxa.50.species <- addSpecies(taxa.50,refFasta = SpecDB,verbose = TRUE, allowMultiple = 3)
-proc.time() - ptm
-
-
-save(taxa.80, taxa.50, taxa.80.species, taxa.50.species, file = file.path(PathToRefs, "TaxonomicData.RData"))
+# # ATTENTION: these takes long: 
+# ptm <- proc.time()
+# taxa.80.species <- addSpecies(taxa.80,refFasta = SpecDB,verbose = TRUE, allowMultiple = 3)
+# proc.time() - ptm
+# 
+# 
+# # ATTENTION: these takes long: 
+# ptm <- proc.time()
+# taxa.50.species <- addSpecies(taxa.50,refFasta = SpecDB,verbose = TRUE, allowMultiple = 3)
+# proc.time() - ptm
+# 
+# 
+# # save(taxa.80, taxa.50, taxa.80.species, taxa.50.species, file = file.path(PathToRefs, "TaxonomicData.RData"))
 ```
 
+# Removal of rare amplicons after taxonomic assignemt, keeping only Amplicons that are present in at least 10% of samples
 
-# Exploratory Analysis of the Taxa tables
+- As mentioned above, this could be already done from seqtab to save a massive amount of time on the assignTaxonomy and addSpecies function
+
+```{r}
+
+seqtab.kept <- KeepAmplicons(taxa = taxa.80.species, seqtab = seqtab)[[2]]
+taxa.50.species <- KeepAmplicons(taxa = taxa.50.species, seqtab = seqtab)[[1]]
+taxa.80.species <- KeepAmplicons(taxa = taxa.80.species, seqtab = seqtab)[[1]]
+taxa.50 <- KeepAmplicons(taxa = taxa.50, seqtab = seqtab)[[1]]
+taxa.80 <- KeepAmplicons(taxa = taxa.80, seqtab = seqtab)[[1]]
+seqtab <- seqtab.kept
+rm(seqtab.kept)
+
+```
+
+# Short Exploratory Analysis of the Taxa tables
 
 ## Overview of taxa matrices 
 
@@ -214,6 +247,18 @@ unname(taxa.80.species[grep(pattern = "/", taxa.80.species[,'Species']), c('Genu
 # Number and percentage of assigned taxonomic levels for all amplicons
 NAPerC.80 <- NAPerCForTaxLevel(taxa.80.species)
 NAPerC.50 <- NAPerCForTaxLevel(taxa.50.species)
+# # So clearly less than 50% get assigned down to species in our case
+
+## Einschub
+# NAPerC.80.kept <- NAPerCForTaxLevel(kept.taxa.80.species)
+# NAPerC.50.kept <- NAPerCForTaxLevel(kept.taxa.50.species)
+# # NB: when I loaded taxa.80.species new (first filtering than taxonomic assignment)
+# # they were close but not fully identical. 
+# # The difference should be small enough to work with filtering before assigment
+# identical(NAPerC.80, NAPerC.80.kept)
+# identical(NAPerC.50, NAPerC.50.kept)
+###
+
 
 # Number and percentage of assigned taxonomic levels related to the penetrance of the amplicons
 TLvsPenetrance.80 <- TaxLevelvsPenetrance(taxa = taxa.80.species, seqtab = seqtab)
@@ -223,16 +268,15 @@ TLvsAb.80 <- TaxLevelvsAbundance(taxa = taxa.80.species, seqtab = seqtab, Level 
 
 TLvsAb.80[[2]]
 
+TLvsAb.80 <- TaxLevelvsAbundance(taxa = taxa.80.species, seqtab = seqtab, Level = "Family")
 
-# Extra training
-M1 <- mergers.nochim[[1]]
-Uniques <- getUniques(M1)
-# same as M1$abundance
-identical(M1$abundance, unname(Uniques))
+TLvsAb.80[[2]]
+
+
 ```
 
 
-# Going into phyloseq 
+# Analyses in Phyloseq
 ```{r}
 ## Generate sample data
 # sample_data in phyloseq is just a data.frame with rownames = Sample names where information on these samples is stored
@@ -242,7 +286,7 @@ Age <- sample(x = 20:70, size = length(SampleNames), replace = TRUE)
 samdf <- data.frame(Sample = SampleNames, Age = Age)
 samdf$Above50 <- Age > 50
 rownames(samdf) <- SampleNames
-rbinom(n = length(SampleNames), size = 1, prob = .5)
+
 
 # Generate the phyloseq file
 ps <- phyloseq(otu_table(seqtab, taxa_are_rows=FALSE), tax_table(taxa.80.species), sample_data(samdf))
@@ -260,6 +304,78 @@ sample_sums(ps)
 taxa_sums(ps) # abundance of the taxa over all samples (sum)
 get_taxa(ps, i = sample_names(ps)[1]) # so i = 1 refers to a sample
 get_sample(ps, taxa_names(ps)[1])
+
+```
+
+
+## Analyse alpha-diversity (especially Richness, Shannon, and Chao1)
+
+
+
+```{r}
+AlphaDiv <- estimate_richness(ps, measures = c("Shannon", "Chao1", "Observed"))
+
+#### Einschub
+## Understand the function:
+# it complains about missing singletons, which is the case when !any(otu_table(physeq) == 1) is TRUE
+# NB: the function is basically fully based on the vegan package
+renamevec = c("Observed", "Chao1", "ACE", "Shannon", "Simpson",
+              "InvSimpson", "Fisher")
+names(renamevec) <- c("S.obs", "S.chao1", "S.ACE", "shannon",
+                      "simpson", "invsimpson", "fisher")
+outlist = vector("list")
+
+## Richness, Chao1, ACE
+## NB: c("Chao1", "Observed", "ACE") are determined with the vegan::estimateR function
+AlphaMeasures <- vegan::estimateR(as(otu_table(ps), "matrix"))
+outlist <- c(outlist, list(t(data.frame(AlphaMeasures))))
+# NB: Observed = Rhichness is just
+Richness <- rowSums(as(otu_table(ps), "matrix") != 0)
+## Chao1 makes use of singletons and doubletons see <http://www.coloss.org/beebook/I/gut-symbionts/2/2/4>
+# I had no singletons, so here the same as richness
+# just to clarify what se.chao1 is: it is the standard error of the estimation probably.
+seqtab2 <- seqtab
+seqtab2[seqtab2 > 2 & seqtab2 < 10] <- 1 # introduce singletons
+AlphaMs <- vegan::estimateR(seqtab2)
+AlphaMs <- t(data.frame(AlphaMs))
+# try to get the estimator
+# from the vegan vignette: f1^2/2*f2 * N-1/N
+SampleCorrection <- (nrow(seqtab2)-1)/nrow(seqtab2)
+Estimator <- (rowSums(seqtab2 == 1))^2/(2*(rowSums(seqtab2 == 2)))
+
+# NB: Chao1 is not Rhichness anymore, 
+## Shannon Diversity, (also Simpson) are from the vegan::diversity function
+
+if ("Shannon" %in% measures) {
+        outlist <- c(outlist, list(shannon = vegan::diversity(OTU, index = "shannon")))
+}
+# Basically just: $-sum(p_{i}*log(p_{i})$.
+# e.g.:
+STRA <- seqtab/rowSums(seqtab)
+STRA1 <- STRA*(-1)*(log(STRA))
+ShDiv <- rowSums(STRA1, na.rm = TRUE)
+identical(ShDiv, vegan::diversity(seqtab, index = "shannon")) # TRUE!
+
+# NB also Simpson would be easy
+Simpson <- vegan::diversity(seqtab, index = "simpson")
+STRA2 <- STRA*STRA
+SimDiv <- 1-rowSums(STRA2, na.rm = TRUE)
+identical(Simpson, SimDiv) # TRUE
+
+## then the function simply combines the data in a data.frame
+out = do.call("cbind", outlist)
+namechange = intersect(colnames(out), names(renamevec))
+colnames(out)[colnames(out) %in% namechange] <- renamevec[namechange]
+colkeep = sapply(paste0("(se\\.){0,}", measures), grep, colnames(out),
+                 ignore.case = TRUE)
+out = out[, sort(unique(unlist(colkeep))), drop = FALSE]
+out <- as.data.frame(out)
+###### Ende Einschub
+
+
+
+
+
 
 
 plot_richness(ps)

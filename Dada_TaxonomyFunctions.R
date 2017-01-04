@@ -1,4 +1,84 @@
 #######################################
+### FUNCTION: assignTaxonomyaddSpecies
+#######################################
+
+# Function that simply calls assignTaxonomy and then addSpecies from dada2
+## Input
+# seqtab: your sequence table from dada2
+# minBoot: minBoot for assignTaxonomy
+# allowMultiple: default 3, allowMultiple for addSpecies
+# PathToRefs: path to the folder with bot the RefDataBase and SpeciesDB in
+# RefDataBase: the reference database for assignTaxonomy
+# SpeciesDB: the reference database for addSpecies
+# PathToSave: the folder into which taxa and taxa.species will be saved, if NULL working directory is used
+## Output:
+# taxa, taxa.species are saved as Taxonomy.RData
+
+
+assignTaxonomyaddSpecies <- function(seqtab, 
+                                     minBoot = 80, 
+                                     allowMultiple = 3,
+                                     PathToRefs = NULL,
+                                     RefDataBase = "silva_nr_v123_train_set.fa.gz",
+                                     SpeciesDB = "silva_species_assignment_v123.fa.gz",
+                                     PathToSave = NULL){
+        
+        ## Packages
+        try(library(dada2), biocLite("dada2"))
+        
+        
+        ## Reference Databases
+        if(is.null(PathToRefs)){
+                stop("PathToRefs must be given")
+        }
+        
+        RefDB <- file.path(PathToRefs, RefDataBase)
+        
+        if(!file.exists(RefDB)){
+                stop("could not find the reference database for assignTaxonomy")
+        }
+        
+        SpecDB <- file.path(PathToRefs, SpeciesDB)
+        
+        if(!file.exists(SpecDB)){
+                stop("could not find the reference database for addSpecies")
+        }
+        
+        ## list the input
+        assignTaxonomyaddSpeciesInput <- list(seqtab = seqtab, minBoot = minBoot,
+                                              allowMultiple = alllowMultiple,
+                                              PathToRefs = PathToRefs, 
+                                              RefDataBase = RefDataBase,
+                                              SpeciesDB = SpeciesDB,
+                                              PathToSave = PathToSave)
+        
+        
+        ## run assignTaxonomy and save
+        ptm <- proc.time()
+        taxa <- assignTaxonomy(seqtab, refFasta = RefDB, verbose = TRUE, minBoot = minBoot)
+        TimeForassignTaxonomy <- (proc.time()-ptm)[3]
+        
+        if(is.null(PathToSave)){
+                PathToSave <- getwd()
+        }
+        
+        assignTaxonomyaddSpeciesInput <- list(assignTaxonomyaddSpeciesInput, TimeForassignTaxonomy)
+        
+        save(taxa, assignTaxonomyaddSpeciesInput, file = file.path(PathToSave, "Taxonomy.RData"))
+        
+        ## run addSpecies and save
+        ptm <- proc.time()
+        taxa.species <- addSpecies(taxa, refFasta = SpecDB, verbose = TRUE, allowMultiple = allowMultiple)
+        TimeForaddSpecies <- (proc.time()-ptm)[3]
+        
+        assignTaxonomyaddSpeciesInput <- list(assignTaxonomyaddSpeciesInput, TimeForaddSpecies)
+        
+        save(taxa, taxa.species, assignTaxonomyaddSpeciesInput, file = file.path(PathToSave, "Taxonomy.RData"))
+
+}
+
+
+#######################################
 ### FUNCTION: NAPerCForTaxLevel
 #######################################
 
@@ -98,3 +178,127 @@ TaxLevelvsAbundance <- function(taxa, seqtab, Level = NULL){
         return(TLvsAb)
         
 }
+
+
+#######################################
+### FUNCTION: KeepAmplicons
+#######################################
+
+# Function to find the amplicons that are present in at least "Percentage" of samples
+## Input
+# taxa: the output of the assignTaxonomy (dada2) and maybe addSpecies command. nrow = number of sequences and ncol number taxonomic levels.
+# seqtab: The abundance table output from Dada2_wrap
+# percentage: only amplicons present in at least this percentage of samples will be kept
+## Output
+# taxseq: list with the shortened taxa and seqtab
+
+KeepAmplicons <- function(taxa, seqtab, Percentage = 10){
+        
+        if(!identical(colnames(seqtab), rownames(taxa))){
+                stop("taxa and seqtab do not fit togetehr")
+        }
+        
+        
+        PerCSampleValue <- ceiling((Percentage/100)*dim(seqtab)[1])
+        KeepAmplis <- colnames(seqtab)[colSums(seqtab != 0) >= PerCSampleValue]
+        seqtab.keep <- seqtab[,KeepAmplis]
+        taxa.keep <- taxa[KeepAmplis,]
+        taxseq <- list(taxa.keep, seqtab.keep)
+        return(taxseq)
+}
+
+
+
+
+
+
+#######################################
+### FUNCTION: plot_richness
+#######################################
+
+# function (physeq, x = "samples", color = NULL, shape = NULL, 
+#           title = NULL, scales = "free_y", nrow = 1, shsi = NULL, measures = NULL, 
+#           sortby = NULL) 
+# {
+#         erDF = estimate_richness(physeq, split = TRUE, measures = measures)
+#         measures = colnames(erDF)
+#         ses = colnames(erDF)[grep("^se\\.", colnames(erDF))]
+#         measures = measures[!measures %in% ses]
+#         if (!is.null(sample_data(physeq, errorIfNULL = FALSE))) {
+#                 DF <- data.frame(erDF, sample_data(physeq))
+#         }
+#         else {
+#                 DF <- data.frame(erDF)
+#         }
+#         if (!"samples" %in% colnames(DF)) {
+#                 DF$samples <- sample_names(physeq)
+#         }
+#         if (!is.null(x)) {
+#                 if (x %in% c("sample", "samples", "sample_names", "sample.names")) {
+#                         x <- "samples"
+#                 }
+#         }
+#         else {
+#                 x <- "samples"
+#         }
+#         mdf = reshape2::melt(DF, measure.vars = measures)
+#         mdf$se <- NA_integer_
+#         if (length(ses) > 0) {
+#                 selabs = ses
+#                 names(selabs) <- substr(selabs, 4, 100)
+#                 substr(names(selabs), 1, 1) <- toupper(substr(names(selabs), 
+#                                                               1, 1))
+#                 mdf$wse <- sapply(as.character(mdf$variable), function(i, 
+#                                                                        selabs) {
+#                         selabs[i]
+#                 }, selabs)
+#                 for (i in 1:nrow(mdf)) {
+#                         if (!is.na(mdf[i, "wse"])) {
+#                                 mdf[i, "se"] <- mdf[i, (mdf[i, "wse"])]
+#                         }
+#                 }
+#                 mdf <- mdf[, -which(colnames(mdf) %in% c(selabs, "wse"))]
+#         }
+#         if (!is.null(measures)) {
+#                 if (any(measures %in% as.character(mdf$variable))) {
+#                         mdf <- mdf[as.character(mdf$variable) %in% measures, 
+#                                    ]
+#                 }
+#                 else {
+#                         warning("Argument to `measures` not supported. All alpha-diversity measures (should be) included in plot.")
+#                 }
+#         }
+#         if (!is.null(shsi)) {
+#                 warning("shsi no longer supported option in plot_richness. Please use `measures` instead")
+#         }
+#         if (!is.null(sortby)) {
+#                 if (!all(sortby %in% levels(mdf$variable))) {
+#                         warning("`sortby` argument not among `measures`. Ignored.")
+#                 }
+#                 if (!is.discrete(mdf[, x])) {
+#                         warning("`sortby` argument provided, but `x` not a discrete variable. `sortby` is ignored.")
+#                 }
+#                 if (all(sortby %in% levels(mdf$variable)) & is.discrete(mdf[, 
+#                                                                             x])) {
+#                         wh.sortby = which(mdf$variable %in% sortby)
+#                         mdf[, x] <- factor(mdf[, x], levels = names(sort(tapply(X = mdf[wh.sortby, 
+#                                                                                         "value"], INDEX = mdf[wh.sortby, x], mean, na.rm = TRUE, 
+#                                                                                 simplify = TRUE))))
+#                 }
+#         }
+#         richness_map = aes_string(x = x, y = "value", colour = color, 
+#                                   shape = shape)
+#         p = ggplot(mdf, richness_map) + geom_point(na.rm = TRUE)
+#         if (any(!is.na(mdf[, "se"]))) {
+#                 p = p + geom_errorbar(aes(ymax = value + se, ymin = value - 
+#                                                   se), width = 0.1)
+#         }
+#         p = p + theme(axis.text.x = element_text(angle = -90, vjust = 0.5, 
+#                                                  hjust = 0))
+#         p = p + ylab("Alpha Diversity Measure")
+#         p = p + facet_wrap(~variable, nrow = nrow, scales = scales)
+#         if (!is.null(title)) {
+#                 p <- p + ggtitle(title)
+#         }
+#         return(p)
+# }
