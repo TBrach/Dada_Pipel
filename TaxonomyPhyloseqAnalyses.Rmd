@@ -201,14 +201,17 @@ rownames(AlphaDiv) <- sample_names(ps)
 ## I use plotAlphaDiversity function which is related to plot_richness from phyloseq (but also offers boxplots and
 # always gives each plot individually in a list instead of facet_wraps)
 
-
 TrList <- plotAlphaDiversity(ps, x = "samples", measures = c("Observed", "Shannon", "Chao1"), color = "Above50")
 
 # alternatively List of Boxplots using group
 TrListBP <- plotAlphaDiversity(ps, x = "Above50", color = "Above50", group = "Above50", measures = c("Observed", "Shannon", "Chao1"))
 
 
-#### RESTART Here with a plot sequencing depth to alpha diversity correlation
+#### Plot possible correlation between alpha diversity measures and sequencing depth
+
+TrListLm <- plotAlphaDivVsSeqDepth(physeq, measures = c("Observed", "Shannon", "Chao1"))
+
+
 
 # example of using only the taxa that are present in at least 2 samples
 Above2Taxa <- taxa_names(ps)[colSums(otu_table(ps) != 0) > 1]

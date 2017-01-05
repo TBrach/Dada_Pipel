@@ -710,5 +710,93 @@ plotAlphaDiversity <- function(physeq, measures = NULL, x = "samples", color = N
         return(TrList)
         
 }
+    
+
+#######################################
+#### plotAlphaDivVsSeqDepth
+#######################################
+# Function plots the alpha diversity measures from estimate_richness against the total number of reads/amplicons per sample
+# and adds a linear fit.
+# if color is given the fit is individual on the different colors, but the p-value in the title is still to an overall fit!!
+
+plotAlphaDivVsSeqDepth <- function(physeq, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
         
+        # needed to get the p-value from-linear fit objects (from stackoverflow)
+        lmp <- function (modelobject) {
+                if (class(modelobject) != "lm") stop("Not an object of class 'lm' ")
+                f <- summary(modelobject)$fstatistic
+                p <- pf(f[1],f[2],f[3],lower.tail=F)
+                attributes(p) <- NULL
+                return(p)
+        }
+        
+        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+        
+        AlphaDiv <- estimate_richness(physeq, measures = measures)
+        measures = colnames(AlphaDiv)
+        ses = colnames(AlphaDiv)[grep("^se\\.", colnames(AlphaDiv))]
+        measures = measures[!measures %in% ses]
+        
+        if (!is.null(sample_data(physeq, errorIfNULL = FALSE))) {
+                DF <- data.frame(AlphaDiv, sample_data(physeq))
+        } else {
+                DF <- data.frame(AlphaDiv)
+        }
+        
+        DF$samples <- sample_names(physeq)
+        
+        if(taxa_are_rows(physeq)){
+                DF$TotalReads <- colSums(otu_table(physeq))
+                
+        } else {
+                DF$TotalReads <- rowSums(otu_table(physeq))
+        }
+        
+        
+        TrList <- list()
+        
+        for (i in 1:length(measures)) {
+                
+                aes_map = aes_string(x = "TotalReads", y = measures[i], shape = shape, color = color)
+                
+                if(is.null(color)){
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE, col = defCol)
+                } else {
+                        
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE)
+                }
+                
+                
+                if (measures[i] == "Chao1") {
+                        Tr = Tr + geom_errorbar(aes(ymax = Chao1 + se.chao1, ymin = Chao1 -
+                                                            se.chao1), width = 0.1)
+                }
+                if (measures[i] == "ACE") {
+                        Tr = Tr + geom_errorbar(aes(ymax = ACE + se.ACE, ymin = ACE -
+                                                            se.ACE), width = 0.1)
+                }
+                
+                Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
+                
+                # add the regression line and the p-values
+                fit <- lm(DF[,measures[i]] ~ DF[,"TotalReads"])
+                adjR2 <- round(summary(fit)$adj.r.squared,3)
+                pfit <- lmp(fit)
+                
+                Tr <- Tr + geom_smooth(method = "lm", se = TRUE)
+                
+                Tr <- Tr + ggtitle(paste("Linear Fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
+                
+                Tr <- Tr + theme_bw()
+                
+                Tr = Tr + theme(panel.grid.minor = element_blank())
+                
+                TrList[[i]] <- Tr
+                
+        }
+  
+        names(TrList) <- measures
+        return(TrList)
+        
+}    
 
