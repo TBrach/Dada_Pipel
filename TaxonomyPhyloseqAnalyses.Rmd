@@ -149,7 +149,8 @@ ps
 # all these alpha diversity measures are simple, see commented "Einschub" below
 AlphaDiv <- estimate_richness(ps, measures = c("Shannon", "Chao1", "Observed"))
 rownames(AlphaDiv) <- sample_names(ps)
-
+# I prefer Richness over Observed
+colnames(AlphaDiv)[colnames(AlphaDiv) == "Observed"] <- "Richness"
 
 # ######################### Einschub  ################## 
 # calculating alpha diversity measures self and understanding estimate_richness better

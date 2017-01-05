@@ -581,6 +581,11 @@ plotAlphaDiversity <- function(physeq, measures = NULL, x = "samples", color = N
         measures = colnames(AlphaDiv)
         ses = colnames(AlphaDiv)[grep("^se\\.", colnames(AlphaDiv))]
         measures = measures[!measures %in% ses]
+        if("Observed" %in% measures){
+                
+                measures[measures == "Observed"] <- "Richness"
+                colnames(AlphaDiv)[colnames(AlphaDiv) == "Observed"] <- "Richness"
+        }
         
         if (!is.null(sample_data(physeq, errorIfNULL = FALSE))) {
                 DF <- data.frame(AlphaDiv, sample_data(physeq))
@@ -736,6 +741,12 @@ plotAlphaDivVsSeqDepth <- function(physeq, measures = NULL, color = NULL, shape 
         measures = colnames(AlphaDiv)
         ses = colnames(AlphaDiv)[grep("^se\\.", colnames(AlphaDiv))]
         measures = measures[!measures %in% ses]
+        
+        if("Observed" %in% measures){
+                
+                measures[measures == "Observed"] <- "Richness"
+                colnames(AlphaDiv)[colnames(AlphaDiv) == "Observed"] <- "Richness"
+        }
         
         if (!is.null(sample_data(physeq, errorIfNULL = FALSE))) {
                 DF <- data.frame(AlphaDiv, sample_data(physeq))
