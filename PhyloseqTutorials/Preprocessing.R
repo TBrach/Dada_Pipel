@@ -6,12 +6,13 @@ GP = GlobalPatterns
 GPr  = transform_sample_counts(GlobalPatterns, function(x) x / sum(x) )
 GPfr = filter_taxa(GPr, function(x) mean(x) > 1e-5, TRUE)
 
-#
+# only keep taxa of Phylum Chlamydiae
 GP.chl = subset_taxa(GP, Phylum=="Chlamydiae")
 GP.chl = prune_samples(sample_sums(GP.chl)>=20, GP.chl) # why no filter_samples?
 # go to relative abundance
 transform_sample_counts(GP.chl, function(OTU) OTU/sum(OTU))
 
+### Combine based on taxonomic rank
 ## the tax_glom function is what you want when combining based on taxonomic ranks. However, function takes long time
 unique(tax_table(GP)[, "Phylum"]) == "Bacteroidetes"
 gpsfb = subset_taxa(GP, Phylum == "Bacteroidetes")
@@ -53,6 +54,8 @@ all.equal(OTf[-16, ], OTff) # TRUE!
 ### Further preprocessing
 ###### Filtering 
 GP = filter_taxa(GlobalPatterns, function(x) sum(x > 3) > (0.2*length(x)), TRUE) # keeps only taxa that have in at least 20% of samples more than 3 reads
+# down to 2572 taxa
+## add the human variable
 sample_data(GP)$human = factor( get_variable(GP, "SampleType") %in% c("Feces", "Mock", "Skin", "Tongue") )
 
 ############ Standardize abundances
@@ -61,6 +64,8 @@ standf = function(x, t=total) round(t * (x / sum(x)))
 gps = transform_sample_counts(GP, standf)
 range(sample_sums(gps)) # now all very similar
 
+
+####### Einschub DESeq2 ####################
 ### Standardize a la DESEQ using geometric mean
 #NB: check the percentage of 0 in your samples
 sample_sums(otu_table(GP)==0)/ntaxa(GP)
@@ -125,11 +130,61 @@ GPDES <- phyloseq(otu_table(OTU, taxa_are_rows = TRUE),
 sample_sums(GPDES)
 all.equal(sample_sums(GPDE), sample_sums(GPDES))
 ## NB: far from similar now!!!!
+############################# Ende Einschub ########
 
 ## Filter the taxa using a cutoff of 3.0 for the Coefficient of Variation
+## so they only want to keep taxa that vary
 
-gpsf = filter_taxa(gps, function(x) sd(x)/mean(x) > 3.0, prune = TRUE)
-GPDESf <- filter_taxa(GPDES, function(x) sd(x)/mean(x) > 3.0, prune = TRUE)
-# so differences depending on how filtered
+gpsf = filter_taxa(gps, function(x) sd(x)/mean(x) > 3.0, prune = TRUE) # down to 1201 taxa
 
+# also keep a physeq with only Bacteroidetes
+gpsfb = subset_taxa(gpsf, Phylum=="Bacteroidetes")
 
+title = "plot_bar; Bacteroidetes-only"
+plot_bar(gpsfb, x = "SampleType", y = "Abundance", title=title)
+# see indasettelse below, basically, if you plotted sample vs Abundance and had corrected all bars should be similarly long
+
+####### indsaettelse understanding plot_bar ##########
+# the function is based on psmelt which is again based on the melt function from reshape2
+# which is without possible conflicts simply
+# rankNames = rank_names(physeq, FALSE)
+# sampleVars = sample_variables(physeq, FALSE)
+# reservedVarnames = c("Sample", "Abundance", "OTU")
+# otutab = as(otu_table(physeq), "matrix")
+# mdf = reshape2::melt(otutab) # generates long format (nxm of matrix in nrow) with the following three columns
+# colnames(mdf)[1] <- "OTU"
+# colnames(mdf)[2] <- "Sample"
+# colnames(mdf)[3] <- "Abundance"
+# mdf$OTU <- as.character(mdf$OTU)
+# mdf$Sample <- as.character(mdf$Sample)
+# sdf = data.frame(sample_data(physeq), stringsAsFactors = FALSE) # nrows = nsamples
+# sdf$Sample <- sample_names(physeq)
+# mdf <- merge(mdf, sdf, by.x = "Sample") # merge function nice
+# # add the taxonomic ranks
+# TT = access(physeq, "tax_table")
+# keepTTcols <- colSums(is.na(TT)) < ntaxa(TT) # not keeping taxonomic levels that are all NA
+# if (length(which(keepTTcols)) > 0 & ncol(TT) > 0) {
+#         TT <- TT[, keepTTcols]
+#         tdf = data.frame(TT, OTU = taxa_names(physeq)) # nrow = ntaxa(physeq)
+#         mdf <- merge(mdf, tdf, by.x = "OTU")}
+# mdf = mdf[order(mdf$Abundance, decreasing = TRUE), ]
+# # return(mdf) so that was psmelt
+# # mdf is a long data frame having all combis of Sample OTU Abundance in
+# x <- "Sample"
+# y <- "Abundance"
+# fill <- NULL
+# p = ggplot(mdf, aes_string(x = x, y = y, fill = fill))
+# p = p + geom_bar(stat = "identity", position = "stack", color = "black")
+# p = p + theme(axis.text.x = element_text(angle = -90, hjust = 0))
+# if (!is.null(facet_grid)) {
+#         p <- p + facet_grid(facet_grid)
+# }
+# if (!is.null(title)) {
+#         p <- p + ggtitle(title)
+# }
+# return(p)
+############################### end indsaettelse ###############
+
+plot_bar(gpsfb, x = "SampleType", y = "Abundance", fill = "Family", title=title)
+plot_bar(gpsfb, "Family", "Abundance", "Family", 
+         title=title, facet_grid="SampleType~.")
