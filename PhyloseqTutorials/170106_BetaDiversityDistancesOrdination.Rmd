@@ -1,0 +1,205 @@
+---
+title: "170106_BetaDiversityDistancesOrdination"
+author: "Thorsten Brach"
+date: "6/1/2017"
+output: html_document
+---
+
+# Packages
+```{r}
+try(library(dada2), biocLite("dada2"))
+
+## Short Read
+try(library(phyloseq), biocLite("phyloseq"))
+
+## ggplot2
+try(library(ggplot2), install.packages("ggplot2"))
+
+## dplyr
+try(library(dplyr), install.packages("dplyr"))
+
+## dplyr
+try(library(tidyr), install.packages("tidyr"))
+
+```
+
+# Background
+
+We want to measure and illustrate how similar the microbial communities are in different samples. Alpha-diversity measures tell us how diverse a individual sample is, now we want to know how similar/distant different samples are to each other. Are the samples from patients more similar to each other than to healthy controls?
+
+The first step is therefore to calculate distances between the samples. 
+The second step is then to illustrate the distances in a two or three dimensional coordinate frame.
+
+# Calculating distances between microbial communities
+
+## Preprocessing the Global Patterns example data
+
+- this sample data contains human samples from Feces, Mock, Skin, and Tongue, and you would expect that samples from the same "area" should be more similar to each other
+- NB: we change to relative abundances here on the way, because some distance measures seem to only work on relative abundances
+
+```{r}
+## example physeq
+data(GlobalPatterns)
+GP <- GlobalPatterns
+# ntaxa(GP) # 19216
+
+## Filtering the GP to reduce processing time
+# keep only human samples
+sample_data(GP)$human = factor( get_variable(GP, "SampleType") %in% c("Feces", "Mock", "Skin", "Tongue") )
+
+GPh <- subset_samples(GP, subset = human == TRUE )
+
+## keep only taxa present in at least 30% of samples
+GPhf <- filter_taxa(GPh, function(x){sum(x != 0) > .3*length(x)}, prune = TRUE) # still 3670 taxa
+
+## do their normalisation
+total = median(sample_sums(GPhf))
+standf = function(x, t=total) round(t * (x / sum(x)))
+GPhfs = transform_sample_counts(GPhf, standf)
+#range(sample_sums(GPhfs))
+
+## change to relative abundance here
+GPhfs = transform_sample_counts(GPhfs, function(x){x/sum(x)})
+
+## keep only taxa with good variation
+GPhfsf = filter_taxa(GPhfs, function(x) sd(x)/mean(x) > 3.0, prune = TRUE) # down to 388 taxa
+sample_sums(GPhfsf) # again very different but I think fine since all have now same taxa
+
+```
+
+```{r}
+plot_bar(GPhfsf, x = "Sample", y = "Abundance", fill = "SampleType")
+plot_bar(GPhfsf, x = "SampleType", y = "Abundance", fill = "Phylum")
+
+```
+
+## Calculate different distances and understand at least some
+
+```{r}
+# phyloseq offers a lot of distance methods
+dist_methods <- unlist(distanceMethodList)
+# I reduce
+dist_methods <- dist_methods[dist_methods %in% c("unifrac", "wunifrac", "jsd", "canberra", "bray", "jaccard", "euclidean")]
+
+dist_methods
+```
+
+### Calculate the distance matrixes with phyloseq and try to recapitulate some of them
+
+- NB: UniFrac requires a phylogenetic tree that is present in this sample data
+
+```{r}
+
+# NB: UniFrac requires a tree! GP has a tree
+
+Distlist <- vector("list", length(dist_methods))
+names(Distlist) = dist_methods
+
+for( i in dist_methods ){
+        # Calculate distance matrix
+        iDist <- phyloseq::distance(GPhfsf, method=i)
+        Distlist[[i]] = iDist
+}
+
+```
+
+#### recapitulate Euclidean distance
+
+```{r}
+# phyloseq makes use here of the vegan package
+DistEucl <- vegan::vegdist(t(as(otu_table(GPhfsf), "matrix")), method = 'euclidean')
+
+identical(as(DistEucl, "matrix"), as(Distlist$euclidean, "matrix"))
+
+# the function (type vegan::vegdist) is unfortunately based on C code
+# but ?vegan::vegdist shows you
+# euclidean	d[jk] = sqrt(sum(x[ij]-x[ik])^2) # but actually it is sqrt(sum((x[ij]-x[ik])^2))
+# THINK of a2 + b2 = c2, then c <- sqrt(a2 + b2)
+# j and k refer to the two samples to be compared
+# i to the current taxa
+
+##### Own Euclidean distance
+# First example for only a few samples
+physeq <- GPhfsf
+if(taxa_are_rows(physeq)){
+        DF <- as.data.frame(otu_table(physeq))     
+} else {
+        DF <- as.data.frame(t(otu_table(physeq)))
+}
+
+colnames(DF)[1:2] # "M31Fcsw" "M11Fcsw"
+Dist12 <- sqrt(sum((DF[,1]-DF[,2])^2))
+all.equal(Dist12, DistEucl[1]) # TRUE!
+
+
+# how to implement this, basically column wise calculation
+physeq <- GPhfsf
+if(taxa_are_rows(physeq)){
+        DF <- as(otu_table(physeq), "matrix")     
+} else {
+        DF <- as(t(otu_table(physeq)), "matrix")
+}
+
+## Long way (computationally) with apply and sapply:
+EuclDistMatrix <- sapply(1:ncol(DF), function(y){apply(DF, 2, function(x){sqrt(sum((x-DF[,y])^2))})})
+colnames(EuclDistMatrix) <- rownames(EuclDistMatrix)
+# compare: 
+DistEuclM <- as(DistEucl, "matrix")
+all.equal(DistEuclM, EuclDistMatrix) # TRUE
+```
+
+- NB: I like the apply way here, but it is of course not computationally super efficient, Check:
+- <http://stackoverflow.com/questions/34757217/fastest-way-to-apply-function-to-all-pairwise-combinations-of-columns>
+- thus the data.table package might be smart to learn (in c), I could not figure it out easily here, at for small sample sizes I guess the apply solution is good enough
+
+```{r}
+# library(data.table)
+# data.DT <- setkey(data.table(c(DF), colId = rep(1:ncol(DF), each = nrow(DF)), rowId = rep(1:nrow(DF), times = ncol(DF))), colId)
+# 
+# diff.DT <- data.DT[
+#   , {
+#     ccl <- unique(colId)
+#     vv <- V1
+#     data.DT[colId > ccl, .(col2 = colId, V1 - vv)]
+#   }
+#   , keyby = .(col1 = colId)
+# ]
+```
+
+
+#### recapitulate Bray Curtis distance
+
+```{r}
+# phyloseq makes also here use of the vegan package
+DistBray <- vegan::vegdist(t(as(otu_table(GPhfsf), "matrix")), method = 'bray')
+
+identical(as(DistBray, "matrix"), as(Distlist$bray, "matrix"))
+
+##### Own Bray distance distance
+# from ?vegan::vegdist
+# bray	d[jk] = (sum abs(x[ij]-x[ik]))/(sum (x[ij]+x[ik]))
+
+physeq <- GPhfsf
+if(taxa_are_rows(physeq)){
+        DF <- as(otu_table(physeq), "matrix")     
+} else {
+        DF <- as(t(otu_table(physeq)), "matrix")
+}
+
+## Long way (computationally) with apply and sapply:
+BrayDistMatrix <- sapply(1:ncol(DF), function(y){apply(DF, 2, function(x){ sum(abs(x-DF[,y]))/sum(x + DF[,y]) })})
+colnames(BrayDistMatrix) <- rownames(BrayDistMatrix)
+# compare: 
+DistBrayM <- as(DistBray, "matrix")
+all.equal(DistBrayM, BrayDistMatrix) # TRUE
+```
+
+### Summary Distances
+
+- you should really think about which distance could make most sense for your data and understand the ideas behind some of them
+- at least the implementation should be pretty easy
+- so know you have distances between the different samples
+    - ** Are these all beta diversity measures?**
+- How to use those distances to cluster the samples in some dimensions?
+
+# Ordination: Using the distances to cluster the samples in two dimensions
