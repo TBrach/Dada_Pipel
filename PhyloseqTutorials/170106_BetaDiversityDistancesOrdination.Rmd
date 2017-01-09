@@ -18,24 +18,30 @@ try(library(ggplot2), install.packages("ggplot2"))
 ## dplyr
 try(library(dplyr), install.packages("dplyr"))
 
-## dplyr
+## tidyr
 try(library(tidyr), install.packages("tidyr"))
+
+## gridExtra
+try(library(gridExtra), install.packages("gridExtra"))
 
 ```
 
 # Background
 
-We want to measure and illustrate how similar the microbial communities are in different samples. Alpha-diversity measures tell us how diverse a individual sample is, now we want to know how similar/distant different samples are to each other. Are the samples from patients more similar to each other than to healthy controls?
+We want to measure and illustrate how similar/distant the microbial communities are in different samples (= beta-diversity). Alpha-diversity (often just richness, or richness plus evenness) measures tell us how diverse a individual sample is, now we want to know how similar/distant different samples are to each other. Are the samples from patients more similar to each other than to healthy controls?
 
-The first step is therefore to calculate distances between the samples. 
+The first step is therefore to calculate distances between the samples (the beta-diversity) (see <http://cnx.org/contents/t8i_eHU4@2/Alpha-Beta-and-Gamma-Diversity>). 
 The second step is then to illustrate the distances in a two or three dimensional coordinate frame.
 
-# Calculating distances between microbial communities
+- see also: <http://occamstypewriter.org/boboh/2012/01/17/pca_and_pcoa_explained/>
+- and for sure: <http://cc.oulu.fi/~jarioksa/opetus/metodi/index.html>
+
+# Calculating distances between microbial communities (beta-diversity measures)
 
 ## Preprocessing the Global Patterns example data
 
 - this sample data contains human samples from Feces, Mock, Skin, and Tongue, and you would expect that samples from the same "area" should be more similar to each other
-- NB: we change to relative abundances here on the way, because some distance measures seem to only work on relative abundances
+- NB: we change to relative abundances here on the way, because some distance measures seem to only work on relative abundances (??)
 
 ```{r}
 ## example physeq
@@ -197,9 +203,177 @@ all.equal(DistBrayM, BrayDistMatrix) # TRUE
 ### Summary Distances
 
 - you should really think about which distance could make most sense for your data and understand the ideas behind some of them
-- at least the implementation should be pretty easy
+- as shown, implementation is easy
 - so know you have distances between the different samples
-    - ** Are these all beta diversity measures?**
-- How to use those distances to cluster the samples in some dimensions?
+    - **In a way these are all beta diversity measures?**
+- How to use those distances to cluster the samples in 2 or 3 dimensions? >> Ordination
 
 # Ordination: Using the distances to cluster the samples in two dimensions
+
+## Background/Understanding
+
+- beta diversity: is the difference between the microbial distribution of samples. In the simplest case it could just be the sum of species that are only found in one sample and not the other.
+- ordination plots, especially PCoA (multidimensional scaling) is about the question: if I give you the distances between cities, can you draw a map?
+    - and now imagine the distances come from more than two dimensions, can you then draw the best map in two dimensions
+
+### Simple example of workflow
+```{r}
+# you have your distance matrices (Distlist)
+
+## Example of how to get to the ordination plot with phyloseq
+MDS  <- ordinate(GPhfsf, "MDS", distance=Distlist[["bray"]]) # NB "MDS" is equal to "PCoA", MDS is even of class "pcoa"
+PCoA <- ordinate(GPhfsf, "PCoA", distance=Distlist[["bray"]])
+identical(MDS, PCoA) # TRUE!!
+
+p <- plot_ordination(GPhfsf, MDS, color="SampleType")
+p
+
+# so here it looks like the three Mock samples are furthest away from the others
+plot(Distlist[["bray"]])
+# only 3 distances are small, the ones called Even, and indeed these are the Mock samples
+#sample_data(GPhfsf)
+```
+
+### Example with only 2 dimensions (taxa) to understand MDS/PCoA better
+
+```{r, fig.width = 14}
+############ Attempt to check if I have data with only 2 dimensions (2 taxa), then I calculate the Eucledian distance, and then I do MDS, do I get the map back?? #######################
+set.seed(1)
+x <- abs(rnorm(12))
+y <- abs(rnorm(12))
+df <- t(data.frame(Taxa1 = x, Taxa2 = y))
+colnames(df) <- sample_names(GPhfsf)
+# for plot comparisoin
+dfplot <- as.data.frame(t(df))
+dfplot$SampleType <- as.character(as.data.frame(sample_data(GPhfsf))$SampleType)
+Testphy <- phyloseq(otu_table(as.matrix(df), taxa_are_rows = TRUE), sample_data(GPhfsf))
+ED <- phyloseq::distance(Testphy, method="euclidean")
+MDSTest <- ordinate(Testphy, "PCoA", distance=ED)
+p <- plot_ordination(Testphy, MDSTest, color="SampleType")
+comp <- ggplot(dfplot, aes(x = Taxa1, y = Taxa2, color = SampleType)) 
+comp <- comp + geom_point()
+grid.arrange(comp, p, nrow = 1)
+
+```
+
+- Similarity is clear, a bit turned and stretched, NB: 100% of variability in first 2 axes!
+- NB: on the plot the distances seem not conserved on first sight, but that is because (seet(1)) the first axis explains more variability than the second? 
+
+#### NB: plot_ordination uses physeq object only for sample_data, i.e. the coloring, the rest is saved in the MDS
+
+```{r}
+dff <- as.data.frame(MDSTest[["vectors"]])
+dff$SampleType <- as.character(as.data.frame(sample_data(GPhfsf))$SampleType)
+tr <- ggplot(dff, aes(x = Axis.1, y = Axis.2, color = SampleType)) 
+tr <- tr + geom_point()
+grid.arrange(p, tr, nrow = 1)
+
+# and note for the percentages:
+MDSTest$values$Relative_eig
+
+```
+
+## Understanding the phyloseq::ordinate function
+
+- NB: the Distance matrix only contains distance info for the different samples, it does not contain info about the dimension of the original data (number of taxa)
+- Many of the offered methods, including "PCoA", do not make use of the physeq object, they only needed the Distance matrix
+- The ape::pcoa function is used for pcoa, question is how it from the distances determines how many axes to calculate (principal components?)
+
+
+```{r}
+# # Understanding phyloseq::ordinate
+# #function (physeq, method = "PCoA", distance = "bray", formula = NULL,  ...) 
+# 
+# #NB: distance: can also be directly a dist-class object. IT IS ONLY USED IF THE ORDINATION METHOD REQUIRES A DIST MATRIX
+# 
+# method_table <- c("DCA", "CCA", "RDA", "CAP", "DPCoA", "NMDS", 
+#                           "MDS", "PCoA")
+# 
+# # If distance is not directly given  well then it is calculated with the distance function
+# if (inherits(distance, "dist")) {
+#         ps.dist <- distance
+# } else if (class(distance) == "character") {
+#         vegdist_methods <- c("manhattan", "euclidean", "canberra", 
+#                              "bray", "kulczynski", "jaccard", "gower", "altGower", 
+#                              "morisita", "horn", "mountford", "raup", "binomial", 
+#                              "chao")
+#         if (method == "NMDS" & distance %in% vegdist_methods) {
+#                 return(metaMDS(veganifyOTU(physeq), distance, ...))
+#         }
+#         ps.dist <- distance(physeq, distance)
+# }
+# # at the latest now you have ps.dist, the dist object
+# 
+# # NB for pcoa then the function simply calls:
+# pcoa(ps.dist) # but there is little information on it, it is however to assume that they simply use the ape package pcoa funciton
+# 
+# ape::pcoa(ps.dist)
+```
+
+## Understanding the plot_ordination function
+
+- type plot_ordination to get the function
+- It is based on the vegan::scores function but I could not reproduce this
+
+```{r}
+# To reproduce
+Obj <- plot_ordination(physeq = GPhfsf, ordination = MDS) # returns a ggplot object
+
+# see
+# ?vegan::scores()
+```
+
+
+# Reproducing "Euclidean" and PCoA with the base package
+
+```{r}
+# First again the phyloseq method
+physeq <- GPhfsf
+#1.) The Distance measure
+EucDist <- phyloseq::distance(physeq, method="euclidean")
+# 2.) The PCoA
+EucOrd <- ordinate(physeq, "PCoA", distance=EucDist)
+# 3.) Plotting the PCoA
+EucPlot <- plot_ordination(physeq, ordination = EucOrd)
+
+# Reproduce and understand with the underlying functions
+# 1.) Distance measure
+if(taxa_are_rows(physeq)){
+        DF <- as(otu_table(physeq), "matrix")     
+} else {
+        DF <- as(t(otu_table(physeq)), "matrix")
+}
+
+EuclDistMatrix <- sapply(1:ncol(DF), function(y){apply(DF, 2, function(x){sqrt(sum((x-DF[,y])^2))})})
+colnames(EuclDistMatrix) <- rownames(EuclDistMatrix)
+EucDistS <- EuclDistMatrix[lower.tri(EuclDistMatrix)]
+# here I cheat a bit
+attributes(EucDistS) <- attributes(EucDist)
+all.equal(EucDistS, EucDist)
+
+# 2.) The PCoA
+## for this you have to understand the ape::pcoa function (do that in the future) and understand the PCA in it.
+EucOrdS <- ape::pcoa(EucDistS)
+
+# 3.) The plot
+dff <- as.data.frame(EucOrdS[["vectors"]])
+EucPlotS <- ggplot(dff, aes(x = Axis.1, y = Axis.2)) 
+EucPlotS <- EucPlotS + geom_point()
+xL <- paste("Axis.1 [", round(EucOrdS$values$Relative_eig[1]*100,1), " %]", sep = "")
+yL <- paste("Axis.2 [", round(EucOrdS$values$Relative_eig[2]*100,1), " %]", sep = "")
+EucPlotS <- EucPlotS + xlab(xL) + ylab(yL)
+grid.arrange(EucPlot, EucPlotS, nrow = 1)
+
+# NB also
+EucOrd$values$Eigenvalues/sum(EucOrd$values$Eigenvalues)
+# the proportion of total variation as the Eigenvalue divided by the sum of the Eigenvalues
+# Mathematically, PCA is just an eigen analysis: the covariance (or correlation) matrix is decomposed into its Eigenvectors and Eigenvalues. The Eigenvectors are the rotations to the new axes, and the Eigenvalues are the amount of stretching that needs to be done.
+
+
+
+# svd1 <- svd(df)
+# plot(svd1$v[, 1], xlab = "Column", ylab = "First right singular vector", pch = 19)
+# plot(svd1$d^2/sum(svd1$d^2), xlab = "Column", ylab = "Proportion of variance explained", 
+#      pch = 19)
+# pca1 <- prcomp(df, scale = FALSE)
+```
