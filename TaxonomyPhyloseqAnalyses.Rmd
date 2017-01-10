@@ -60,6 +60,11 @@ TrList[[4]]
 # shows you for example that if you only keep the amplicons that were present in at least 15% of the samples you still keep over 80% of the amplicons
 TrList[[5]]
 
+# SP <- "/Users/jvb740/MarieCurie_Work/TalksAndThoughts/170113_16SClass/Figures"
+# pdf(file = file.path(SP, "AmpliconDistr2.pdf"), width = 7, height = 6)
+# TrList[[4]]
+# dev.off()
+
 ```
 
 
@@ -208,10 +213,13 @@ TrList <- plotAlphaDiversity(ps, x = "samples", measures = c("Observed", "Shanno
 TrListBP <- plotAlphaDiversity(ps, x = "Above50", color = "Above50", group = "Above50", measures = c("Observed", "Shannon", "Chao1"))
 
 
+
 #### Plot possible correlation between alpha diversity measures and sequencing depth
 
-TrListLm <- plotAlphaDivVsSeqDepth(physeq, measures = c("Observed", "Shannon", "Chao1"))
+TrListLm <- plotAlphaDivVsSeqDepth(physeq = ps, measures = c("Observed", "Shannon", "Chao1"))
 
+
+TrListLm[[3]]
 
 
 # example of using only the taxa that are present in at least 2 samples

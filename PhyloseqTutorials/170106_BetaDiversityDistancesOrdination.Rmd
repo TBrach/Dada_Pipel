@@ -332,7 +332,7 @@ physeq <- GPhfsf
 #1.) The Distance measure
 EucDist <- phyloseq::distance(physeq, method="euclidean")
 # 2.) The PCoA
-EucOrd <- ordinate(physeq, "PCoA", distance=EucDist)
+EucOrd <- ordinate(physeq, method = "PCoA", distance=EucDist)
 # 3.) Plotting the PCoA
 EucPlot <- plot_ordination(physeq, ordination = EucOrd)
 
