@@ -177,7 +177,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         ## Collect quality Score data of the fastQ files and store a data.frame for each sample in the lists FW_QualityStats and RV_QualityStats ####################
         
-        if(is.null(F_QualityStats) | is.null(R_QualityStats)) {
+        if (is.null(F_QualityStats) || is.null(R_QualityStats)) {
                 
                 F_QualityStats <- list()
                 R_QualityStats <- list()
@@ -641,7 +641,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         mergers.nochim <- mergers
         for (i in seq_along(mergers)) {
-                mergers.nochim[[i]] <- mergers[[i]][!bimFs[[i]][mergers[[i]]$forward] && !bimRs[[i]][mergers[[i]]$reverse],]
+                mergers.nochim[[i]] <- mergers[[i]][!bimFs[[i]][mergers[[i]]$forward] & !bimRs[[i]][mergers[[i]]$reverse],]
         }
         
         message("*********************** Bimeras removed ***********************
