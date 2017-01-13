@@ -56,9 +56,17 @@ function (D = EucDist, correction = "none", rn = NULL)
         ###
         trace <- sum(diag(delta1))
         D.eig <- eigen(delta1)
+        ## NB: here ----
+        svddelta1 <- svd(delta1) # singular value decomposition
+        all.equal(svddelta1$d, D.eig$values) # TRUE
+        all.equal(svddelta1$v, D.eig$vectors) # Not equal but differences only in sign (Vorzeichen), see
+        all.equal(abs(svddelta1$v), abs(D.eig$vectors))
+        # -------
+        
         min.eig <- min(D.eig$values)
-        zero.eig <- which(abs(D.eig$values) < epsilon)
+        zero.eig <- which(abs(D.eig$values) < epsilon) # here the last three eigen values are basically 0
         D.eig$values[zero.eig] <- 0
+        # NB: all.equal(svddelta1$d, D.eig$values) # not True anymore
         if (min.eig > -epsilon) {
                 correct <- 1
                 eig <- D.eig$values
@@ -174,3 +182,32 @@ function (D = EucDist, correction = "none", rn = NULL)
         class(out) <- "pcoa"
         out
 }
+
+
+# --------------- Steps from the distance matrix
+# Step 1
+# Multiply squared distance matrix with -.5
+DistMat <-  as.matrix(EucDist)
+DM <- -.5*DistMat^2
+# Step 2 center DM
+# either Center function above or
+DMC <- scale(DM, scale = FALSE)
+DMC <- t(scale(t(DMC), scale = F))
+# or
+DMC <- centre(DM, nrow(DM))
+# Step 3 Compute eigenvectors
+D.eig <- eigen(DMC)
+# compare
+svd1 <- svd(DMC)
+# all.equal(svd1$d, D.eig$values)
+all.equal(svd1$v, D.eig$vectors)
+all.equal(abs(svd1$v), abs(D.eig$vectors)) # absolute values are the same but some sign differences
+all.equal(abs(svd1$u), abs(D.eig$vectors)) # same applies for u here, probably because DMC was double centered
+all.equal(svd1$u, D.eig$vectors)
+# usually svd1$u the right singular vectors are the principal components, let's check
+pc <- prcomp(DMC)
+all.equal(svd1$u, pc$rotation, check.attributes = FALSE) # TRUE
+# also note 
+# would be variance explained by the principal components
+svd1$d^2/sum(svd1$d^2))
+# play with plot here a bit

@@ -1,7 +1,7 @@
 ---
-title: "Taxonomic assignation"
-author: "Camila"
-date: "December 15, 2016"
+title: "Taxonomic assignemt"
+author: "16S"
+date: "January 13, 2017"
 output: html_document
 ---
 # Required packages
@@ -21,8 +21,7 @@ library(ggplot2); packageVersion("ggplot2")
 # Questions
 
 - how dependent are the results on the training data (i.e. Silva or other database)?
-- can you improve the plots, phyloseq training
-- what allowMultiple should we use
+- what allowMultiple should we use?
 
 # Background
 

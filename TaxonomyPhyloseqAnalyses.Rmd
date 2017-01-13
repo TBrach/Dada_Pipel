@@ -1,7 +1,7 @@
 ---
-title: "Taxonomic assignation"
-author: "Camila"
-date: "December 15, 2016"
+title: "TaxonomyPhyloseqAnalyses"
+author: "16S class"
+date: "January 13, 2017"
 output: html_document
 ---
 # Required packages
@@ -22,12 +22,13 @@ library(dplyr); packageVersion("dplyr")
 # Questions
 
 - how dependent are the results on the training data (i.e. Silva or other database)?
-- can you improve the plots, phyloseq training
-- what allowMultiple should we use
+- what allowMultiple should we use?
 
 # Background
 
 - minBoot: default = 50, is the minimum number out of 100 bootstraps that return the same genus (taxonomy) for a sequence so the sequence is assigned that taxonomy
+- For human microbiome data and V4 sequencing, we typically see a bit under half of the abundant ribosomal sequence variants (RSVs) assigned unambiguously to species-level, and a bit under 2/3rds assigned ambiguously (ie. allowing multiple species assignment). This fraction drops off in less sampled environments and for rare RSVs.
+    - **question is what is abundant here, but seems we have less**
 - Results of richness estimates (for example) are probably unreliable, or wrong, if you have already trimmed low-abundance taxa from the data.
 
 # Load seqtab and taxonomy data and source functions
@@ -68,18 +69,6 @@ TrList[[5]]
 ```
 
 
-
-# Possibility to remove rare amplicons before goint to phyloseq (not a good idea for richness)
-
-
-```{r}
-
-# seqtab.kept <- KeepAmplicons(taxa = taxa.species, seqtab = seqtab, Percentage = 10)[[2]]
-# taxa.species <- KeepAmplicons(taxa = taxa.species, seqtab = seqtab, Percentage = 10)[[1]]
-# seqtab <- seqtab.kept
-# rm(seqtab.kept)
-```
-
 # Short Exploratory Analysis of the Taxa tables
 
 ## Determine for each taxonomic level the percentage of sequences that could not be attributed unambiguously with the used minBoot
@@ -106,7 +95,7 @@ TLvsAb[[2]]
 ```
 
 - without removal of rare amplicons we get less than 10% of amplicons assigned to species levels
-- For human microbiome data and V4 sequencing, we typically see a bit under half of the abundant ribosomal sequence variants (RSVs) assigned unambiguously to species-level, and a bit under 2/3rds assigned ambiguously (ie. allowing multiple species assignment). This fraction drops off in less sampled environments and for rare RSVs.
+- Remember: For human microbiome data and V4 sequencing, we typically see a bit under half of the abundant ribosomal sequence variants (RSVs) assigned unambiguously to species-level, and a bit under 2/3rds assigned ambiguously (ie. allowing multiple species assignment). This fraction drops off in less sampled environments and for rare RSVs.
     - **question is what is abundant here, but seems we have less**
 
 
@@ -151,13 +140,13 @@ ps
 ```{r}
 ## Get DataFrame with the alpha diversity measures
 # NB: I use the estimate_richness function here (that is also used in plot_richness from phyloseq).
-# all these alpha diversity measures are simple, see commented "Einschub" below
+# all these alpha diversity measures are simple, see commented "Einschub/Insert" below
 AlphaDiv <- estimate_richness(ps, measures = c("Shannon", "Chao1", "Observed"))
 rownames(AlphaDiv) <- sample_names(ps)
 # I prefer Richness over Observed
 colnames(AlphaDiv)[colnames(AlphaDiv) == "Observed"] <- "Richness"
 
-# ######################### Einschub  ################## 
+# ######################### Einschub/Insert  ################## 
 # calculating alpha diversity measures self and understanding estimate_richness better
 # ## Understand the function complain:
 # # it complains about missing singletons, which is the case when !any(otu_table(physeq) == 1) is TRUE
@@ -200,18 +189,22 @@ colnames(AlphaDiv)[colnames(AlphaDiv) == "Observed"] <- "Richness"
 # SimDiv <- 1-rowSums(STRA2, na.rm = TRUE)
 # identical(Simpson, SimDiv) # TRUE
 # 
-# ###### Ende Einschub ##########################################
+# ###### Ende Einschub/ End Insert ##########################################
 
 
 ## Illustrate alpha diversity measures
 ## I use plotAlphaDiversity function which is related to plot_richness from phyloseq (but also offers boxplots and
-# always gives each plot individually in a list instead of facet_wraps)
+# always renders each plot individually in a list instead of using facet_wraps)
+
+plot_richness(ps, measures = c("Shannon", "Chao1", "Observed"), color = "Above50")
 
 TrList <- plotAlphaDiversity(ps, x = "samples", measures = c("Observed", "Shannon", "Chao1"), color = "Above50")
 
 # alternatively List of Boxplots using group
 TrListBP <- plotAlphaDiversity(ps, x = "Above50", color = "Above50", group = "Above50", measures = c("Observed", "Shannon", "Chao1"))
 
+TrList[[1]]
+TrListBP[[1]]
 
 
 #### Plot possible correlation between alpha diversity measures and sequencing depth
@@ -219,28 +212,113 @@ TrListBP <- plotAlphaDiversity(ps, x = "Above50", color = "Above50", group = "Ab
 TrListLm <- plotAlphaDivVsSeqDepth(physeq = ps, measures = c("Observed", "Shannon", "Chao1"))
 
 
-TrListLm[[3]]
+TrListLm[[1]]
+
+```
 
 
-# example of using only the taxa that are present in at least 2 samples
-Above2Taxa <- taxa_names(ps)[colSums(otu_table(ps) != 0) > 1]
-psTop <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
-psTop = prune_taxa(Above2Taxa, psTop)
-sample_sums(psTop) # NOTE if you do it this way around: the relative abundances do not sum to 1
-plot_bar(psTop, x="Sample", fill="Family")
-plot_bar(psTop, x="Sample", fill="Phylum")
-
-psTop2 = prune_taxa(Above2Taxa, ps)
-psTop2 <- transform_sample_counts(psTop2, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
-sample_sums(psTop2) # sum to 1
-plot_bar(psTop2, x="Sample", fill="Family")
-plot_bar(psTop2, x="Sample", fill="Phylum")
+## beta diversity (distances between samples) and ordination plots (e.g. PCoA)
 
 
+### With Global Patterns example data
+
+```{r}
+# ------------- prepare the data --------------
+## example physeq
+data(GlobalPatterns)
+GP <- GlobalPatterns
+# ntaxa(GP) # 19216
+
+## Filtering the GP to reduce processing time
+# keep only human samples
+sample_data(GP)$human = factor( get_variable(GP, "SampleType") %in% c("Feces", "Mock", "Skin", "Tongue") )
+
+GPh <- subset_samples(GP, subset = human == TRUE )
+
+## keep only taxa present in at least 30% of samples
+GPhf <- filter_taxa(GPh, function(x){sum(x != 0) > .3*length(x)}, prune = TRUE) # still 3670 taxa
+
+## do their normalisation
+total = median(sample_sums(GPhf))
+standf = function(x, t=total) round(t * (x / sum(x)))
+GPhfs = transform_sample_counts(GPhf, standf)
+#range(sample_sums(GPhfs))
+
+## change to relative abundance here
+GPhfs = transform_sample_counts(GPhfs, function(x){x/sum(x)})
+
+## keep only taxa with good variation
+GPhfsf = filter_taxa(GPhfs, function(x) sd(x)/mean(x) > 3.0, prune = TRUE) # down to 388 taxa
+# sample_sums(GPhfsf) # again very different but I think fine since all have now same taxa
+
+# ------------- Calculate distances between samples with different measures (phyloseq::distance) -------
+dist_methods <- unlist(distanceMethodList)
+# I reduce to
+dist_methods <- dist_methods[dist_methods %in% c("unifrac", "wunifrac", "jsd", "bray", "jaccard", "euclidean")]
+
+Distlist <- vector("list", length(dist_methods))
+names(Distlist) = dist_methods
+
+for( i in dist_methods ){
+        # Calculate distance matrix
+        iDist <- phyloseq::distance(GPhfsf, method=i)
+        Distlist[[i]] = iDist
+}
 
 
+# ========= recapitulate Bray Crutis Distance ==========
+# physeq <- GPhfsf
+# if(taxa_are_rows(physeq)){
+#         DF <- as(otu_table(physeq), "matrix")
+# } else {
+#         DF <- as(t(otu_table(physeq)), "matrix")
+# }
+# 
+# ## Long way (computationally) with apply and sapply:
+# BrayDistMatrix <- sapply(1:ncol(DF), function(y){apply(DF, 2, function(x){ sum(abs(x-DF[,y]))/sum(x + DF[,y]) })})
+# colnames(BrayDistMatrix) <- rownames(BrayDistMatrix)
+# # compare:
+# all.equal(as(Distlist[["bray"]], "matrix"), BrayDistMatrix, check.attributes = FALSE) # TRUE
+
+# --------------------- Ordination Plots: PCoA and NMDS ----------------------
+
+PCoAList <- vector("list", length(dist_methods))
+PCoAPlotList <- vector("list", length(dist_methods))
+NMDSList <- vector("list", length(dist_methods))
+NMDSPlotList <- vector("list", length(dist_methods))
+
+for (i in seq_along(dist_methods)) {
+        
+        PCoAList[[i]] <- ordinate(GPhfsf, "PCoA", distance=Distlist[[i]])
+        NMDSList[[i]] <- ordinate(GPhfsf, "NMDS", distance=Distlist[[i]])
+        PCoAPlotList[[i]] <- plot_ordination(GPhfsf, PCoAList[[i]], color="SampleType") + ggtitle(names(Distlist)[i])
+        NMDSPlotList[[i]] <- plot_ordination(GPhfsf, NMDSList[[i]], color="SampleType") + ggtitle(names(Distlist)[i])
+}
+names(PCoAList) <- names(NMDSList) <- names(PCoAPlotList) <- names(NMDSPlotList) <- names(Distlist)
+
+do.call("grid.arrange", c(PCoAPlotList, ncol = 2))
+
+do.call("grid.arrange", c(NMDSPlotList, ncol = 2))
 
 ```
 
 
 
+## Bar plots
+
+```{r}
+# example of using only the taxa that are present in at least 2 samples
+# Above2Taxa <- taxa_names(ps)[colSums(otu_table(ps) != 0) > 1]
+# psTop <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
+# psTop = prune_taxa(Above2Taxa, psTop)
+# sample_sums(psTop) # NOTE if you do it this way around: the relative abundances do not sum to 1
+# plot_bar(psTop, x="Sample", fill="Family")
+# plot_bar(psTop, x="Sample", fill="Phylum")
+# 
+# psTop2 = prune_taxa(Above2Taxa, ps)
+# psTop2 <- transform_sample_counts(psTop2, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
+# sample_sums(psTop2) # sum to 1
+# plot_bar(psTop2, x="Sample", fill="Family")
+# plot_bar(psTop2, x="Sample", fill="Phylum")
+
+```
