@@ -21,7 +21,7 @@ assignTaxonomyaddSpecies <- function(seqtab,
                                      PathToRefs = NULL,
                                      RefDataBase = "silva_nr_v123_train_set.fa.gz",
                                      SpeciesDB = "silva_species_assignment_v123.fa.gz",
-                                     PathToSave = NULL){
+                                     PathToSave = getwd()){
         
         ## Packages
         try(library(dada2), biocLite("dada2"))
@@ -57,10 +57,6 @@ assignTaxonomyaddSpecies <- function(seqtab,
         ptm <- proc.time()
         taxa <- assignTaxonomy(seqtab, refFasta = RefDB, verbose = TRUE, minBoot = minBoot)
         TimeForassignTaxonomy <- (proc.time()-ptm)[3]
-        
-        if(is.null(PathToSave)){
-                PathToSave <- getwd()
-        }
         
         InputSave[[length(InputSave) + 1]] <- TimeForassignTaxonomy
         
