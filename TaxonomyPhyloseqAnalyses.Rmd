@@ -6,10 +6,11 @@ output: html_document
 ---
 # Required packages
 
-```{r}
+```{r, message = FALSE}
 library(phyloseq); packageVersion("phyloseq")
 library(ggplot2); packageVersion("ggplot2")
 library(dplyr); packageVersion("dplyr")
+library(gridExtra); packageVersion("gridExtra")
 
 ```
 
@@ -33,7 +34,7 @@ library(dplyr); packageVersion("dplyr")
 
 # Load seqtab and taxonomy data and source functions
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 
 datapath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD_243_maxEE-1"
 load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
@@ -46,20 +47,23 @@ source(file.path(functionpath, "Dada_TaxonomyFunctions.R"))
 source(file.path(functionpath, "Dada_PlotFunctions.R"))
 
 ## At this point you should have seqtab and taxa.species
+# NB: I had saved as taxa.80.species, in the current version you have directly taxa.species so the following 2 lines will not be necessary:
 taxa.species <- taxa.80.species
 rm(taxa.50, taxa.80, taxa.80.species, taxa.50.species, bimFs, bimRs, mergers, mergers.nochim)
 
 ```
 
-# Explore seqtab, Do you later want to exclude rare amplicons?
+# Look at Amplicon Distribution in seqtab (for later taxa filtering for example)
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 
 TrList <- AmpliconDistribution(seqtab, PCentage = 15)
 
+TrList[[1]]
+
 TrList[[4]]
 # shows you for example that if you only keep the amplicons that were present in at least 15% of the samples you still keep over 80% of the amplicons
-TrList[[5]]
+#TrList[[5]]
 
 # SP <- "/Users/jvb740/MarieCurie_Work/TalksAndThoughts/170113_16SClass/Figures"
 # pdf(file = file.path(SP, "AmpliconDistr2.pdf"), width = 7, height = 6)
@@ -69,29 +73,29 @@ TrList[[5]]
 ```
 
 
-# Short Exploratory Analysis of the Taxa tables
+# Short Exploratory Analysis of the taxonomic assignment (taxa.species)
 
 ## Determine for each taxonomic level the percentage of sequences that could not be attributed unambiguously with the used minBoot
 
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Number and percentage of assigned taxonomic levels for all amplicons
 NAPerC <- NAPerCForTaxLevel(taxa.species)
 
 NAPerC
 
 
-# look at the Genus-species with multiple species assignment
-unname(taxa.species[grep(pattern = "/", taxa.species[,'Species']), c('Genus', 'Species')])
+# look at the Genus-species with multiple species assignment (at the first 5)
+head(unname(taxa.species[grep(pattern = "/", taxa.species[,'Species']), c('Genus', 'Species')]), 5)
 
-# # Number and percentage of assigned taxonomic levels related to the penetrance of the amplicons
-# TLvsPenetrance <- TaxLevelvsPenetrance(taxa = taxa.species, seqtab = seqtab)
-
-# Taxonomic assignments compared to the abundance of the sequences
-TLvsAb <- TaxLevelvsAbundance(taxa = taxa.species, seqtab = seqtab, Level = "Genus")
-
-TLvsAb[[2]]
-# could be done for other levels
+# # # Number and percentage of assigned taxonomic levels related to the penetrance of the amplicons
+# # TLvsPenetrance <- TaxLevelvsPenetrance(taxa = taxa.species, seqtab = seqtab)
+# 
+# # Taxonomic assignments compared to the abundance of the sequences
+# TLvsAb <- TaxLevelvsAbundance(taxa = taxa.species, seqtab = seqtab, Level = "Genus")
+# 
+# TLvsAb[[2]]
+# # could be done for other levels
 ```
 
 - without removal of rare amplicons we get less than 10% of amplicons assigned to species levels
@@ -102,7 +106,8 @@ TLvsAb[[2]]
 # Analyses in Phyloseq
 
 ## Generate the phyloseq object
-```{r}
+```{r, message = FALSE, warning = FALSE}
+## NB: M
 ## Generate mock sample data
 # sample_data in phyloseq is just a data.frame with rownames = Sample names where information on these samples is stored
 # e.g
@@ -135,9 +140,9 @@ ps
 ```
 
 
-## Analyse alpha-diversity (especially Richness, Shannon, and Chao1)
+## Analyse **alpha-diversity** (especially Richness, Shannon, and Chao1)
 
-```{r}
+```{r, message = FALSE, warning = FALSE, fig.width = 10}
 ## Get DataFrame with the alpha diversity measures
 # NB: I use the estimate_richness function here (that is also used in plot_richness from phyloseq).
 # all these alpha diversity measures are simple, see commented "Einschub/Insert" below
@@ -196,8 +201,6 @@ colnames(AlphaDiv)[colnames(AlphaDiv) == "Observed"] <- "Richness"
 ## I use plotAlphaDiversity function which is related to plot_richness from phyloseq (but also offers boxplots and
 # always renders each plot individually in a list instead of using facet_wraps)
 
-plot_richness(ps, measures = c("Shannon", "Chao1", "Observed"), color = "Above50")
-
 TrList <- plotAlphaDiversity(ps, x = "samples", measures = c("Observed", "Shannon", "Chao1"), color = "Above50")
 
 # alternatively List of Boxplots using group
@@ -205,6 +208,9 @@ TrListBP <- plotAlphaDiversity(ps, x = "Above50", color = "Above50", group = "Ab
 
 TrList[[1]]
 TrListBP[[1]]
+
+TrList[[3]]
+TrListBP[[3]]
 
 
 #### Plot possible correlation between alpha diversity measures and sequencing depth
@@ -214,6 +220,7 @@ TrListLm <- plotAlphaDivVsSeqDepth(physeq = ps, measures = c("Observed", "Shanno
 
 TrListLm[[1]]
 
+TrListLm[[3]]
 ```
 
 
@@ -222,7 +229,7 @@ TrListLm[[1]]
 
 ### With Global Patterns example data
 
-```{r}
+```{r, warning = FALSE, message = FALSE, fig.width= 12, fig.height = 10}
 # ------------- prepare the data --------------
 ## example physeq
 data(GlobalPatterns)
@@ -290,15 +297,15 @@ NMDSPlotList <- vector("list", length(dist_methods))
 for (i in seq_along(dist_methods)) {
         
         PCoAList[[i]] <- ordinate(GPhfsf, "PCoA", distance=Distlist[[i]])
-        NMDSList[[i]] <- ordinate(GPhfsf, "NMDS", distance=Distlist[[i]])
+        #NMDSList[[i]] <- ordinate(GPhfsf, "NMDS", distance=Distlist[[i]])
         PCoAPlotList[[i]] <- plot_ordination(GPhfsf, PCoAList[[i]], color="SampleType") + ggtitle(names(Distlist)[i])
-        NMDSPlotList[[i]] <- plot_ordination(GPhfsf, NMDSList[[i]], color="SampleType") + ggtitle(names(Distlist)[i])
+        #NMDSPlotList[[i]] <- plot_ordination(GPhfsf, NMDSList[[i]], color="SampleType") + ggtitle(names(Distlist)[i])
 }
 names(PCoAList) <- names(NMDSList) <- names(PCoAPlotList) <- names(NMDSPlotList) <- names(Distlist)
 
 do.call("grid.arrange", c(PCoAPlotList, ncol = 2))
 
-do.call("grid.arrange", c(NMDSPlotList, ncol = 2))
+# do.call("grid.arrange", c(NMDSPlotList, ncol = 2))
 
 ```
 
