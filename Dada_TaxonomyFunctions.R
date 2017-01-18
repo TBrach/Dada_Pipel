@@ -212,92 +212,54 @@ KeepAmplicons <- function(taxa, seqtab, Percentage = 10){
 
 
 #######################################
-### FUNCTION: plot_richness
+### gm_own: calculate geometric mean
 #######################################
+# see commented below, this function comes from 
+# <http://stackoverflow.com/questions/2602583/geometric-mean-is-there-a-built-in>
 
-function (physeq, x = "samples", color = NULL, shape = NULL,
-          title = NULL, scales = "free_y", nrow = 1, shsi = NULL, measures = NULL,
-          sortby = NULL)
-{
-        erDF = estimate_richness(physeq, split = TRUE, measures = measures)
-        measures = colnames(erDF)
-        ses = colnames(erDF)[grep("^se\\.", colnames(erDF))]
-        measures = measures[!measures %in% ses]
-        if (!is.null(sample_data(physeq, errorIfNULL = FALSE))) {
-                DF <- data.frame(erDF, sample_data(physeq))
+## Input:
+# x numeric vector
+# na.rm: if FALSE you get NA as soon as an NA is in your data, if TRUE the NA get basically treated as 0 (but NOTE these zeros always count also when zero.count = FALSE)
+# zero.count: This is IMPORTANT, if TRUE 0s count, so if x contains a 0 the GM will be lower than when zero.count = FALSE, in 
+# which case the gm is calculated for the same vector in which all 0 have been removed.
+gm_own = function(x, na.rm=FALSE, zero.count = TRUE){
+        if(any(x < 0, na.rm = TRUE)){
+                return(NaN)
         }
-        else {
-                DF <- data.frame(erDF)
+        if(zero.count){
+                exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+        } else {
+                exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x[x > 0]))
         }
-        if (!"samples" %in% colnames(DF)) {
-                DF$samples <- sample_names(physeq)
+}
+
+# Explanation of original gm function:
+# Note zero.propagate just makes sure you get a 0 if there is any zero in your vector
+# if there is no zero exp(mean(log(x), na.rm = TRUE)) == exp(sum(log(x[x > 0]), na.rm=TRUE) / length(x))
+# I think this zero.propagate is silly, I therefore decided to make my own function, gm_own below
+
+gm = function(x, na.rm=TRUE, zero.propagate = FALSE){
+        if(any(x < 0, na.rm = TRUE)){
+                return(NaN)
         }
-        if (!is.null(x)) {
-                if (x %in% c("sample", "samples", "sample_names", "sample.names")) {
-                        x <- "samples"
+        if(zero.propagate){
+                if(any(x == 0, na.rm = TRUE)){
+                        return(0)
                 }
+                exp(mean(log(x), na.rm = na.rm))
+        } else {
+                exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
         }
-        else {
-                x <- "samples"
-        }
-        mdf = reshape2::melt(DF, measure.vars = measures)
-        mdf$se <- NA_integer_
-        if (length(ses) > 0) {
-                selabs = ses
-                names(selabs) <- substr(selabs, 4, 100)
-                substr(names(selabs), 1, 1) <- toupper(substr(names(selabs),
-                                                              1, 1))
-                mdf$wse <- sapply(as.character(mdf$variable), function(i,
-                                                                       selabs) {
-                        selabs[i]
-                }, selabs)
-                for (i in 1:nrow(mdf)) {
-                        if (!is.na(mdf[i, "wse"])) {
-                                mdf[i, "se"] <- mdf[i, (mdf[i, "wse"])]
-                        }
-                }
-                mdf <- mdf[, -which(colnames(mdf) %in% c(selabs, "wse"))]
-        }
-        if (!is.null(measures)) {
-                if (any(measures %in% as.character(mdf$variable))) {
-                        mdf <- mdf[as.character(mdf$variable) %in% measures,
-                                   ]
-                }
-                else {
-                        warning("Argument to `measures` not supported. All alpha-diversity measures (should be) included in plot.")
-                }
-        }
-        if (!is.null(shsi)) {
-                warning("shsi no longer supported option in plot_richness. Please use `measures` instead")
-        }
-        if (!is.null(sortby)) {
-                if (!all(sortby %in% levels(mdf$variable))) {
-                        warning("`sortby` argument not among `measures`. Ignored.")
-                }
-                if (!is.discrete(mdf[, x])) {
-                        warning("`sortby` argument provided, but `x` not a discrete variable. `sortby` is ignored.")
-                }
-                if (all(sortby %in% levels(mdf$variable)) & is.discrete(mdf[,
-                                                                            x])) {
-                        wh.sortby = which(mdf$variable %in% sortby)
-                        mdf[, x] <- factor(mdf[, x], levels = names(sort(tapply(X = mdf[wh.sortby,
-                                                                                        "value"], INDEX = mdf[wh.sortby, x], mean, na.rm = TRUE,
-                                                                                simplify = TRUE))))
-                }
-        }
-        richness_map = aes_string(x = x, y = "value", colour = color,
-                                  shape = shape)
-        p = ggplot(mdf, richness_map) + geom_point(na.rm = TRUE)
-        if (any(!is.na(mdf[, "se"]))) {
-                p = p + geom_errorbar(aes(ymax = value + se, ymin = value -
-                                                  se), width = 0.1)
-        }
-        p = p + theme(axis.text.x = element_text(angle = -90, vjust = 0.5,
-                                                 hjust = 0))
-        p = p + ylab("Alpha Diversity Measure")
-        p = p + facet_wrap(~variable, nrow = nrow, scales = scales)
-        if (!is.null(title)) {
-                p <- p + ggtitle(title)
-        }
-        return(p)
+}
+
+
+
+
+
+
+normalisealaDeSeq <- function(physeq) {
+        
+        
+        
+        
 }
