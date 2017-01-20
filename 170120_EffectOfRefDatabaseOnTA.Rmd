@@ -1,0 +1,114 @@
+---
+title: "170120_EffectOfRefDatabase"
+author: "Thorsten Brach"
+date: "20/1/2017"
+output: html_document
+---
+
+# Required packages
+
+```{r, message = FALSE}
+library(phyloseq); packageVersion("phyloseq")
+library(DESeq2); packageVersion("DESeq2")
+library(knitr); packageVersion("knitr")
+library(ggplot2); packageVersion("ggplot2")
+library(dplyr); packageVersion("dplyr")
+library(gridExtra); packageVersion("gridExtra")
+
+```
+
+# Background
+
+- checking how the taxanomic assignment of abundant taxa in the 243 DanFunD sample seqtab depends on the reference databases given on the Dada2 tutorial website
+- the seqtab had been filtered (to f_seqtab) so that taxa remained that were present in at least 20% of the samples
+    - see below: min(colSums(seqtab > 0)/nrow(seqtab))
+
+
+```{r}
+# # Dada_WrapperAssignTaxonomyAddSpecies used
+# datapath <- "/home/jvb740/AssignTaxonomy/"
+# load(file.path(datapath, "FilteredSeqtab.RData"))
+# 
+# functpath <- "/home/jvb740/Dada_Pipel"
+# 
+# source(file.path(functpath, "Dada_TaxonomyFunctions.R"))
+# 
+# seqtab <- f_seqtab
+# 
+# if(!exists("seqtab")){
+#         stop("no seqtab has been loaded")
+# }
+# 
+# assignTaxonomyaddSpecies(seqtab, 
+#                          minBoot = 80,
+#                          allowMultiple = 3,
+#                          PathToRefs = "/home/jvb740/AssignTaxonomy/",
+#                          RefDataBase = "silva_nr_v123_train_set.fa.gz",
+#                          SpeciesDB = "silva_species_assignment_v123.fa.gz",
+#                          PathToSave = "/home/jvb740/AssignTaxonomy/Silva/")
+# 
+# assignTaxonomyaddSpecies(seqtab, 
+#                          minBoot = 80,
+#                          allowMultiple = 3,
+#                          PathToRefs = "/home/jvb740/AssignTaxonomy/",
+#                          RefDataBase = "gg_13_8_train_set_97.fa.gz",
+#                          SpeciesDB = "silva_species_assignment_v123.fa.gz",
+#                          PathToSave = "/home/jvb740/AssignTaxonomy/GG/")
+# 
+# assignTaxonomyaddSpecies(seqtab, 
+#                          minBoot = 80,
+#                          allowMultiple = 3,
+#                          PathToRefs = "/home/jvb740/AssignTaxonomy/",
+#                          RefDataBase = "rdp_train_set_14.fa.gz",
+#                          SpeciesDB = "rdp_species_assignment_14.fa.gz",
+#                          PathToSave = "/home/jvb740/AssignTaxonomy/rdp/")
+
+```
+
+# Load seqtab and taxonomy data and source functions
+
+```{r, message = FALSE, warning = FALSE}
+functionpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel"
+
+source(file.path(functionpath, "Dada_TaxonomyFunctions.R"))
+source(file.path(functionpath, "Dada_PlotFunctions.R"))
+
+
+datapath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/AssignTaxonomy/"
+load(file.path(datapath, "Silva/Taxonomy.RData"))
+taxa.species.silva <- taxa.species
+load(file.path(datapath, "GG/Taxonomy.RData"))
+taxa.species.gg <- taxa.species
+## NB: the gg alone resulted already in an all NA species column that I remove here
+taxa.species.gg <- taxa.species.gg[,-7]
+
+load(file.path(datapath, "rdp/Taxonomy.RData"))
+taxa.species.rdp <- taxa.species
+
+
+load(file.path(datapath, "FilteredSeqtab.RData"))
+seqtab <- f_seqtab
+min(colSums(seqtab > 0)/nrow(seqtab)) # all taxa in seqtab_f were present in at least 20% of the samples
+```
+
+
+# Compare the Assignments
+
+```{r, message = FALSE, warning = FALSE}
+# Number and percentage of assigned taxonomic levels for all amplicons
+NAPerC.silva <- NAPerCForTaxLevel(taxa.species.silva)
+
+knitr::kable(NAPerC.silva) # still only 26% of amplicons assigned 
+
+NAPerC.gg <- NAPerCForTaxLevel(taxa.species.gg)
+
+knitr::kable(NAPerC.gg) # still only 29% of amplicons assigned
+
+NAPerC.rdp <- NAPerCForTaxLevel(taxa.species.rdp)
+
+knitr::kable(NAPerC.rdp)
+
+```
+
+
+- so the assignment numbers are very alike, question is if the assignemnts are the same

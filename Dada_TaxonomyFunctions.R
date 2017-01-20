@@ -337,7 +337,8 @@ filttaxa_by_penetrance <- function(physeq, penetrance = 30, MaxCountCheck = FALS
                       legend.title = element_blank())
         
         
-        list(physeq_f, data.frame(Before = Sparsity, After = Sparsity_f), Tr, Tr2, Tr3)
+        list(FilteredPhyseq = physeq_f, Sparsity = data.frame(Before = Sparsity, After = Sparsity_f), PlotReadsRemoved = Tr,
+             HistReadsRemoved = Tr2, PlotSampleSumsBeforeAfter = Tr3)
         
 }
 
@@ -410,7 +411,7 @@ adjust_LS <- function(physeq, zeros.count = FALSE, percentile = 50, ignore.zero.
         histos <- function(x, SF, zPC, SampleName) {
                 x <- data.frame(x = x)
                 Tr <- ggplot(x, aes(x = x))
-                Tr <- Tr + geom_histogram(binwidth = 2, col = "black", fill = "#E69F00") +
+                Tr <- Tr + geom_histogram(binwidth = 0.3, col = "black", fill = "#E69F00") +
                         geom_rug() +
                         geom_vline(xintercept = SF, col = "#009E73") +
                         ylab("Frequency") + 
@@ -472,7 +473,7 @@ adjust_LS <- function(physeq, zeros.count = FALSE, percentile = 50, ignore.zero.
         histo2 <- function(x, xtitle, gtitle) {
                 x <- data.frame(x = x)
                 Tr <- ggplot(x, aes(x = x))
-                Tr <- Tr + geom_histogram(binwidth = diff(range(x))/45, col = "black", fill = "#E69F00") +
+                Tr <- Tr + geom_histogram(binwidth = diff(range(x))/60, col = "black", fill = "#E69F00") +
                         geom_rug() +
                         geom_vline(xintercept = median(x$x), col = "#009E73", size = 1) +
                         ylab("No Samples") + 

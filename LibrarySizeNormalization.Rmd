@@ -111,34 +111,36 @@ ps
 
 # Normalization a la DESeq
 
-## Reduce to taxa that are present in at least 30% of samples
+## Filter taxa: keep only taxa present in at least least 30% of samples
 
 ```{r, warning = FALSE, message = FALSE}
 
 # Filter Taxa
+formals(filttaxa_by_penetrance)
 # psf <- filter_taxa(ps, function(x){sum(x != 0) > .3*length(x)}, prune = TRUE) 
 FiltList <- filttaxa_by_penetrance(ps, penetrance = 30)
 FiltList1 <- filttaxa_by_penetrance(ps, penetrance = 30, MaxCountCheck = T)
-
-psf <- FiltList[[1]]
 
 # check that the 146 is correct:
 # sum(colSums(seqtab != 0) > .3*nrow(seqtab))
 f_seqtab <- seqtab[,colSums(seqtab != 0) > .3*nrow(seqtab)]
 
 # Look how sparsity changed
-FiltList[[2]]
+FiltList[["Sparsity"]]
 FiltList1[[2]]
 
 # Note how many reads some of the smaples lost
-FiltList[[3]]
+FiltList[["PlotReadsRemoved"]]
 FiltList1[[3]]
 
-FiltList[[4]]
+FiltList[["HistReadsRemoved"]]
 FiltList1[[4]]
 
-FiltList[[5]]
+FiltList[["PlotSampleSumsBeforeAfter"]]
 FiltList1[[5]]
+
+# Continue with filtered phyloseq object
+psf <- FiltList[[1]]
 ```
 
 - So this leaves only 146 out of the 3600 taxa, but remember it is still 70 % of the total reads
@@ -146,17 +148,16 @@ FiltList1[[5]]
 ## Implement own DESeq normalization  
 
 ```{r, warning = FALSE, message = FALSE}
-# ---- Check Sparsity ---------
-SparsityPC <- 100*(sum(otu_table(psf) == 0)/(ntaxa(psf)*nsamples(psf))) 
-SparsityPC # still almost 43 %
+# ----  Playing for understanding some basics first ---------
+FiltList[["Sparsity"]]
+#SparsityPC <- 100*(sum(otu_table(psf) == 0)/(ntaxa(psf)*nsamples(psf))) 
+#SparsityPC # still almost 43 %
 
-# ---- geometric mean function ------
-# for gm_own see Dada_TaxonomyFunctions.R
 # ==== Understanding gm_own ======
 # NB the prod(x/gm(x)) = 1 only applies when no 0 present, e.g.
 prodgm <- function(x){
-        GMzeroTrue <- gm_own(x,zero.count = TRUE)
-        GMzeroFALSE <- gm_own(x,zero.count = FALSE)
+        GMzeroTrue <- gm_own(x,zeros.count = TRUE)
+        GMzeroFALSE <- gm_own(x,zeros.count = FALSE)
         xT <- x/GMzeroTrue
         xF <- x/GMzeroFALSE
         list(xT= xT, xF= xF, GMzeroTrue =  GMzeroTrue,  GMzeroFALSE =  GMzeroFALSE, ProdT = prod(xT[xT>0], na.rm = TRUE),
@@ -172,20 +173,18 @@ g[5] <- NA
 prodgm(g)
 # ======
 
-# ---- Step 1: Use the geometric means for each taxa over all samples to calculate a "representative" Reference Sample ------
+# ---- USE adjust_LS ------
+# formals(adjust_LS) # understand zeros.count, I recommend just default values
+# body(adjust_LS)
+# environment(adjust_LS)
 
-# # NB the prod(x/gm(x)) = 1 only applies when no 0 present, e.g.
-# x <- 1:10
-# prod(x/gm(x))
+ListOAdj <- adjust_LS(psf)
+# ==== look at some outputs ==== 
+ListOAdj[["SizeFactorCompare"]]
+ListOAdj[["HistoList"]][[1]]
+ListOAdj[["SFHistos"]][[1]]
 
-if(taxa_are_rows(GP)){
-        GM <- apply(otu_table(GP), 1, gm)   
-} else {
-        GM <- apply(otu_table(GP), 2, gm) 
-}
-
-
-
+SizeFactorsOwn <- ListOAdj[["SFs"]]
 ```
 
 
@@ -261,21 +260,3 @@ do.call("grid.arrange", c(PCoAPlotList, ncol = 2))
 
 
 
-## Bar plots
-
-```{r}
-# example of using only the taxa that are present in at least 2 samples
-# Above2Taxa <- taxa_names(ps)[colSums(otu_table(ps) != 0) > 1]
-# psTop <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
-# psTop = prune_taxa(Above2Taxa, psTop)
-# sample_sums(psTop) # NOTE if you do it this way around: the relative abundances do not sum to 1
-# plot_bar(psTop, x="Sample", fill="Family")
-# plot_bar(psTop, x="Sample", fill="Phylum")
-# 
-# psTop2 = prune_taxa(Above2Taxa, ps)
-# psTop2 <- transform_sample_counts(psTop2, function(OTU) OTU/sum(OTU)) # change to relative Abundances here
-# sample_sums(psTop2) # sum to 1
-# plot_bar(psTop2, x="Sample", fill="Family")
-# plot_bar(psTop2, x="Sample", fill="Phylum")
-
-```
