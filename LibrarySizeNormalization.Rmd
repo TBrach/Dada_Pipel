@@ -116,13 +116,29 @@ ps
 ```{r, warning = FALSE, message = FALSE}
 
 # Filter Taxa
-psf <- filter_taxa(ps, function(x){sum(x != 0) > .3*length(x)}, prune = TRUE) 
+# psf <- filter_taxa(ps, function(x){sum(x != 0) > .3*length(x)}, prune = TRUE) 
+FiltList <- filttaxa_by_penetrance(ps, penetrance = 30)
+FiltList1 <- filttaxa_by_penetrance(ps, penetrance = 30, MaxCountCheck = T)
 
-psf
+psf <- FiltList[[1]]
 
 # check that the 146 is correct:
 # sum(colSums(seqtab != 0) > .3*nrow(seqtab))
 f_seqtab <- seqtab[,colSums(seqtab != 0) > .3*nrow(seqtab)]
+
+# Look how sparsity changed
+FiltList[[2]]
+FiltList1[[2]]
+
+# Note how many reads some of the smaples lost
+FiltList[[3]]
+FiltList1[[3]]
+
+FiltList[[4]]
+FiltList1[[4]]
+
+FiltList[[5]]
+FiltList1[[5]]
 ```
 
 - So this leaves only 146 out of the 3600 taxa, but remember it is still 70 % of the total reads
@@ -135,25 +151,25 @@ SparsityPC <- 100*(sum(otu_table(psf) == 0)/(ntaxa(psf)*nsamples(psf)))
 SparsityPC # still almost 43 %
 
 # ---- geometric mean function ------
-# for 
-# ==== Understanding gm ======
+# for gm_own see Dada_TaxonomyFunctions.R
+# ==== Understanding gm_own ======
 # NB the prod(x/gm(x)) = 1 only applies when no 0 present, e.g.
 prodgm <- function(x){
-        GM <- gm(x)
-        x <- x/GM
-        x[x == 0] <- NA
-        list(vector = x, GM = GM, Prod = prod(x, na.rm = TRUE))
+        GMzeroTrue <- gm_own(x,zero.count = TRUE)
+        GMzeroFALSE <- gm_own(x,zero.count = FALSE)
+        xT <- x/GMzeroTrue
+        xF <- x/GMzeroFALSE
+        list(xT= xT, xF= xF, GMzeroTrue =  GMzeroTrue,  GMzeroFALSE =  GMzeroFALSE, ProdT = prod(xT[xT>0], na.rm = TRUE),
+             ProdF = prod(xF[xF>0], na.rm = TRUE))
 }
 x <- 1:10
 prodgm(x)
 y <- x
 y[c(1,5)] <- 0
 prodgm(y)
-z <- y
-z <- z[z != 0]
-prodgm(z)
 g <- y
 g[5] <- NA
+prodgm(g)
 # ======
 
 # ---- Step 1: Use the geometric means for each taxa over all samples to calculate a "representative" Reference Sample ------
