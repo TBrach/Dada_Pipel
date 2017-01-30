@@ -104,7 +104,7 @@ NAPerCForTaxLevel <- function(taxa){
 
 
 #######################################
-### FUNCTION: TaxLevelvsPenetrance
+### FUNCTION: TaxLevelvsprevalence
 #######################################
 
 # Function to determine how many sequences could be assigned to the different taxonomic levels compared to the number of smaples the amplicons are present
@@ -112,35 +112,35 @@ NAPerCForTaxLevel <- function(taxa){
 # taxa: the output of the assignTaxonomy (dada2) and maybe addSpecies command. nrow = number of sequences and ncol number taxonomic levels.
 # seqtab: The abundance table output from Dada2_wrap
 ## Output
-# TLvsPenetrance: list of 2 data frames that state for each penetrance level the assigned taxonomic levels, first data frame as numbers, second as percentage 
+# TLvsprevalence: list of 2 data frames that state for each prevalence level the assigned taxonomic levels, first data frame as numbers, second as percentage 
 ## requires: 
 # dplyr!
 
-TaxLevelvsPenetrance <- function(taxa, seqtab){
+TaxLevelvsprevalence <- function(taxa, seqtab){
         
-        TLvsPenetrance <- as.data.frame(cbind(colSums(seqtab != 0), apply(taxa, 2, function(x){!is.na(x)})))
-        colnames(TLvsPenetrance)[1] <- "InNoSamples"
-        TLvsPenetrance <- dplyr::group_by(TLvsPenetrance, InNoSamples)
+        TLvsprevalence <- as.data.frame(cbind(colSums(seqtab != 0), apply(taxa, 2, function(x){!is.na(x)})))
+        colnames(TLvsprevalence)[1] <- "InNoSamples"
+        TLvsprevalence <- dplyr::group_by(TLvsprevalence, InNoSamples)
         
         if("Species" %in% colnames(taxa)){
                 
-                TLvsPenetrance <- as.data.frame(dplyr::summarise(TLvsPenetrance, NoAmplicons = n(), Kingdom = sum(Kingdom), Phylum = sum(Phylum), Class = sum(Class),
+                TLvsprevalence <- as.data.frame(dplyr::summarise(TLvsprevalence, NoAmplicons = n(), Kingdom = sum(Kingdom), Phylum = sum(Phylum), Class = sum(Class),
                                                                  Order = sum(Order), Family = sum(Family), Genus = sum(Genus), Species = sum(Species)))
-                TLPC <- dplyr::mutate(TLvsPenetrance, Kingdom = Kingdom/NoAmplicons, Phylum = 100*(Phylum/NoAmplicons), Class = 100*(Class/NoAmplicons), Order =
+                TLPC <- dplyr::mutate(TLvsprevalence, Kingdom = Kingdom/NoAmplicons, Phylum = 100*(Phylum/NoAmplicons), Class = 100*(Class/NoAmplicons), Order =
                                               100*(Order/NoAmplicons), Family = 100*(Family/NoAmplicons), Genus = 100*(Genus/NoAmplicons), Species = 100*(Species/NoAmplicons))
                 
         } else {
                 
-                TLvsPenetrance <- as.data.frame(dplyr::summarise(TLvsPenetrance, NoAmplicons = n(), Kingdom = sum(Kingdom), Phylum = sum(Phylum), Class = sum(Class),
+                TLvsprevalence <- as.data.frame(dplyr::summarise(TLvsprevalence, NoAmplicons = n(), Kingdom = sum(Kingdom), Phylum = sum(Phylum), Class = sum(Class),
                                                                  Order = sum(Order), Family = sum(Family), Genus = sum(Genus)))
-                TLPC <- dplyr::mutate(TLvsPenetrance, Kingdom = Kingdom/NoAmplicons, Phylum = 100*(Phylum/NoAmplicons), Class = 100*(Class/NoAmplicons), Order =
+                TLPC <- dplyr::mutate(TLvsprevalence, Kingdom = Kingdom/NoAmplicons, Phylum = 100*(Phylum/NoAmplicons), Class = 100*(Class/NoAmplicons), Order =
                                               100*(Order/NoAmplicons), Family = 100*(Family/NoAmplicons), Genus = 100*(Genus/NoAmplicons))
                                      
         }
         
-        TLvsPenetrance <- list(Counts = TLvsPenetrance, PerC = TLPC)
+        TLvsprevalence <- list(Counts = TLvsprevalence, PerC = TLPC)
         
-        return(TLvsPenetrance)
+        return(TLvsprevalence)
         
 }
 
@@ -257,15 +257,15 @@ gm = function(x, na.rm=TRUE, zero.propagate = FALSE){
 
 
 #######################################
-### filttaxa_by_penetrance
+### filttaxa_by_prevalence
 #######################################
-# filters taxa by penetrance and provides plots that illustrate how the sample_sums
+# filters taxa by prevalence and provides plots that illustrate how the sample_sums
 # were changed by the filtering
 
 ## Input:
 # physeq
-# penetrance: in %, only take stay that are present in more than penetrance % of the samples unless MaxCountCheck is used
-# MaxCountCheck, MaxCount: if max count is used a taxa can remain even if not fulfilling the penetrance
+# prevalence: in %, only take stay that are present in more than prevalence % of the samples unless MaxCountCheck is used
+# MaxCountCheck, MaxCount: if max count is used a taxa can remain even if not fulfilling the prevalence
 # criterion if its max count in one of the samples is bigger than MaxCount 
 # the idea is that some samples might depend very much on a rare taxa
 
@@ -273,12 +273,12 @@ gm = function(x, na.rm=TRUE, zero.propagate = FALSE){
 # list with the filtered physeq, the sparsity measures, and 3 different plots (3-5)
 
 
-filttaxa_by_penetrance <- function(physeq, penetrance = 30, MaxCountCheck = FALSE, MaxCount = 0.2*(min(sample_sums(physeq)))) {
+filttaxa_by_prevalence <- function(physeq, prevalence = 30, MaxCountCheck = FALSE, MaxCount = 0.2*(min(sample_sums(physeq)))) {
         
         if (MaxCountCheck) {
-                physeq_f <- filter_taxa(physeq, function(x){(sum(x != 0) > (penetrance/100)*length(x)) || (max(x) > MaxCount)}, prune = TRUE)
+                physeq_f <- filter_taxa(physeq, function(x){(sum(x != 0) > (prevalence/100)*length(x)) || (max(x) > MaxCount)}, prune = TRUE)
         } else {
-                physeq_f <- filter_taxa(physeq, function(x){(sum(x != 0) > (penetrance/100)*length(x))}, prune = TRUE)
+                physeq_f <- filter_taxa(physeq, function(x){(sum(x != 0) > (prevalence/100)*length(x))}, prune = TRUE)
         }
         Sparsity <- 100*(sum(otu_table(physeq) == 0)/(ntaxa(physeq)*nsamples(physeq)))
         Sparsity_f <- 100*(sum(otu_table(physeq_f) == 0)/(ntaxa(physeq_f)*nsamples(physeq_f)))
@@ -355,10 +355,10 @@ filttaxa_by_penetrance <- function(physeq, penetrance = 30, MaxCountCheck = FALS
 # DESeq percentile = 50, i.e. the median is used. NOTE when ignore.zero.ratios = FALSE, you might get SF = 0 in case that more 
 # than 50% of the taxa of in a sample are 0. Function will through a warning then. s
 # ignore.zero.ratios: if TRUE, the SF of each sample (i.e. the percentile) will be calculated based on the pool of non-zero ratios of the sample
+# plots: if TRUE SFs and plots will be given in an output list, otherwise just the adjusted physeq is returned
 
-adjust_LS <- function(physeq, zeros.count = FALSE, percentile = 50, ignore.zero.ratios = TRUE)  {
-        
-        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+adjust_LS <- function(physeq, zeros.count = FALSE, percentile = 50, ignore.zero.ratios = TRUE, plots = FALSE)  {
         
         # ---- Step 1: Use the geometric means for each taxa over all samples to calculate a "representative" Reference Sample ------
         if(taxa_are_rows(physeq)){
@@ -387,107 +387,132 @@ adjust_LS <- function(physeq, zeros.count = FALSE, percentile = 50, ignore.zero.
         
         # -- 2c: calculate SFs for each sample depending on given percentile and whether to ignore.zero.ratios
         # if ignore.zero.ratios = TRUE, the percentile refers only to the non zero ratios in each sample
-        
+        # NB: DESEQ uses ignore.zero.ratios = TRUE
         if(ignore.zero.ratios){
                 if (taxa_are_rows(physeq)) {
-                        SFs <- apply(RatioMatrix, 2, function(x){x <- x[x>0]; quantile(x, probs = percentile/100)})
+                        SFs <- apply(RatioMatrix, 2, function(x){x <- x[x>0]; quantile(x, probs = percentile/100, na.rm = T)})
                 } else {
-                        SFs <- apply(RatioMatrix, 1, function(x){x <- x[x>0]; quantile(x, probs = percentile/100)})
+                        SFs <- apply(RatioMatrix, 1, function(x){x <- x[x>0]; quantile(x, probs = percentile/100, na.rm = T)})
                 }  
         } else {
                 if (taxa_are_rows(physeq)) {
-                        SFs <- apply(RatioMatrix, 2, quantile, probs = percentile/100)
+                        SFs <- apply(RatioMatrix, 2, quantile, probs = percentile/100, na.rm = T)
                 } else {
-                        SFs <- apply(RatioMatrix, 1, quantile, probs = percentile/100) 
+                        SFs <- apply(RatioMatrix, 1, quantile, probs = percentile/100, na.rm = T) 
                 }   
         }
         
         if(min(SFs) == 0) { warning("in at least one sample the Size Factor was 0!") }
         
-        # ---- step 3: Generate Plots that illustrate the process
-        # -- 3a: calculate for each sample a histogram of the ratios used to determine the SF
         
-        # Define the histos function
-        histos <- function(x, SF, zPC, SampleName) {
-                x <- data.frame(x = x)
-                Tr <- ggplot(x, aes(x = x))
-                Tr <- Tr + geom_histogram(binwidth = 0.3, col = "black", fill = "#E69F00") +
-                        geom_rug() +
-                        geom_vline(xintercept = SF, col = "#009E73") +
-                        ylab("Frequency") + 
-                        xlab("Count/(Count of Ref Sample)") +
-                        ggtitle(paste("Sample: ", SampleName, "; zeroPC: ", round(zPC, 2), "; size factor: ", round(SF,2), sep = "")) +
-                        theme_bw() + 
-                        theme(panel.grid.minor = element_blank(),
-                              panel.grid.major.y = element_blank(),
-                              panel.grid.major.x = element_line(color = "#999999", size = .15))
-        }
+        # --- 3: calculate the new counts and put into a physeq object
         
-        
-        if(taxa_are_rows(physeq) && (!all.equal(colnames(RatioMatrix), names(SFs), names(zeroPC)))) {warning("names messed up!")}
-        if(!taxa_are_rows(physeq) && (!all.equal(rownames(RatioMatrix), names(SFs), names(zeroPC)))) {warning("names messed up!")}
-        
-        if(ignore.zero.ratios){
-                if(taxa_are_rows(physeq)){
-                        HistoList <- lapply(1:nsamples(physeq), function(i){histos(x = RatioMatrix[,i][RatioMatrix[,i] > 0], SF = SFs[i], zPC = zeroPC[i], SampleName = names(SFs)[i])})
-                } else {
-                        HistoList <- lapply(1:nsamples(physeq), function(i){histos(x = RatioMatrix[i,][RatioMatrix[i,] > 0], SF = SFs[i], zPC = zeroPC[i], SampleName = names(SFs)[i])})
-                }  
+        if(taxa_are_rows(physeq)){
+                if (!identical(colnames(otu_table(physeq)), names(SFs))) {stop("names SFs do not fit to physeq")}
+                Mat <- sweep(otu_table(physeq),2,SFs, "/")
+                phynew <- phyloseq(otu_table(Mat, taxa_are_rows = TRUE), sample_data(physeq), tax_table(physeq))
         } else {
-                if(taxa_are_rows(physeq)){
-                        HistoList <- lapply(1:nsamples(physeq), function(i){histos(x = RatioMatrix[,i], SF = SFs[i], zPC = zeroPC[i], SampleName = names(SFs)[i])})
+                if (!identical(rownames(otu_table(physeq)), names(SFs))) {stop("names SFs do not fit to physeq")}
+                Mat <- sweep(otu_table(physeq),1,SFs, "/") 
+                phynew <- phyloseq(otu_table(Mat, taxa_are_rows = FALSE), sample_data(physeq), tax_table(physeq))
+        }
+        
+        if (plots){
+                
+                # ---- step 4: Generate Plots that illustrate the process
+                # -- 4a: calculate for each sample a histogram of the ratios used to determine the SF
+                
+                cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+                
+                # Define the histos function
+                histos <- function(x, SF, zPC, SampleName) {
+                        x <- data.frame(x = x)
+                        Tr <- ggplot(x, aes(x = x))
+                        Tr <- Tr + geom_histogram(binwidth = 0.3, col = "black", fill = "#E69F00") +
+                                geom_rug() +
+                                geom_vline(xintercept = SF, col = "#009E73") +
+                                ylab("Frequency") + 
+                                xlab("Count/(Count of Ref Sample)") +
+                                ggtitle(paste("Sample: ", SampleName, "; zeroPC: ", round(zPC, 2), "; size factor: ", round(SF,2), sep = "")) +
+                                theme_bw() + 
+                                theme(panel.grid.minor = element_blank(),
+                                      panel.grid.major.y = element_blank(),
+                                      panel.grid.major.x = element_line(color = "#999999", size = .15))
+                }
+                
+                
+                if(taxa_are_rows(physeq) && (!all.equal(colnames(RatioMatrix), names(SFs), names(zeroPC)))) {warning("names messed up!")}
+                if(!taxa_are_rows(physeq) && (!all.equal(rownames(RatioMatrix), names(SFs), names(zeroPC)))) {warning("names messed up!")}
+                
+                if(ignore.zero.ratios){
+                        if(taxa_are_rows(physeq)){
+                                HistoList <- lapply(1:nsamples(physeq), function(i){histos(x = RatioMatrix[,i][RatioMatrix[,i] > 0], SF = SFs[i], zPC = zeroPC[i], SampleName = names(SFs)[i])})
+                        } else {
+                                HistoList <- lapply(1:nsamples(physeq), function(i){histos(x = RatioMatrix[i,][RatioMatrix[i,] > 0], SF = SFs[i], zPC = zeroPC[i], SampleName = names(SFs)[i])})
+                        }  
                 } else {
-                        HistoList <- lapply(1:nsamples(physeq), function(i){histos(x = RatioMatrix[i,], SF = SFs[i], zPC = zeroPC[i], SampleName = names(SFs)[i])}) 
-                }   
-        }
-        
-        # -- 3b: compare calculated SFs to library sizes of the samples
-        if(!identical(names(SFs), names(sample_sums(physeq)))){warning("Probably some Mix Up CHECK!")}
-        comp <- data.frame(Sample = names(SFs), TotAmps = sample_sums(physeq), SFs = SFs)
-        comp$SFsNormed <- comp$SFs/median(comp$SFs)
-        comp$TotAmpsNormed <- comp$TotAmps/mean(comp$TotAmps)
-        comp <- dplyr::arrange(comp, desc(TotAmpsNormed))
-        comp$Sample <- as.factor(comp$Sample)
-        LevelsWant <- as.character(comp$Sample)
-        for(i in 1:length(LevelsWant)){
-                comp$Sample <- relevel(comp$Sample, LevelsWant[i])
-        }
-        
-        comp <- comp[c(1,4,5)]
-        names(comp)[c(2,3)] <- c("SizeFactor_DESeq", "TotalAmplicons_relAb")
-        comp <- tidyr::gather(comp, key = Corrector, value = NormedValue, -Sample)
-        Tr <- ggplot(comp, aes(x = Sample, y = NormedValue, color = Corrector))
-        Tr <- Tr + geom_point(size = 2) +
-                xlab("") +
-                ylab("correction value (normalized to median)") +
-                ggtitle(paste("Median SF: ", round(median(SFs),3), " Median TotAmp: ", round(median(sample_sums(physeq)),3), sep = "")) +
-                scale_color_manual(values = cbPalette[c(4,2)]) +
-                theme_bw() +
-                theme(panel.grid.minor = element_blank(),
-                      panel.grid.major.y = element_blank(),
-                      panel.grid.major.x = element_line(color = "#999999", size = .15),
-                      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
-                      legend.title = element_blank())
-        
-        # -- 3c: save Histograms of the SFs and sample_sums
-        histo2 <- function(x, xtitle, gtitle) {
-                x <- data.frame(x = x)
-                Tr <- ggplot(x, aes(x = x))
-                Tr <- Tr + geom_histogram(binwidth = diff(range(x))/60, col = "black", fill = "#E69F00") +
-                        geom_rug() +
-                        geom_vline(xintercept = median(x$x), col = "#009E73", size = 1) +
-                        ylab("No Samples") + 
-                        xlab(xtitle) +
-                        ggtitle(gtitle) +
-                        theme_bw() + 
+                        if(taxa_are_rows(physeq)){
+                                HistoList <- lapply(1:nsamples(physeq), function(i){histos(x = RatioMatrix[,i], SF = SFs[i], zPC = zeroPC[i], SampleName = names(SFs)[i])})
+                        } else {
+                                HistoList <- lapply(1:nsamples(physeq), function(i){histos(x = RatioMatrix[i,], SF = SFs[i], zPC = zeroPC[i], SampleName = names(SFs)[i])}) 
+                        }   
+                }
+                
+                # -- 3b: compare calculated SFs to library sizes of the samples
+                if(!identical(names(SFs), names(sample_sums(physeq)))){warning("Probably some Mix Up CHECK!")}
+                comp <- data.frame(Sample = names(SFs), TotAmps = sample_sums(physeq), SFs = SFs)
+                comp$SFsNormed <- comp$SFs/median(comp$SFs)
+                comp$TotAmpsNormed <- comp$TotAmps/mean(comp$TotAmps)
+                comp <- dplyr::arrange(comp, desc(TotAmpsNormed))
+                comp$Sample <- as.factor(comp$Sample)
+                LevelsWant <- as.character(comp$Sample)
+                for(i in 1:length(LevelsWant)){
+                        comp$Sample <- relevel(comp$Sample, LevelsWant[i])
+                }
+                
+                comp <- comp[c(1,4,5)]
+                names(comp)[c(2,3)] <- c("SizeFactor_DESeq", "TotalAmplicons_relAb")
+                comp <- tidyr::gather(comp, key = Corrector, value = NormedValue, -Sample)
+                Tr <- ggplot(comp, aes(x = Sample, y = NormedValue, color = Corrector))
+                Tr <- Tr + geom_point(size = 2) +
+                        xlab("") +
+                        ylab("correction value (normalized to median)") +
+                        ggtitle(paste("Median SF: ", round(median(SFs),3), " Median TotAmp: ", round(median(sample_sums(physeq)),3), sep = "")) +
+                        scale_color_manual(values = cbPalette[c(4,2)]) +
+                        theme_bw() +
                         theme(panel.grid.minor = element_blank(),
                               panel.grid.major.y = element_blank(),
-                              panel.grid.major.x = element_line(color = "#999999", size = .15))
+                              panel.grid.major.x = element_line(color = "#999999", size = .15),
+                              axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
+                              legend.title = element_blank())
+                
+                # -- 3c: save Histograms of the SFs and sample_sums
+                histo2 <- function(x, xtitle, gtitle) {
+                        x <- data.frame(x = x)
+                        Tr <- ggplot(x, aes(x = x))
+                        Tr <- Tr + geom_histogram(binwidth = diff(range(x))/60, col = "black", fill = "#E69F00") +
+                                geom_rug() +
+                                geom_vline(xintercept = median(x$x), col = "#009E73", size = 1) +
+                                ylab("No Samples") + 
+                                xlab(xtitle) +
+                                ggtitle(gtitle) +
+                                theme_bw() + 
+                                theme(panel.grid.minor = element_blank(),
+                                      panel.grid.major.y = element_blank(),
+                                      panel.grid.major.x = element_line(color = "#999999", size = .15))
+                }
+                
+                Tr2 <- histo2(SFs, xtitle = "Size Factors", gtitle = "Size Factors a la DESeq")
+                Tr3 <- histo2(sample_sums(physeq), xtitle = "Total Amplicons", gtitle = "Size Factors a la relative abundance")
+                
+                List <- list(Physeq = phynew, SFs = SFs, SizeFactorCompare = Tr, SFHistos = list(Tr2, Tr3), RefSample = GM, RatioMatrix = RatioMatrix, zeroPC = zeroPC, HistoList = HistoList)
+                
+                
+        } else {
+                
+                phynew
+                
         }
         
-        Tr2 <- histo2(SFs, xtitle = "Size Factors", gtitle = "Size Factors a la DESeq")
-        Tr3 <- histo2(sample_sums(physeq), xtitle = "Total Amplicons", gtitle = "Size Factors a la relative abundance")
-        
-        List <- list(SFs = SFs, SizeFactorCompare = Tr, SFHistos = list(Tr2, Tr3), RefSample = GM, RatioMatrix = RatioMatrix, zeroPC = zeroPC, HistoList = HistoList)
         
 }
