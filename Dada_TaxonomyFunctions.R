@@ -342,6 +342,127 @@ filttaxa_by_prevalence <- function(physeq, prevalence = 30, MaxCountCheck = FALS
         
 }
 
+
+#######################################
+### adj_LS
+#######################################
+# implementation of DESeq2 library size similar to estimateSizeFactorsForMatrix
+# in difference to adjust_LS (obsolete) ignore.zero.ratios is always TRUE (so 0 ratios are always ignored)
+
+## Input:
+# physeq
+# zeros.count: zeros.count of gm_own, if TRUE 0 will be considered when calculating the geometric mean
+# if FALSE not and thus the geometric means will be bigger (see gm_own)
+# percentile: the percentile to select the size factor SF of a sample based on its count ratios to the reference sample. In
+# DESeq percentile = 50, i.e. stats::median is used. 
+# plots: if TRUE SFs and plots will be given in an output list, otherwise just the adjusted physeq is returned
+
+
+adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, plots = FALSE)  {
+        
+        # ---- Step 1: Calculate Geometric mean for each taxa over all samples ------
+        # NB: these GM is basically the reference sample
+        if(taxa_are_rows(physeq)){
+                GM <- apply(otu_table(physeq), 1, gm_own, zeros.count = zeros.count)   
+        } else {
+                GM <- apply(otu_table(physeq), 2, gm_own, zeros.count = zeros.count) 
+        }
+        
+        # ---- Step 2: Calculate Size factors --------
+
+        # NB: x/y = exp(log(x) - log(y))
+        
+        if (taxa_are_rows(physeq)) {
+                SFs <- apply(as(otu_table(physeq), "matrix"), 2, function(sample_cnts){exp(quantile((log(sample_cnts)-log(GM))[sample_cnts > 0], probs = percentile/100, na.rm = T))})
+        } else {
+                SFs <- apply(as(otu_table(physeq), "matrix"), 1, function(sample_cnts){exp(quantile((log(sample_cnts)-log(GM))[sample_cnts > 0], probs = percentile/100, na.rm = T))})
+        } 
+        
+       
+        if(min(SFs) == 0) { warning("in at least one sample the Size Factor was 0!") }
+        
+        
+        # --- 3: calculate the new counts and put into a physeq object
+        
+        if(taxa_are_rows(physeq)){
+                if (!identical(colnames(otu_table(physeq)), names(SFs))) {stop("names SFs do not fit to physeq")}
+                Mat <- sweep(otu_table(physeq),2,SFs, "/")
+                phynew <- phyloseq(otu_table(Mat, taxa_are_rows = TRUE), sample_data(physeq), tax_table(physeq))
+        } else {
+                if (!identical(rownames(otu_table(physeq)), names(SFs))) {stop("names SFs do not fit to physeq")}
+                Mat <- sweep(otu_table(physeq),1,SFs, "/") 
+                phynew <- phyloseq(otu_table(Mat, taxa_are_rows = FALSE), sample_data(physeq), tax_table(physeq))
+        }
+        
+        if (plots){
+                
+                cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+                
+                
+                # compare calculated SFs to library sizes of the samples
+                if(!identical(names(SFs), names(sample_sums(physeq)))){warning("Probably some Mix Up CHECK!")}
+                comp <- data.frame(Sample = names(SFs), TotAmps = sample_sums(physeq), SFs = SFs)
+                comp$SFsNormed <- comp$SFs/median(comp$SFs)
+                comp$TotAmpsNormed <- comp$TotAmps/mean(comp$TotAmps)
+                comp <- dplyr::arrange(comp, desc(TotAmpsNormed))
+                comp$Sample <- as.factor(comp$Sample)
+                LevelsWant <- as.character(comp$Sample)
+                for(i in 1:length(LevelsWant)){
+                        comp$Sample <- relevel(comp$Sample, LevelsWant[i])
+                }
+                
+                comp <- comp[c(1,4,5)]
+                names(comp)[c(2,3)] <- c("SizeFactor_DESeq", "TotalAmplicons_relAb")
+                comp <- tidyr::gather(comp, key = Corrector, value = NormedValue, -Sample)
+                Tr <- ggplot(comp, aes(x = Sample, y = NormedValue, color = Corrector))
+                Tr <- Tr + geom_point(size = 2) +
+                        xlab("") +
+                        ylab("correction value (normalized to median)") +
+                        ggtitle(paste("Median SF: ", round(median(SFs),3), " Median TotAmp: ", round(median(sample_sums(physeq)),3), sep = "")) +
+                        scale_color_manual(values = cbPalette[c(4,2)]) +
+                        theme_bw() +
+                        theme(panel.grid.minor = element_blank(),
+                              panel.grid.major.y = element_blank(),
+                              panel.grid.major.x = element_line(color = "#999999", size = .15),
+                              axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
+                              legend.title = element_blank())
+                
+                # -- 3c: save Histograms of the SFs and sample_sums
+                histo2 <- function(x, xtitle, gtitle) {
+                        x <- data.frame(x = x)
+                        Tr <- ggplot(x, aes(x = x))
+                        Tr <- Tr + geom_histogram(binwidth = diff(range(x))/60, col = "black", fill = "#E69F00") +
+                                geom_rug() +
+                                geom_vline(xintercept = median(x$x), col = "#009E73", size = 1) +
+                                ylab("No Samples") + 
+                                xlab(xtitle) +
+                                ggtitle(gtitle) +
+                                theme_bw() + 
+                                theme(panel.grid.minor = element_blank(),
+                                      panel.grid.major.y = element_blank(),
+                                      panel.grid.major.x = element_line(color = "#999999", size = .15))
+                }
+                
+                Tr2 <- histo2(SFs, xtitle = "Size Factors", gtitle = "Size Factors a la DESeq")
+                Tr3 <- histo2(sample_sums(physeq), xtitle = "Total Amplicons", gtitle = "Size Factors a la relative abundance")
+                
+                List <- list(Physeq = phynew, SFs = SFs, SizeFactorCompare = Tr, SFHistos = list(Tr2, Tr3), RefSample = GM)
+                
+                
+        } else {
+                
+                phynew
+                
+        }
+        
+        
+}
+
+
+
+
+# ----------------------------- obsolete functions ----------------------------------------------------
+
 #######################################
 ### adjust_LS
 #######################################
