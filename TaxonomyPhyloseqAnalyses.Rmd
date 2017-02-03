@@ -41,7 +41,7 @@ load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
 
 load(file.path(datapath, "TaxAssign/TaxonomicData.RData"))
 
-functionpath <- "."
+functionpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel"
 
 source(file.path(functionpath, "Dada_TaxonomyFunctions.R"))
 source(file.path(functionpath, "Dada_PlotFunctions.R"))
