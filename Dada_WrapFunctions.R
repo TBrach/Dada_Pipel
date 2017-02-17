@@ -153,6 +153,10 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         dir.create(DataFolder, showWarnings = FALSE)
         
+        if(!file.exists(DataFolder)){
+                stop("DataFolder could not be created! something wrong with path2, maybe permission denied.")
+        }
+        
         ptm <- proc.time()
         
         LogFile <- file.path(DataFolder, "DadaWrapper.log")
@@ -663,17 +667,17 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         }
         ReadSummary <- do.call("rbind",QStatsList)
         ReadSummary <- ReadSummary[!duplicated(ReadSummary$Sample), c("Sample", "NoReads")]
-        ReadSummary$Filtered <- NoFilteredReads
-        ReadSummary$Merged <- sapply(1:length(SampleNames), function(i) sum(mergers[[i]]$abundance))
-        ReadSummary$NoChimera <- sapply(1:length(SampleNames), function(i) sum(mergers.nochim[[i]]$abundance))
-        ReadSummary$Uniques_F <- Uniques_F
-        ReadSummary$Denoised_F <- Denoised_F
-        ReadSummary$bimera_F <- sapply(1:length(SampleNames), function(i) sum(bimFs[[i]]))
-        ReadSummary$Uniques_R <- Uniques_R
-        ReadSummary$Denoised_R <- Denoised_R
-        ReadSummary$bimera_R <- sapply(1:length(SampleNames), function(i) sum(bimRs[[i]]))
+        ReadSummary$FilteredReads <- NoFilteredReads
+        ReadSummary$MergedReads <- sapply(1:length(SampleNames), function(i) sum(mergers[[i]]$abundance))
+        ReadSummary$MergedReadsWOBimera <- sapply(1:length(SampleNames), function(i) sum(mergers.nochim[[i]]$abundance))
+        ReadSummary$UniqueSequences_F <- Uniques_F
+        ReadSummary$DenoisedSequences_F <- Denoised_F
+        ReadSummary$BimeraSequences_F <- sapply(1:length(SampleNames), function(i) sum(bimFs[[i]]))
+        ReadSummary$UniqueSequences_R <- Uniques_R
+        ReadSummary$DenoisedSequences_R <- Denoised_R
+        ReadSummary$BimeraSequences_R <- sapply(1:length(SampleNames), function(i) sum(bimRs[[i]]))
         ReadSummary$Unique_Amplicons <- sapply(1:length(SampleNames), function(i) dim(mergers[[i]])[1])
-        ReadSummary$Unique_Amplicons_nochim <- sapply(1:length(SampleNames), function(i) dim(mergers.nochim[[i]])[1])
+        ReadSummary$UniqueAmpliconsWOBimera <- sapply(1:length(SampleNames), function(i) dim(mergers.nochim[[i]])[1])
         rownames(ReadSummary) <- NULL
         
         if(!exists("SamplesFor_errF")){SamplesFor_errF = NULL}
@@ -875,6 +879,10 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
         }
         
         dir.create(DataFolder, showWarnings = TRUE)
+        
+        if(!file.exists(DataFolder)){
+                stop("DataFolder could not be created! something wrong with path2, maybe permission denied.")
+        }
         
         ## Collect quality Score data of the fastQ files and store a data.frame for each sample in the lists FW_QualityStats and RV_QualityStats ####################
         
