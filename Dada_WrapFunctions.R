@@ -760,7 +760,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
 #######################################
 
 # runs the first part of the Dada2_wrap function, creating the quality plots and data. Based on these one can decide on the filtering
-# parameters when using the Dada2_wrap function subsequently
+# parameters to subsequently use the Dada2_wrap function
 ## Input
 # path: The path to the folder containing the sample folders with the fastq files: 
 # F_pattern: a regular expression to find the fastq files with the forward reads in the sample folders
@@ -804,11 +804,12 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
         ### save the package Versions
         ##############################
         # NB: outputs an error and stops function if a Package is not installed
-        PackageVersions <- data.frame(Package = c("dada2", "ShortRead", "ggplot2", "dplyr"),
+        PackageVersions <- data.frame(Package = c("dada2", "ShortRead", "ggplot2", "dplyr", "tidyr"),
                                       Version = c(packageVersion("dada2"),
                                                   packageVersion("ShortRead"),
                                                   packageVersion("ggplot2"),
-                                                  packageVersion("dplyr")))
+                                                  packageVersion("dplyr"),
+                                                  packageVersion("tidyr")))
         
         message(paste(PackageVersions$Package, ": ", PackageVersions$Version, "; ", sep= ""))
         
@@ -873,7 +874,7 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
         
         DataFolder <- file.path(path2, "Dada_Data")
         
-        ## Not sure if this is wanted, deleting all files that are already in the DataFolder folder
+        # Not sure if this is wanted, deleting all files that are already in the DataFolder folder
         if(file.exists(DataFolder)){
                 file.remove(list.files(DataFolder, full.names = TRUE))
         }
@@ -884,7 +885,7 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
                 stop("DataFolder could not be created! something wrong with path2, maybe permission denied.")
         }
         
-        ## Collect quality Score data of the fastQ files and store a data.frame for each sample in the lists FW_QualityStats and RV_QualityStats ####################
+        # Collect quality Score data of the fastQ files and store a data.frame for each sample in the lists FW_QualityStats and RV_QualityStats ####################
         
         F_QualityStats <- list()
         R_QualityStats <- list()
@@ -893,7 +894,8 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
                 
                 Current_FWfq <- F_fastq[i]
                 Current_dfFW <- qa(Current_FWfq, n = 1e06)[["perCycle"]]$quality
-                # df is a data frame containing for each cycle (nt) the distribution of Quality scores
+                # df is a data frame containing for each cycle (nt) the distribution of Quality scores,
+                # e.g. Cycle 1 had 7 different quality scores, then 7 rows of cycle one, for each score the count says how many reads had this score
                 Current_dfFW <- dplyr::group_by(Current_dfFW, Cycle)
                 
                 Current_dfQStatsFW <- dplyr::summarise(
