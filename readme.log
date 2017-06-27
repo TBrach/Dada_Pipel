@@ -1,0 +1,17 @@
+This is pdfTeX, Version 3.14159265-2.6-1.40.17 (TeX Live 2016) (preloaded format=pdftex 2016.11.30)  20 JUN 2017 12:30
+entering extended mode
+ restricted \write18 enabled.
+ file:line:error style messages enabled.
+ %&-line parsing enabled.
+**readme.md
+(./readme.md
+./readme.md:1: You can't use `macro parameter character #' in vertical mode.
+l.1 #
+      Purpose of Dada Pipel
+? 
+./readme.md:1: Emergency stop.
+l.1 #
+      Purpose of Dada Pipel
+End of file on the terminal!
+
+./readme.md:1:  ==> Fatal error occurred, no output PDF file produced!

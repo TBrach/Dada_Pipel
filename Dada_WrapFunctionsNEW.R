@@ -16,7 +16,7 @@
 # trunQ: = truncQ from the fastqPairedFilter command, Truncate reads at the first instance of a quality score less than or equal to truncQ, ? actually not sure if these reads are then discarded?
 #    # NB: currently run before trimLeft/truncLen which does the size check. So unless truncated after the truncLen
 # the size check will kick the affected reads out, so makes little sense, see: https://github.com/benjjneb/dada2/issues/140 
-# NSAM.LEARN: default = NULL: the number of samples used to estimate the F and R error matrixes. When NULL all samples are used. 
+# nreadsLearn = 1e+06, # the number of reads (distributed over far less unique reads) used to learn the error matrixes, i.e. nreads in dada2:::learnErrors 
 # Should account for a number of samples that in total have about 1 milliion filtered reads (number will be given in the log file)
 # err_F: the error matrix for the dada command for the forward reads. Default NULL then the error matrix will be estimated (using SelfConsit = TRUE)
 # err_R: analogous to err_F for the reverse reads
@@ -39,7 +39,7 @@
 Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                        trimLeft = c(10,10), truncLen = c(220, 160), 
                        maxN = 0, maxEE = 2, truncQ = 2,
-                       NSAM.LEARN = NULL,
+                       nreadsLearn = 1e+06,
                        err_F = NULL,
                        err_R = NULL,
                        minOverlap = 20,
@@ -173,7 +173,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         Input <- list(path = path, F_pattern = F_pattern, R_pattern = R_pattern, path2 = path2,
                       trimLeft = trimLeft, truncLen = truncLen, 
                       maxN = maxN, maxEE = maxEE, truncQ = truncQ,
-                      NSAM.LEARN = NSAM.LEARN, err_F = err_F, err_R = err_R,
+                      nreadsLearn = nreadsLearn, err_F = err_F, err_R = err_R,
                       minOverlap = minOverlap, maxMismatch = maxMismatch, F_QualityStats = F_QualityStats,
                       R_QualityStats = R_QualityStats, filtFs = filtFs, filtRs = filtRs)
         
@@ -386,64 +386,26 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         if(is.null(err_F)){
                 
-                if(is.null(NSAM.LEARN)){
-                        NSAM.LEARN <- length(SampleNames)
-                        message("Your NSAM.LEARN was \"NULL\" all samples are used for err_F estimation")
-                } else if(!is.numeric(NSAM.LEARN)){
-                        NSAM.LEARN <- length(SampleNames)
-                        message("Your NSAM.LEARN was not numeric, therefore all samples are used for err_F estimation")
-                } else if(NSAM.LEARN >= length(SampleNames)){
-                        NSAM.LEARN <- length(SampleNames)
-                        message("Your NSAM.LEARN covered all samples, i.e. all samples are used for err_F estimation")
-                }
+                # the new learnErrors from dada2 was a smarter way to find the balance between using enough reads for error matrix calculation
+                # without getting a terribly long calculation
+                errorsFW <- learnErrorsAdj(fls = filtFs, nreads = nreadsLearn, multithread = TRUE)
+                # learnErrorsAdj is basically dada2::learnErrors, just adds the NREADS from the function to the output list
                 
-                # Random selection of samples used for err_F estimation unless all samples are used
                 
-                if(NSAM.LEARN == length(SampleNames)){
-                        SamplesFor_errF <- filtFs
-                } else {
-                        prng <- .Random.seed
-                        SamplesFor_errF <- sample(filtFs, NSAM.LEARN)
-                        attr(SamplesFor_errF, "seed") <- prng
-                }
+                message(paste("**", errorsFW$NREADS, "reads have been used for err_F estimation **"))
                 
-                drp.learnF <- derepFastq(SamplesFor_errF)
+                err_F <- errorsFW$err_out
                 
-                if(class(drp.learnF) == "list") {
-                        ReadsForErrFEstimation <- sum(sapply(1:length(drp.learnF), function(x) sum(drp.learnF[[x]]$uniques)))
-                } else {
-                        ReadsForErrFEstimation <- sum(drp.learnF$uniques)
-                }
-                
-                message(paste("**", ReadsForErrFEstimation, "reads will be used for err_F estimation **"))
-                
-                dd.learnF <- dada(drp.learnF, err=NULL, selfConsist=TRUE, multithread=TRUE)
-                # ## NB: The determined error rates are all identical, so here samples were pooled that is why it took so long
-                # identical(dd.learnF[[1]]$err_out, dd.learnF[[2]]$err_out, dd.learnF[[3]]$err_out)
-                
-                if(class(dd.learnF) == "list") {
-                        err_F <- dd.learnF[[1]]$err_out
-                } else {
-                        err_F <- dd.learnF$err_out
-                }
-                
-                pdf(file = file.path(PlotFolder, "errorRates_F_Sample1.pdf"), width = 10, height = 10)
-                if(class(dd.learnF) == "list") {
-                        print(plotErrors(dd.learnF[[1]], nominalQ=TRUE))
-                } else {
-                        print(plotErrors(dd.learnF, nominalQ=TRUE))
-                }
+                pdf(file = file.path(PlotFolder, "errorRates_F.pdf"), width = 10, height = 10)
+                print(plotErrors(errorsFW, nominalQ=TRUE))
                 dev.off()
                 
                 save(err_F, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
                 
                 message("*********************** err_F has been estimated ***********************
-                ********************************************************************")
+                        ********************************************************************")
                 cat("\n*** err_F has been estimated ***", file = LogFile, append = TRUE)
-                cat(paste("\nNumber of samples used for err_F estimation: ", NSAM.LEARN), file = LogFile, append = TRUE)
-                cat("\nSamples used for err_F estimation: \n", file = LogFile, append = TRUE)
-                cat(paste(SampleNames[sort(match(names(SamplesFor_errF), SampleNames))]), file = LogFile, append = TRUE)
-                cat(paste("\nReads used for err_F estimation: ", ReadsForErrFEstimation), file = LogFile, append = TRUE)
+                cat(paste("\nReads used for err_F estimation: ", errorsFW$NREADS), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
                 cat("\nTime after err_F estimation: ", file = LogFile, append = TRUE)
                 cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
@@ -453,107 +415,75 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         }
         
         
+        
+        
         ##############################
         ### Estimate err_R matrix
         ##############################
         
         if(is.null(err_R)){
                 
-                if(is.null(NSAM.LEARN)){
-                        NSAM.LEARN <- length(SampleNames)
-                        message("Your NSAM.LEARN was \"NULL\" all samples are used for err_R estimation")
-                } else if(NSAM.LEARN >= length(SampleNames)){
-                        NSAM.LEARN <- length(SampleNames)
-                        message("Your NSAM.LEARN covered all samples, i.e. all samples are used for err_R estimation")
-                }
                 
-                # Random selection of samples used for err_F estimation unless all samples are used
-                if(NSAM.LEARN == length(SampleNames)){
-                        SamplesFor_errR <- filtRs
-                } else {
-                        prng <- .Random.seed
-                        SamplesFor_errR <- sample(filtRs, NSAM.LEARN)
-                        attr(SamplesFor_errR, "seed") <- prng
-                }
+                errorsRV <- learnErrorsAdj(fls = filtRs, nreads = nreadsLearn, multithread = TRUE)
                 
-                drp.learnR <- derepFastq(SamplesFor_errR)
+                message(paste("**", errorsRV$NREADS, "reads have been used for err_R estimation **"))
                 
-                if(class(drp.learnR) == "list") {
-                        ReadsForErrREstimation <- sum(sapply(1:length(drp.learnR), function(x) sum(drp.learnR[[x]]$uniques)))
-                } else {
-                        ReadsForErrREstimation <- sum(drp.learnR$uniques)
-                }
+                err_R <- errorsRV$err_out
                 
-                message(paste("**", ReadsForErrREstimation, "reads will be used for err_R estimation **"))
-                
-                dd.learnR <- dada(drp.learnR, err=NULL, selfConsist=TRUE, multithread=TRUE)
-                
-                if(class(dd.learnR) == "list") {
-                        err_R <- dd.learnR[[1]]$err_out
-                } else {
-                        err_R <- dd.learnR$err_out
-                }
-                
-                pdf(file = file.path(PlotFolder, "errorRates_R_Sample1.pdf"), width = 10, height = 10)
-                if(class(dd.learnR) == "list") {
-                        print(plotErrors(dd.learnR[[1]], nominalQ=TRUE))
-                } else {
-                        print(plotErrors(dd.learnR, nominalQ=TRUE))
-                }
+                pdf(file = file.path(PlotFolder, "errorRates_R.pdf"), width = 10, height = 10)
+                print(plotErrors(errorsRV, nominalQ=TRUE))
                 dev.off()
+                
+                save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
                 
                 message("*********************** err_R has been estimated ***********************
                         ********************************************************************")
                 cat("\n*** err_R has been estimated ***", file = LogFile, append = TRUE)
-                cat(paste("\nNumber of samples used for err_R estimation: ", NSAM.LEARN), file = LogFile, append = TRUE)
-                cat("\nSamples used for err_R estimation: \n", file = LogFile, append = TRUE)
-                cat(paste(SampleNames[sort(match(names(SamplesFor_errR), SampleNames))]), file = LogFile, append = TRUE)
-                cat(paste("\nReads used for err_R estimation: ", ReadsForErrREstimation), file = LogFile, append = TRUE)
+                cat(paste("\nReads used for err_R estimation: ", errorsRV$NREADS), file = LogFile, append = TRUE)
                 TimePassed <- proc.time()-ptm
-                cat("\nTime after err_F estimation: ", file = LogFile, append = TRUE)
+                cat("\nTime after err_R estimation: ", file = LogFile, append = TRUE)
                 cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
                 cat(paste("Time Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
                 cat("\n*** Start denoising data, bimera detection, and merging of reads into amplicons***", file = LogFile, append = TRUE)
                 
         }
         
-        save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
+        
         
         ##############################
         ### Denoising (dada command for all samples) and bimeara identification
         ##############################
         
-        #### NB: if all samples have been used to generate drp.learnR, dd.learnR, drp.learnF, dd.learnF, these should of course be used
-        # instead of running again through all samples, therefore the following if check
+        # NB: if all samples have been used to learn err_F and err_R, there is no need to do the dereplication and the dada command again
+        # in that case the denoised data (dds) has been saved in errorsFW$dds and errorsRV$dds
         
         message("*********************** Start denoising and bimera detection ***********************
                         ********************************************************************")
         
-        if (NSAM.LEARN == length(SampleNames) && exists("drp.learnR", inherits = FALSE) && exists("drp.learnF", inherits = FALSE) &&
-            exists("dd.learnR", inherits = FALSE) && exists("dd.learnF", inherits = FALSE)) {
-                # if drp.learnF and R have been generated in this function and all samples where used for doing so, then:
+        if (exists("errorsFW", inherits = FALSE) && exists("errorsRV", inherits = FALSE) &&
+            !is.null(errorsFW$dds) && !is.null(errorsRV$dds)) {
+                # This is the case when both err_F and err_R have been estimated above with all samples, i.e. nreadsLearn was big enought that all samples were used
+                dd.learnF <- errorsFW$dds
+                drp.learnF <- errorsFW$drps
+                dd.learnR <- errorsRV$dds
+                drp.learnR <- errorsRV$drps
                 
-                #NB: the follwoing demands that the samples were denoised in the given order, i.e. just 1:NSAM.LEARN was used not the sample command!!
+                rm(errorsRV, errorsFW)
+
+                # NB: the follwoing demands that the samples were denoised in the given order, I therefore removed tha randomize option from learnErrorsAdj
                 names(dd.learnF) <- SampleNames
                 names(drp.learnF) <- SampleNames
                 names(dd.learnR) <- SampleNames
                 names(drp.learnR) <- SampleNames
                 
-                ## only for the ReadSummary later
-                Uniques_F <- sapply(1:length(SampleNames), function(i) length(drp.learnF[[i]]$uniques))
-                Uniques_R <- sapply(1:length(SampleNames), function(i) length(drp.learnR[[i]]$uniques))
-                Denoised_F <- sapply(1:length(SampleNames), function(i) length(dd.learnF[[i]]$denoised))
-                Denoised_R <- sapply(1:length(SampleNames), function(i) length(dd.learnR[[i]]$denoised))
-                names(Uniques_F) <- SampleNames
-                names(Uniques_R) <- SampleNames
-                names(Denoised_F) <- SampleNames
-                names(Denoised_R) <- SampleNames
-                ##
+                # only for the ReadSummary later
+                Uniques_F <- sapply(drp.learnF, function(x) length(x$uniques))
+                Uniques_R <- sapply(drp.learnR, function(x) length(x$uniques))
+                Denoised_F <- sapply(dd.learnF, function(x) length(x$denoised))
+                Denoised_R <- sapply(dd.learnR, function(x) length(x$denoised))
+                NoFilteredReads <- sapply(drp.learnF, function(x) sum(x$uniques)) # would be the same for drp.learnR, or sum dd.learnF$denoised
+                mergers <- mergePairs(dd.learnF, drp.learnF, dd.learnR, drp.learnR, minOverlap = minOverlap, maxMismatch = maxMismatch)
                 
-                mergers <- vector("list", length(SampleNames))
-                names(mergers) <- SampleNames
-                NoFilteredReads <- vector("numeric", length(SampleNames))
-                names(NoFilteredReads) <- SampleNames
                 bimFs <- vector("list", length(SampleNames))
                 names(bimFs) <- SampleNames
                 bimRs <- vector("list", length(SampleNames))
@@ -562,17 +492,12 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 for(sam in SampleNames) {
                         cat("Processing:", sam, "\n")
                         #cat(paste("\nDenoising sample:", sam), file = LogFile, append = TRUE)
-                        derepF <- drp.learnF[[sam]]
-                        NoFilteredReads[sam] <- sum(derepF$uniques)
                         ddF <- dd.learnF[[sam]] 
                         bimFs[[sam]] <- isBimeraDenovo(ddF, verbose=TRUE)
-                        derepR <- drp.learnR[[sam]]
                         ddR <- dd.learnR[[sam]]
                         bimRs[[sam]] <- isBimeraDenovo(ddR, verbose=TRUE)
-                        merger <- mergePairs(ddF, derepF, ddR, derepR, minOverlap = minOverlap, maxMismatch = maxMismatch)
-                        mergers[[sam]] <- merger
                         
-                        rm(derepF, derepR, ddF, ddR, merger)
+                        rm(ddF, ddR)
                 }
 
                 rm(drp.learnF, drp.learnR, dd.learnF, dd.learnR)
@@ -995,4 +920,47 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
 }
 
 
+#######################################
+### FUNCTION: learnErrorsAdj
+#######################################
+# is basically the dada2:::learnErrors function unchanged, only that the NREADS used are added to the output list,
+# in addition: if dada command has been run on all samples, dds is also saved to not have to run it again in 
+# DadaWrapper.
+# NB: this makes this function a bit dangerous if fls were already dereplicated samples, so keep fls to be file names!
+
+
+learnErrorsAdj <- function (fls, nreads = 1e+06, errorEstimationFunction = loessErrfun, 
+                            multithread = FALSE) #, randomize = FALSE 
+{
+        NREADS <- 0
+        drps <- vector("list", length(fls))
+        # if (randomize) {
+        #         fls <- sample(fls)
+        # }
+        for (i in seq_along(fls)) {
+                if (dada2:::is.list.of(fls, "derep")) {
+                        drps[[i]] <- fls[[i]]
+                }
+                else {
+                        drps[[i]] <- derepFastq(fls[[i]])
+                }
+                NREADS <- NREADS + sum(drps[[i]]$uniques)
+                if (NREADS > nreads) {
+                        break
+                }
+        }
+        drps <- drps[1:i]
+        dds <- dada(drps, err = NULL, selfConsist = TRUE, multithread = multithread)
+        # cat("Total reads used: ", NREADS, "\n")
+        ErrorList <- getErrors(dds, detailed = TRUE)
+        ErrorList$NREADS <- NREADS
+        if (length(drps) == length(fls)){
+                ErrorList$dds <- dds 
+                ErrorList$drps <- drps
+        } else {
+                ErrorList$dds <- NULL
+                ErrorList$drps <- NULL
+        }
+        return(ErrorList)
+}
 
