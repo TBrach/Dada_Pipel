@@ -448,7 +448,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         
         ##############################
-        ### Denoising (dada command for all samples) and bimeara identification
+        ### Denoising (dada command for all samples)
         ##############################
         
         message("*********************** Start denoising and bimera detection ***********************
@@ -479,22 +479,6 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 NoFilteredReads <- sapply(drp_F, function(x) sum(x$uniques)) # would be the same for drp_R, or sum dd_F$denoised
                 
                 mergers <- mergePairs(dd_F, drp_F, dd_R, drp_R, minOverlap = minOverlap, maxMismatch = maxMismatch)
-                
-                bimFs <- vector("list", length(SampleNames))
-                names(bimFs) <- SampleNames
-                bimRs <- vector("list", length(SampleNames))
-                names(bimRs) <- SampleNames
-                
-                for(sam in SampleNames) {
-                        cat("Processing:", sam, "\n")
-                        #cat(paste("\nDenoising sample:", sam), file = LogFile, append = TRUE)
-                        ddF <- dd_F[[sam]] 
-                        bimFs[[sam]] <- isBimeraDenovo(ddF, verbose=TRUE)
-                        ddR <- dd_R[[sam]]
-                        bimRs[[sam]] <- isBimeraDenovo(ddR, verbose=TRUE)
-                        
-                        rm(ddF, ddR)
-                }
 
                 rm(drp_F, drp_R, dd_F, dd_R)
                 
@@ -511,10 +495,6 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 names(mergers) <- SampleNames
                 NoFilteredReads <- vector("numeric", length(SampleNames))
                 names(NoFilteredReads) <- SampleNames
-                bimFs <- vector("list", length(SampleNames))
-                names(bimFs) <- SampleNames
-                bimRs <- vector("list", length(SampleNames))
-                names(bimRs) <- SampleNames
                 Uniques_F <- vector("numeric", length(SampleNames))
                 names(Uniques_F) <- SampleNames
                 Uniques_R <- vector("numeric", length(SampleNames))
@@ -530,13 +510,11 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         derepF <- derepFastq(filtFs[[sam]])
                         NoFilteredReads[sam] <- sum(derepF$uniques)
                         ddF <- dada(derepF, err=err_F, multithread=TRUE) 
-                        bimFs[[sam]] <- isBimeraDenovo(ddF, verbose=TRUE)
                         Uniques_F[sam] <- length(derepF$uniques)
                         Denoised_F[sam] <- length(ddF$denoised)
                         
                         derepR <- derepFastq(filtRs[[sam]])
                         ddR <- dada(derepR, err=err_R, multithread=TRUE)
-                        bimRs[[sam]] <- isBimeraDenovo(ddR, verbose=TRUE)
                         Uniques_R[sam] <- length(derepR$uniques)
                         Denoised_R[sam] <- length(ddR$denoised)
                         merger <- mergePairs(ddF, derepF, ddR, derepR, minOverlap = minOverlap, maxMismatch = maxMismatch)
@@ -557,14 +535,21 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 stop("**In none of the samples merged amplicons could be found! maybe minOverlap too strict??**")
         }
         
-        message("*********************** all samples denoised, bimeras identified, mergerd amplicons generated ***********************
+        message("*********************** all samples denoised mergerd amplicons generated ***********************
                         ********************************************************************")
         cat("\n*** all samples denoised, bimeras identified, mergerd amplicons generated ***", file = LogFile, append = TRUE)
         TimePassed <- proc.time()-ptm
         cat("\nTime after denoising: ", file = LogFile, append = TRUE)
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
         cat(paste("Time Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
-        cat("\n*** Start removing bimera ***", file = LogFile, append = TRUE)
+        cat("\n*** Start generating Sequence table and removing bimeras ***", file = LogFile, append = TRUE)
+        
+        
+        ##############################
+        ### Generating sequence table
+        ##############################
+        
+        seqtab <- makeSequenceTable(mergers)
         
         
         ##############################
@@ -572,22 +557,15 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ##############################
         
         # removes denoised sequence FW RV combi that was paired in merger for which the FW or the RV sequence was identified as bimera
-        mergers.nochim <- mergers
-        for (i in seq_along(mergers)) {
-                mergers.nochim[[i]] <- mergers[[i]][!bimFs[[i]][mergers[[i]]$forward] & !bimRs[[i]][mergers[[i]]$reverse],]
-        }
+        seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
         
-        message("*********************** Bimeras removed ***********************
-                        ********************************************************************")
-        cat("\n*** bimeras removed ***", file = LogFile, append = TRUE)
-        cat("\n*** Start generating Sequence table ***", file = LogFile, append = TRUE)
+        message("*********************** Seq table generated and Bimeras removed ***********************
+                ********************************************************************")
+        cat("\n*** seqtable generated, bimeras removed ***", file = LogFile, append = TRUE)
+        cat("\n*** Start saving the data ***", file = LogFile, append = TRUE)
         
         
-        ##############################
-        ### Generating sequence table
-        ##############################
         
-        seqtab <- makeSequenceTable(mergers.nochim)
         
         ## generate also a read summary data frame
         QStatsList <- F_QualityStats
