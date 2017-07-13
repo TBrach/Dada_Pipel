@@ -1,3 +1,8 @@
+# What to update:
+
+- add the pool option into the denoised section
+
+
 # Purpose of Dada Pipel
 
 Dada Pipel is a wrapper that uses the Dada2 package to get from paired reads in fastQ files to the count table (phyloseq object/ amplicon sequence variant (ASV or SV) table). 
@@ -45,11 +50,11 @@ Specifically, the function Dada2_wrap is a wrapper of:
 - 5.) Estimate err_F matrix and then err_R matrix
     - uses learnErrorsAdj which is basically learnErrors (NB: runs derepFastq() and dada() inside) from dada2 but saves dds and drps in the outcome in case all samples are used for error estimation. This allows in that case to not repeat derepFastq() and dada() in step 6. NB: to allow this the randomize option of learnErrors was removed. 
 - 6.) dereplication, denoising, merging, (bimera identification in case of Dada2_wrap_BimFWRV)
-- 6a.) In case all samples have been used for error estimation, i.e. dd_F, drp_F, dd_R, drp_R were saved as drp and dds in errorsRV and errorsFW. These are lists of the drp and dd of all samples.
-    - The number of filtered reads, unique reads (drp), and denoised reads are saved for each sample using sapply.
-    - mergePairs is used directly on the lists to merge the reads of the different samples: See: **UnderstandMergers.R** for understanding the resulting abundances.
-- 6b.) In case err_F and err_R have been estimated only on a subset of samples, so errorsFW$dd and errorsRV$dd are NULL
-    - derepFastq() and dada() (with the estimated (or given) err_F and err_R) and then mergePairs are run individually on the filtered reads of each sample.
+    - 6a.) In case all samples have been used for error estimation, i.e. dd_F, drp_F, dd_R, drp_R were saved as drp and dds in errorsRV and errorsFW. These are lists of the drp and dd of all samples.
+        - The number of filtered reads, unique reads (drp), and denoised reads are saved for each sample using sapply.
+        - mergePairs is used directly on the lists to merge the reads of the different samples: See: **UnderstandMergers.R** for understanding the resulting abundances.
+    - 6b.) In case err_F and err_R have been estimated only on a subset of samples, so errorsFW$dd and errorsRV$dd are NULL
+        - derepFastq() and dada() (with the estimated (or given) err_F and err_R) and then mergePairs are run individually on the filtered reads of each sample.
 - NB: on the chimera removal: 
     - Since dada2 tutorials are now all with removeBimeraDenovo(method = "conensus") after seqtab generation, we do this now and bimera removal is in step 8 in Dada2_wrap
     -  Dada2_wrap_BimFWRV is our old version, it uses isBimeraDenovo (probably similar to removeBimeraDenovo(method = 'pooled') separately on the FW and RV reads. Then mergers.nochim is created where only amplicons are kept for which both FW and RV reads were not identified as bimera. This usually identifies more amplicons as bimeras than does the new version in Dada2_wrap (step 8)

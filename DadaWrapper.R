@@ -31,7 +31,7 @@ Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learnin
            filtFs = NULL, # if given and FilteredFolder with files exist, Filtering can be jumped over
            filtRs = NULL)
 
-# Then call on terminal: Rsript DadaWrapper.R
+# Then call on terminal: Rscript DadaWrapper.R
 
 
 # path alternatives

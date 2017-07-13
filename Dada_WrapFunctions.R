@@ -649,6 +649,8 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         print(Trr)
         dev.off()
         cat("\n*** Summary Plots generated, Function done ***", file = LogFile, append = TRUE)
+        message("*********************** Dada_wrap done ***********************
+                        ********************************************************************")
 }
 
 
