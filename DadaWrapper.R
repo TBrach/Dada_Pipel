@@ -21,7 +21,7 @@ Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learnin
            # NB: see: https://github.com/benjjneb/dada2/issues/140 
            # ? I did not understand this because I thought it should clash with dada2 not allowing sequences of variable length, but this i now supported:
            # https://github.com/benjjneb/dada2/issues/55 (at the end)
-           NSAM.LEARN = 40, # the number of samples used to estimate the F and R error matrixes. When NULL all samples are used. Number of filtered reads should be 1 million
+           nreadsLearn = 1e+06, # the number of reads (distributed over far less unique reads) used to learn the error matrixes, i.e. nreads in dada2:::learnErrors
            err_F = NULL, # when error matrix given, the error matrix estimation is skipped
            err_R = NULL,
            minOverlap = 20, # minOverlap from the mergePairs command

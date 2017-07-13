@@ -325,124 +325,56 @@ NoReads_DotPlot_Type <- function(QStatsList = NULL, derepFs = NULL, mergers = NU
 }
 
 
+
 #######################################
-#### NoReads_Steps
+#### NoReads_StepsSimple
 #######################################
 
-NoReads_Steps <- function(QStatsList = NULL, NoFilteredReads = NULL, mergers = NULL, mergers.nochim = NULL, SampleNames, sort = TRUE) {
-  
-  # Input:
-  # QStatsList: list of QStats data frames, such as FW_QualityStats
-  # SampleNames: List of Sample names that must be names of the QStatsList, NoFilteredReads, mergers, and mergers.nochim
-  # sort: if the samples should be sorted in the plot based on NoReads
-  
-  if (all(c(is.null(QStatsList), is.null(NoFilteredReads), is.null(mergers), is.null(mergers.nochim)))) {
-    stop("QStatsList, derepFs, mergers, mergers.nochim can not all be NULL")
-  }
-  
-  if (!all(SampleNames %in% c(names(QStatsList), names(NoFilteredReads), names(mergers), names(mergers.nochim)))) {
-    stop("not all SampleNames were found in the given data")
-  }
-  
-  cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-  
-  ## Construct the plotting data frame
-  
-  df.all <- NULL
-  
-  if (!is.null(QStatsList) & any(SampleNames %in% names(QStatsList))) {
-    
-    QStatsList <- QStatsList[SampleNames[which(SampleNames %in% names(QStatsList))]]
-    
-    for (i in seq_along(QStatsList)) {
-      QStatsList[[i]]$Sample <- names(QStatsList[i])
-    }
-    
-    df.all <- do.call("rbind",QStatsList)
-    df.all <- df.all[!duplicated(df.all$Sample), c("Sample", "NoReads")]
-    df.all$Type <- "all"
-    
-  }
-  
-  df.filtered <- NULL
-  
-  if (!is.null(NoFilteredReads) & any(SampleNames %in% names(NoFilteredReads))) {
-    
-    NoFilteredReads <- NoFilteredReads[SampleNames[which(SampleNames %in% names(NoFilteredReads))]]
-    
-    df.filtered <- data.frame(Sample = names(NoFilteredReads), NoReads = NoFilteredReads, Type = "filtered")
-    
-  }
-  
-  df.merged <- NULL
-  
-  if (!is.null(mergers) & any(SampleNames %in% names(mergers))) {
-    
-    mergers <- mergers[SampleNames[which(SampleNames %in% names(mergers))]]
-    
-    df.merged <- data.frame(Sample = names(mergers), NoReads = 0, Type = "merged")
-    for(i in seq_along(mergers)) {
-      df.merged$NoReads[i] <- sum(mergers[[i]]$abundance)
-    }
-    
-  } 
-  
-  df.nochim <- NULL
-  
-  if (!is.null(mergers.nochim) & any(SampleNames %in% names(mergers.nochim))) {
-    
-    mergers.nochim <- mergers.nochim[SampleNames[which(SampleNames %in% names(mergers.nochim))]]
-    
-    df.nochim <- data.frame(Sample = names(mergers.nochim), NoReads = 0, Type = "nochim")
-    for(i in seq_along(mergers.nochim)) {
-      df.nochim$NoReads[i] <- sum(mergers.nochim[[i]]$abundance)
-    }
-    
-  }
-  
-  df.plot <- rbind(df.all, df.filtered, df.merged, df.nochim)
-  
-  if (sort) {
-    # sort always by highest level: all, filtered, merged, nochim
-    if (!is.null(df.all)) {
-      df.all <- dplyr::arrange(df.all, desc(NoReads))
-      LevelsWant <- as.character(df.all$Sample)
-    } else if (!is.null(df.filtered)) {
-      df.filtered <- dplyr::arrange(df.filtered, desc(NoReads))
-      LevelsWant <- as.character(df.filtered$Sample)
-    } else if (!is.null(df.merged)) {
-      df.merged <- dplyr::arrange(df.merged, desc(NoReads))
-      LevelsWant <- as.character(df.merged$Sample)
-    } else if (!is.null(df.nochim)) {
-      df.nochim <- dplyr::arrange(df.nochim, desc(NoReads))
-      LevelsWant <- as.character(df.nochim$Sample)
-    }
-    
-    
-    df.plot$Sample <- factor(df.plot$Sample)
-    for (i in seq_along(LevelsWant)) {
-      df.plot$Sample <- relevel(df.plot$Sample, ref = LevelsWant[i])
-    }
-    
-  }
-  
-  
-  ggplot(data = df.plot, aes(x = Sample, y = NoReads, color = Type))  + 
-    geom_hline(yintercept = 10000, color = 'darkred', linetype = "dashed", size = .35) +
-    geom_point(size = 2) +
-    scale_color_manual(values = c(cbPalette[2:4],cbPalette[7])) +
-    ylab("No Reads") + 
-    xlab("") +
-    theme_bw() + 
-    theme(panel.grid.minor = element_blank(),
-          panel.grid.major.y = element_blank(),
-          panel.grid.major.x = element_line(color = "#999999", size = .15),
-          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
-          legend.title = element_blank())
-  
+NoReads_StepsSimple <- function(ReadSummary, SampleNames, sort = TRUE) {
+        
+        
+        if (!all(SampleNames %in% ReadSummary$Sample)) {
+                stop("not all SampleNames were found in the given ReadSummary")
+        }
+        
+        ReadSummary <- ReadSummary[ReadSummary$Sample %in% SampleNames,]
+        
+        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+        
+        ## Construct the plotting data frame
+        
+        ReadSummary <- subset(ReadSummary, select = c("Sample", "NoReads", "FilteredReads", "MergedReads", "MergedReadsWOBimera"))
+        
+        
+        if (sort) {
+                
+                ReadSummary <- dplyr::arrange(ReadSummary, desc(NoReads))
+                LevelsWant <- as.character(ReadSummary$Sample)
+                for (i in seq_along(LevelsWant)) {
+                        ReadSummary$Sample <- relevel(ReadSummary$Sample, ref = LevelsWant[i])
+                }
+                
+        }
+        
+        colnames(ReadSummary)[2:5] <- c("all", "filtered", "merged", "nochim")
+        ReadSummary <- tidyr::gather(ReadSummary, key = Type, value = NoReads, -Sample)
+        
+        Tr <- ggplot(data = ReadSummary, aes(x = Sample, y = NoReads, color = Type))  
+        Tr <- Tr + 
+                geom_hline(yintercept = 10000, color = 'darkred', linetype = "dashed", size = .35) +
+                geom_point(size = 2) +
+                scale_color_manual(values = c(cbPalette[2:4],cbPalette[7])) +
+                ylab("No Reads") + 
+                xlab("") +
+                theme_bw() + 
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15),
+                      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
+                      legend.title = element_blank())
+        Tr
+        
 }
-
-
 
 
 
@@ -810,4 +742,130 @@ plotAlphaDivVsSeqDepth <- function(physeq, measures = NULL, color = NULL, shape 
         return(TrList)
         
 }    
+
+
+
+
+
+###################### OLD FUNCTIONS #############################
+
+#######################################
+#### NoReads_Steps
+#######################################
+
+NoReads_Steps <- function(QStatsList = NULL, NoFilteredReads = NULL, mergers = NULL, mergers.nochim = NULL, SampleNames, sort = TRUE) {
+        
+        # Input:
+        # QStatsList: list of QStats data frames, such as FW_QualityStats
+        # SampleNames: List of Sample names that must be names of the QStatsList, NoFilteredReads, mergers, and mergers.nochim
+        # sort: if the samples should be sorted in the plot based on NoReads
+        
+        if (all(c(is.null(QStatsList), is.null(NoFilteredReads), is.null(mergers), is.null(mergers.nochim)))) {
+                stop("QStatsList, derepFs, mergers, mergers.nochim can not all be NULL")
+        }
+        
+        if (!all(SampleNames %in% c(names(QStatsList), names(NoFilteredReads), names(mergers), names(mergers.nochim)))) {
+                stop("not all SampleNames were found in the given data")
+        }
+        
+        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+        
+        ## Construct the plotting data frame
+        
+        df.all <- NULL
+        
+        if (!is.null(QStatsList) & any(SampleNames %in% names(QStatsList))) {
+                
+                QStatsList <- QStatsList[SampleNames[which(SampleNames %in% names(QStatsList))]]
+                
+                for (i in seq_along(QStatsList)) {
+                        QStatsList[[i]]$Sample <- names(QStatsList[i])
+                }
+                
+                df.all <- do.call("rbind",QStatsList)
+                df.all <- df.all[!duplicated(df.all$Sample), c("Sample", "NoReads")]
+                df.all$Type <- "all"
+                
+        }
+        
+        df.filtered <- NULL
+        
+        if (!is.null(NoFilteredReads) & any(SampleNames %in% names(NoFilteredReads))) {
+                
+                NoFilteredReads <- NoFilteredReads[SampleNames[which(SampleNames %in% names(NoFilteredReads))]]
+                
+                df.filtered <- data.frame(Sample = names(NoFilteredReads), NoReads = NoFilteredReads, Type = "filtered")
+                
+        }
+        
+        df.merged <- NULL
+        
+        if (!is.null(mergers) & any(SampleNames %in% names(mergers))) {
+                
+                mergers <- mergers[SampleNames[which(SampleNames %in% names(mergers))]]
+                
+                df.merged <- data.frame(Sample = names(mergers), NoReads = 0, Type = "merged")
+                for(i in seq_along(mergers)) {
+                        df.merged$NoReads[i] <- sum(mergers[[i]]$abundance)
+                }
+                
+        } 
+        
+        df.nochim <- NULL
+        
+        if (!is.null(mergers.nochim) & any(SampleNames %in% names(mergers.nochim))) {
+                
+                mergers.nochim <- mergers.nochim[SampleNames[which(SampleNames %in% names(mergers.nochim))]]
+                
+                df.nochim <- data.frame(Sample = names(mergers.nochim), NoReads = 0, Type = "nochim")
+                for(i in seq_along(mergers.nochim)) {
+                        df.nochim$NoReads[i] <- sum(mergers.nochim[[i]]$abundance)
+                }
+                
+        }
+        
+        df.plot <- rbind(df.all, df.filtered, df.merged, df.nochim)
+        
+        if (sort) {
+                # sort always by highest level: all, filtered, merged, nochim
+                if (!is.null(df.all)) {
+                        df.all <- dplyr::arrange(df.all, desc(NoReads))
+                        LevelsWant <- as.character(df.all$Sample)
+                } else if (!is.null(df.filtered)) {
+                        df.filtered <- dplyr::arrange(df.filtered, desc(NoReads))
+                        LevelsWant <- as.character(df.filtered$Sample)
+                } else if (!is.null(df.merged)) {
+                        df.merged <- dplyr::arrange(df.merged, desc(NoReads))
+                        LevelsWant <- as.character(df.merged$Sample)
+                } else if (!is.null(df.nochim)) {
+                        df.nochim <- dplyr::arrange(df.nochim, desc(NoReads))
+                        LevelsWant <- as.character(df.nochim$Sample)
+                }
+                
+                
+                df.plot$Sample <- factor(df.plot$Sample)
+                for (i in seq_along(LevelsWant)) {
+                        df.plot$Sample <- relevel(df.plot$Sample, ref = LevelsWant[i])
+                }
+                
+        }
+        
+        
+        ggplot(data = df.plot, aes(x = Sample, y = NoReads, color = Type))  + 
+                geom_hline(yintercept = 10000, color = 'darkred', linetype = "dashed", size = .35) +
+                geom_point(size = 2) +
+                scale_color_manual(values = c(cbPalette[2:4],cbPalette[7])) +
+                ylab("No Reads") + 
+                xlab("") +
+                theme_bw() + 
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15),
+                      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
+                      legend.title = element_blank())
+        
+}
+
+
+
 
