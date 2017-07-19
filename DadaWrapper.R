@@ -37,3 +37,4 @@ Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learnin
 # path alternatives
 # path = "/home/tdr438/16s/Danfund/Clean"
 # path2 = "/home/jvb740/DanFunD_Test"
+# "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging_Pretest"

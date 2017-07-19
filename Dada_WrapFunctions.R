@@ -74,15 +74,18 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 ********************************************************************")
         
         ##############################
-        ### save the package Versions
+        ### save the R and package Versions
         ##############################
         # NB: outputs an error and stops function if a Package is not installed
-        PackageVersions <- data.frame(Package = c("dada2", "ShortRead", "ggplot2", "dplyr", "tidyr"),
-                                      Version = c(packageVersion("dada2"),
-                                                  packageVersion("ShortRead"),
-                                                  packageVersion("ggplot2"),
-                                                  packageVersion("dplyr"),
-                                                  packageVersion("tidyr")))
+        RVer <- R.Version()
+        RVer <- RVer$version.string
+        PackageVersions <- data.frame(Package = c("R", "dada2", "ShortRead", "ggplot2", "dplyr", "tidyr"),
+                                      Version = c(RVer,
+                                                  as.character(packageVersion("dada2")),
+                                                  as.character(packageVersion("ShortRead")),
+                                                  as.character(packageVersion("ggplot2")),
+                                                  as.character(packageVersion("dplyr")),
+                                                  as.character(packageVersion("tidyr"))))
         
         message(paste(PackageVersions$Package, ": ", PackageVersions$Version, "; ", sep= ""))
         
@@ -931,6 +934,32 @@ learnErrorsAdj <- function (fls, nreads = 1e+06, errorEstimationFunction = loess
         }
         return(ErrorList)
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
