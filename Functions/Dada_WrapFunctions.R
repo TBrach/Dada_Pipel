@@ -24,6 +24,7 @@
 # maxMismatch: = maxMismatch from the mergePairs command
 # F_QualityStats and R_QualityStats: NULL by default, if given e.g. from Dada_QualityCheck the quality stats collection part is jumped over
 # filtFs and filtRs: NULL by default, if given and FilteredFolder with files exist, Filtering can be jumped over.
+# pool: pool option of dada command
 ## Output
 # PLOTS:
 # Several Plots saved as pdfs in generated Dada_Plots folder # NB: the plots are currently assuming 250 nt
@@ -47,7 +48,8 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                        F_QualityStats = NULL,
                        R_QualityStats = NULL,
                        filtFs = NULL,
-                       filtRs = NULL) {
+                       filtRs = NULL,
+                       pool = FALSE) {
         
         ##############################
         ### call the required packages
@@ -457,17 +459,15 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         message("*********************** Start denoising and bimera detection ***********************
                         ********************************************************************")
         
-        # do not do dereplication and denoising again if all samples had been used for determining the error matrixes
-        if (exists("errorsFW", inherits = FALSE) && exists("errorsRV", inherits = FALSE) &&
-            !is.null(errorsFW$dds) && !is.null(errorsRV$dds)) {
+        if (pool) { # very time and memory consuming but might help identifying rare SVs
                 
-                dd_F <- errorsFW$dds
-                drp_F <- errorsFW$drps
-                dd_R <- errorsRV$dds
-                drp_R <- errorsRV$drps
+                drp_F <- derepFastq(filtFs)
+                dd_F <- dada(drp_F, err = err_F, pool = pool, multithread = TRUE)
+                drp_R <- derepFastq(filtRs)
+                dd_R <- dada(drp_R, err = err_R, pool = pool, multithread = TRUE)
                 
                 rm(errorsRV, errorsFW)
-
+                
                 # NB: the following demands that the samples were denoised in the given order, I therefore removed tha randomize option from learnErrorsAdj
                 names(dd_F) <- SampleNames
                 names(drp_F) <- SampleNames
@@ -482,7 +482,37 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 NoFilteredReads <- sapply(drp_F, function(x) sum(x$uniques)) # would be the same for drp_R, or sum dd_F$denoised
                 
                 mergers <- mergePairs(dd_F, drp_F, dd_R, drp_R, minOverlap = minOverlap, maxMismatch = maxMismatch)
-
+                
+                rm(drp_F, drp_R, dd_F, dd_R)
+                
+                
+                
+                
+        } else if (exists("errorsFW", inherits = FALSE) && exists("errorsRV", inherits = FALSE) && # do not do dereplication and denoising again if all samples had been used for determining the error matrixes
+                   !is.null(errorsFW$dds) && !is.null(errorsRV$dds)) {
+                
+                dd_F <- errorsFW$dds
+                drp_F <- errorsFW$drps
+                dd_R <- errorsRV$dds
+                drp_R <- errorsRV$drps
+                
+                rm(errorsRV, errorsFW)
+                
+                # NB: the following demands that the samples were denoised in the given order, I therefore removed tha randomize option from learnErrorsAdj
+                names(dd_F) <- SampleNames
+                names(drp_F) <- SampleNames
+                names(dd_R) <- SampleNames
+                names(drp_R) <- SampleNames
+                
+                # only for the ReadSummary later
+                Uniques_F <- sapply(drp_F, function(x) length(x$uniques))
+                Uniques_R <- sapply(drp_R, function(x) length(x$uniques))
+                Denoised_F <- sapply(dd_F, function(x) length(x$denoised))
+                Denoised_R <- sapply(dd_R, function(x) length(x$denoised))
+                NoFilteredReads <- sapply(drp_F, function(x) sum(x$uniques)) # would be the same for drp_R, or sum dd_F$denoised
+                
+                mergers <- mergePairs(dd_F, drp_F, dd_R, drp_R, minOverlap = minOverlap, maxMismatch = maxMismatch)
+                
                 rm(drp_F, drp_R, dd_F, dd_R)
                 
         } else {
@@ -527,6 +557,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 }
                 
         }
+        
+        
+        
         
         if(!all((sapply(1:length(mergers), function(i) dim(mergers[[i]])[1]))!=0)){
                 message("**Not in all samples merged amplicons could be found! maybe minOverlap too strict??**")

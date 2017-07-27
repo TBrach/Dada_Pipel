@@ -1,7 +1,7 @@
 # ---- Source the functions ----
 
 # ATTENTION: change pathToFunctions here if necessary#
-pathToFunctions <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel"
+pathToFunctions <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions"
 #pathToFunctions <- "/home/jvb740/Dada_Pipel"
 
 source(file.path(pathToFunctions, "Dada_PlotFunctions.R"))
@@ -10,10 +10,10 @@ source(file.path(pathToFunctions, "Dada_WrapFunctions.R"))
 # ----
 
 # ---- Call the wrap function (Adjust INPUTS) ----
-Dada2_QualityCheck(path = "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging_Pretest", #"/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD",
+Dada2_QualityCheck(path = "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Clean", #"/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD",
            F_pattern = "1.fq.gz", 
            R_pattern = "2.fq.gz",
-           path2 = NULL)
+           path2 = "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging")
 # ----
 
 # Then call on terminal Rscript Dada_QualityCheck.R

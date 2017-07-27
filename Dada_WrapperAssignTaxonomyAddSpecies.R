@@ -1,19 +1,20 @@
 # source seqtab data and function
-datapath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/DanFunD_243_maxEE-1"
+datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis_trimLeft30"
 load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
 
-functpath <- ""
+functpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions"
 
 source(file.path(functpath, "Dada_TaxonomyFunctions.R"))
 
-if(!exists("seqtab")){
+if(!exists("seqtab.nochim")){
         stop("no seqtab has been loaded")
 }
 
-assignTaxonomyaddSpecies(seqtab, 
-                         minBoot = 80,
-                         allowMultiple = 3,
-                         PathToRefs = NULL,
-                         RefDataBase = "silva_nr_v123_train_set.fa.gz",
-                         SpeciesDB = "silva_species_assignment_v123.fa.gz",
-                         PathToSave = NULL)
+assignTaxonomyaddSpecies(seqtab = seqtab.nochim, 
+                         minBoot = 50,
+                         allowMultiple = TRUE,
+                         PathToRefs = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/AssignTaxonomy",
+                         RefDataBase = "silva_nr_v128_train_set.fa.gz",
+                         SpeciesDB = "silva_species_assignment_v128.fa.gz",
+                         PathToSave = "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis_trimLeft30/Dada_Taxonomy",
+                         tryRC = FALSE)

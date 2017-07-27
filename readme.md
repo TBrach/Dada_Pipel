@@ -2,45 +2,42 @@
 
 - add the pool option into the denoised section
 
+# Requirements
 
-# Purpose of Dada Pipel
+- current code requires R version 3.4 up, and dada2 1.4
+- Data requirement: FW and RV reads of each sample are in individual folders. These "sample" folders are all collected in one "project" folder. FW and RV reads can be distinguished by character patterns. Important for dada2: *The forward and reverse fastqs contain reads in matched order*
 
-Dada Pipel is a wrapper that uses the Dada2 package to get from paired reads in fastQ files to the count table (phyloseq object/ amplicon sequence variant (ASV or SV) table). 
+# Purpose of Dada_Pipel
 
+Dada_Pipel offers wrapper function around the Dada2 package to use with Rscript. 
+- Dada_QualityCheck.R: generates quality check plots of your fastQ data.
+- DadaWrapper.R: runs the pipeline from the paired reads in your fastQ files to the count table (i.e. amplicon sequence variant (ASV or SV) table).
+- Dada_WrapperAssignTaxonomyAddSpecies.R: a dada2 wrapper for taxonomy assignment, i.e. assignTaxonomy() and addSpecies()
 
 # How to use it
 
-NB: currently the wrappers are implemented for cases in which the FW and RV reads of each sample are in individual folders. These "sample" folders are all collected in one "project" folder. FW and RV reads can be distinguished by character patterns. Important for dada2: *The forward and reverse fastqs contain reads in matched order*
+## Step 1: **Dada_QualityCheck.R**
 
-## Step 1: Do a quality check of the sequence reads to decide on filtering parameters with (**Dada_QualityCheck.R**)
-
-Dada_QualityCheck.R runs the **Dada2_QualityCheck** function. The Mean and Median quality scores at the different cycles over all reads are determined and plotted. The data is stored in newly generated folders Dada_Data and Dada_Plot: 
+- runs the **Dada2_QualityCheck** function. The Mean and Median quality scores at the different cycles over all reads are determined and plotted. The data is stored in newly generated folders Dada_Data and Dada_Plot.
 
 Specifically, the function Dada2_QualityCheck is a wrapper of:
 
 - the ShortRead:::qa function (quality assessment on short reads)
-    - in addition Dada2_QualityCheck: 
-        - checks if all reads were of the same length
-        - calculates mean and median quality score for each cycle (nucleotide)
+- in addition: 
+    - mean and median quality scores for each cycle (nucleotide) are calculated and plotted
 
 To run the function from the terminal, use:
 
 -  Rscript Dada_QualityCheck.R
     - make sure to adjust the pathnames in Dada_QualityCheck.R before calling it.
+- nohup Rscript Dada_QualityCheck.R &
 
 
 ## Step 2: Run the actual Dada pipeline (**Dada_Wrapper.R**)
 
-Dada_Wrapper.R runs the Dada2_wrap function. 
+- nohup /usr/local/R-3.4.1/bin/Rscript Dada_Wrapper.R &
 
-Specifically, the function Dada2_wrap is a wrapper of:
-
-- Read quality check: the ShortRead:::qa function (quality assessment on short reads) (see Step 1 for additions)
-- Filtering: dada2:::fastqPairedFilter
-    - the filtered reads are saved in the folder Dada_FilteredFastqs using "SampleName"_F_Filtered.fastq.gz and "SampleName"_R_Filtered.fastq.gz
-    - 
-
-# Steps of the Dada2_wrap function
+### Steps of the Dada2_wrap function
 
 - 1.) Construct character vectors to the FW and RV fastq files
 - 2.) Determine the quality scores and save the stats in Data folder
@@ -62,9 +59,35 @@ Specifically, the function Dada2_wrap is a wrapper of:
 - 8.) remove bimeras: 
     - (NB: from tutorial: Fortunately, the accuracy of the sequences after denoising makes identifying chimeras simpler than it is when dealing with fuzzy OTUs: all sequences which can be exactly reconstructed as a bimera (two-parent chimera) from more abundant sequences.)
     -  If a majority of reads failed to pass the chimera check, you may need to revisit the removal of primers, as the ambiguous nucleotides in unremoved primers interfere with chimera identification.
- 
 
-# Features
+## Parameters to Consider
+
+
+## Step 3: Dada_WrapperAssignTaxonomyAddSpecies.R
+
+- assigns taxonomy to the found SV (from seqtab.nochim).
+- assignTaxonomy() implements the RDP naive Bayesian classifier method described in Wang et al. 2007. 
+    - assigns down to genus level based on reference database, currently silva_nr_v128_train_set.fa.gz or rdp_train_set_16.fa.gz
+- assignSpecies (addSpecies) uses exact string matching vs a reference database, currently silva_species_assignment_v128.fa.gz or rdp_species_assignment_16.fa.gz, to assign species level taxonomy.
+
+### Parameters to think about:
+
+- minBoot for assignTaxonomy: sets the minimum bootstrapping support required to return a taxonomic classification. The original paper recommended a threshold of 50 for sequences of 250nts or less (as these are) but a threshold of 80 generally. The higher this value the more NA you get. 
+    - I would stick to 50, I tried 80 and it was a bit more NA, I tried 25 and it was almost as 50, no real gain.
+- allowMultiple for assignSpecies: usually you get NA when there is ambiguity, when allowMultiple = T, you get all the species that fitted, you can also use an integer allowMultiple = 3, then you get NA when sequence fitted to more than 3 species.
+- tryRC: is tryRC in assignTaxonomy, should the reverse complement be checked if it fits better to the reference data base. Usually would only make sense if a lot of your assignments look really weird, like Eukaryota NA NA...
+- NB: **We unfortunately usually get far lower percentages assigned to species level as they claim in their tutorial**: For human microbiome data and V4 sequencing, we typically see a bit under half of the abundant sequence variants (SVs) assigned unambiguously to species-level, and a bit under 2/3rds assigned ambiguously (ie. allowing multiple species assignment). This fraction drops off in less sampled environments and for rare SVs.
+    - Question is of course, what are abundant sequence variants? The ones with a prevalence above 25\%?
+- I was trying a longer trimLeft (maybe some remaining primer sequence prevents good assignment) but NB: filterAndTrim has by default trimLeft = 0.
+
+Links:
+
+- <https://benjjneb.github.io/dada2/assign.html>
+
+
+
+
+
 
 # Possible Improvements:
 

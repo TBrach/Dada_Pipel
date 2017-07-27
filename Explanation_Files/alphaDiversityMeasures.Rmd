@@ -1,0 +1,116 @@
+---
+title: "alpha diversity measures"
+author: "Thorsten Brach"
+date: "25/7/2017"
+output: html_document
+---
+
+# You start with a phyloseq ps object
+
+- Load here ps object from ManiAging pretest or DanFund
+
+```{r}
+seqtab <- as(otu_table(ps), "matrix")
+```
+
+# Some phyloseq basics
+
+```{r}
+# ntaxa(ps)
+# nsamples(ps)
+# sample_names(ps)
+# sample_variables(ps)
+# get_variable(ps, sample_variables(ps)[2])
+# sample_data(ps)$Group
+# rank_names(ps)
+# colnames(tax_table(ps))
+# get_taxa_unique(ps, "Phylum")
+# sample_sums(ps)
+# taxa_sums(ps) # abundance of the taxa over all samples (sum)
+# get_taxa(ps, i = sample_names(ps)[1]) # so i = 1 refers to a sample
+# get_sample(ps, taxa_names(ps)[1])
+
+```
+
+# Alpha Diversity
+
+## use estimate_richness to calculate Richness, Observed, and Shannon
+
+```{r, message = FALSE, warning = FALSE}
+AlphaDiv <- phyloseq::estimate_richness(ps, measures = c("Shannon", "Chao1", "Observed"))
+rownames(AlphaDiv) <- sample_names(ps)
+# I prefer Richness over Observed
+colnames(AlphaDiv)[colnames(AlphaDiv) == "Observed"] <- "Richness"
+```
+
+- NB: estimate_richness warns if no singletons are in the data, i.e. if !any(otu_table(ps) == 1) = TRUE (= !any(seqtab.nochim == 1))
+    - NB: dada2 seqtabs tend to be without singletons, most likely because low abundance SVs are considered errors from more abundant SVs
+
+
+### NB: estimate_richness uses a functions from the vegan package
+
+- specifically vegan::estimateR (e.g. for Chao1)
+- and vegan::diversity (for Shannon and simpson)
+- just type estimate_richness and check
+
+```{r, message = FALSE, warning = FALSE}
+AlphaMeasures <- vegan::estimateR(seqtab)
+AlphaMeasures <- t(data.frame(AlphaMeasures))
+```
+
+
+## Calculate alpha diversity measures self
+
+### Richness
+
+```{r, message = FALSE, warning = FALSE}
+Richness <- rowSums(seqtab != 0)
+
+AlphaDiv$Richness_self <- Richness
+head(AlphaDiv)
+```
+
+###  Chao1:
+
+- Chao1 makes use of singletons and doubletons see vignette of vegan package and maybe <http://www.coloss.org/beebook/I/gut-symbionts/2/2/4>
+- without singletons it is the same as Richness
+- se.chao1 is the standard error of the chao1
+
+```{r, message = FALSE, warning = FALSE}
+# how to calculate chao1 yourself with singletons
+seqtab2 <- seqtab
+seqtab2[seqtab2 > 2 & seqtab2 < 10] <- 1 # introduce singletons
+Estimator <- ((rowSums(seqtab2 == 1))*((rowSums(seqtab2 == 1))-1))/(2*((rowSums(seqtab2 == 2))+1))
+Chao1 <- Richness+Estimator
+## NB: the Variance (Standard Error) estimation is also given in the vignette but I was to lazy to do that here too
+
+pss <- ps
+otu_table(pss) <- otu_table(seqtab2, taxa_are_rows = FALSE)
+AlphDivpss <- phyloseq::estimate_richness(pss, measures = c("Chao1"))
+head(cbind(AlphDivpss, Chao1))
+```
+
+
+###  Shannon diversity 
+
+```{r, message = FALSE, warning = FALSE}
+# first use vegan::diversity function
+shannon_vegan <- vegan::diversity(seqtab, index = "shannon")
+
+# Self
+# Basically just: $-sum(p_{i}*log(p_{i})$.
+seqtab_RA <- seqtab/rowSums(seqtab)
+seqtab_RA_logT <- seqtab_RA*(-1)*(log(seqtab_RA))
+shannon_self <- rowSums(seqtab_RA_logT, na.rm = TRUE)
+head(cbind(AlphaDiv, Shannon_vegan = shannon_vegan, Shannon_self = shannon_self))
+```
+
+### Simpson
+
+```{r, message = FALSE, warning = FALSE}
+
+simpson_vegan <- vegan::diversity(seqtab, index = "simpson")
+seqtab_RA2 <- seqtab_RA*seqtab_RA
+simpson_self <- 1-rowSums(seqtab_RA2, na.rm = TRUE)
+identical(simpson_vegan, simpson_self) # TRUE
+```

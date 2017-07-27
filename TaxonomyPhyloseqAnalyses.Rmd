@@ -23,11 +23,11 @@ library(gridExtra); packageVersion("gridExtra")
 # Questions
 
 - how dependent are the results on the training data (i.e. Silva or other database)?
-- what allowMultiple should we use?
+- Why do we get so far lower percentag of SV (sequence variants) assigned to sequence level than they in their tutorial?
 
 # Background
 
-- minBoot: default = 50, is the minimum number out of 100 bootstraps that return the same genus (taxonomy) for a sequence so the sequence is assigned that taxonomy
+- minBoot: I would use 50 as recommended for sequences of 250 or below
 - For human microbiome data and V4 sequencing, we typically see a bit under half of the abundant ribosomal sequence variants (RSVs) assigned unambiguously to species-level, and a bit under 2/3rds assigned ambiguously (ie. allowing multiple species assignment). This fraction drops off in less sampled environments and for rare RSVs.
     - **question is what is abundant here, but seems we have less**
 - Results of richness estimates (for example) are probably unreliable, or wrong, if you have already trimmed low-abundance taxa from the data.

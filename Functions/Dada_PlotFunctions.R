@@ -426,19 +426,20 @@ TotalandUniqueAmplicons <- function(FinalNumbers, seqtab, sort =TRUE) {
 
 
 #######################################
-#### AmpliconDistribution
+#### plotSVdistributions
 #######################################
 ## REQUIRES dplyr
 ## Input:
 # Seqtab: seqtab from dada2 wrapper
-# PCentage: illustrates in how many amplicons you would keep if only considering amplicons that are present in at least PCentage of the samples
+# prevalence: a percentage of samples (bw 0 and 100)
 ## Output: 
-# TrList: List of four Trelis objects, plus AmpliconDistribution data.frame
+# TrList: List of four Trelis objects, plus distribution data.frame
 
 
-AmpliconDistribution <- function(seqtab, PCentage = 10) {
+plotSVdistributions <- function(seqtab, prevalence = 10) {
         
         FinalNumbersSeq <- data.frame(Sequence = colnames(seqtab), InNumberSamples = colSums(seqtab != 0), TotalAmplicons = colSums(seqtab))
+        # a look at it shows you that seqtab is ordered after total counts
         FinalNumbersSeq <- group_by(FinalNumbersSeq, InNumberSamples)
         AmpliconDistribution <- dplyr::summarise(FinalNumbersSeq, UniqueAmplicons = n(), TotalAmplicons = sum(TotalAmplicons))
         AmpliconDistribution$CumSumUnique <- rev(cumsum(rev(AmpliconDistribution$UniqueAmplicons)))
@@ -446,52 +447,77 @@ AmpliconDistribution <- function(seqtab, PCentage = 10) {
         AmpliconDistribution$CumSumTotal <- rev(cumsum(rev(AmpliconDistribution$TotalAmplicons)))
         AmpliconDistribution$CumPerCTotal <- rev(cumsum(rev(AmpliconDistribution$TotalAmplicons/sum(colSums(seqtab)))))
         
-        PCValue <- ceiling((PCentage/100)*dim(seqtab)[1])
-        Diff <- AmpliconDistribution$InNumberSamples - PCValue
-        index <- which.max(Diff[Diff<0]) + which.min(Diff[Diff>=0])
-        PCKeptAtPCValue <- AmpliconDistribution$CumPerCTotal[index]
+        PCValue <- ceiling((prevalence/100)*dim(seqtab)[1]) # tells you in how many samples a SV must be present to meet the prevalence 
         
-        # The number of samples the unique amplicons are present in
+        # Diff <- AmpliconDistribution$InNumberSamples - PCValue
+        # index <- which.max(Diff[Diff<0]) + which.min(Diff[Diff>=0])
+        index <- which(AmpliconDistribution$InNumberSamples >= PCValue)[1]
+        PCKeptAtPCValue <- AmpliconDistribution$CumPerCTotal[index]
+        SVskeptAtPCValue <- AmpliconDistribution$CumPerCUnique[index]
+        
+        # The number of samples the SVs are present in
         Tr <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = UniqueAmplicons))
         Tr <- Tr + geom_point(col = "#E69F00", size = 3) +
-                xlab("Present in Number of Samples") +
-                ylab("Unique Amplicons") +
+                xlab("in No of Samples") +
+                ylab("Number of SVs") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
                       panel.grid.major.x = element_line(color = "#999999", size = .15))
         
-        # Cumulative Percentage of Unique Amplicons
+        
+        In1Index <- which(AmpliconDistribution$InNumberSamples == 1)
+        if (length(In1Index) != 0) {
+                Tr <- Tr + ggtitle(paste(AmpliconDistribution$UniqueAmplicons[In1Index], " of ", AmpliconDistribution$CumSumUnique[In1Index], " SVs (", round(100*AmpliconDistribution$UniqueAmplicons[In1Index]/AmpliconDistribution$CumSumUnique[In1Index], 1), " %)", " were only found in 1 sample", sep = ""))
+        } 
+        
+        
+        # Cumulative Percentage of SVs
         Tr1 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCUnique))
         Tr1 <- Tr1 + geom_point(col = "#E69F00", size = 3) +
-                xlab("Present in Number of Samples") +
-                ylab("Cumulative Percentage of unique Amplicons") +
+                xlab("in No of Samples") +
+                ylab("Cumulative percentage of SVs") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
                       panel.grid.major.x = element_line(color = "#999999", size = .15))
+        
+        Tr1 <- Tr1 + 
+                geom_hline(yintercept = SVskeptAtPCValue, lty =  "dashed") +
+                geom_vline(xintercept = PCValue, lty = 'dashed') +
+                ggtitle(paste("with prevalence ", prevalence, " % (= ", PCValue, " samples); ", AmpliconDistribution$CumSumUnique[index], " of ", AmpliconDistribution$CumSumUnique[1], 
+                              " SVs (", round(100*AmpliconDistribution$CumSumUnique[index]/AmpliconDistribution$CumSumUnique[1], 1), " %) would remain", sep = ""))
+        
         
         # The number of samples the total amplicons are present in
         Tr2 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = TotalAmplicons))
         Tr2 <- Tr2 + geom_point(col = "#E69F00", size = 3) +
-                xlab("Present in Number of Samples") +
+                xlab("in No of Samples") +
                 ylab("Total Amplicons") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
                       panel.grid.major.x = element_line(color = "#999999", size = .15))
         
+        Tr2 <- Tr2 + ggtitle(paste(AmpliconDistribution$CumSumTotal[1] - AmpliconDistribution$CumSumTotal[index], " of ",
+                                   AmpliconDistribution$CumSumTotal[index], " (", round(100*(AmpliconDistribution$CumSumTotal[1] - AmpliconDistribution$CumSumTotal[index])/AmpliconDistribution$CumSumTotal[index], 2),
+                                    " %) of amplicons were from SVs present in less than ", PCValue, " samples.", sep = ""))
+        
         Tr3 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCTotal))
         Tr3 <- Tr3 + geom_point(col = "#E69F00", size = 3) +
-                xlab("Present in Number of Samples") +
-                ylab("Cumulative Percentage of total Amplicons") +
-                geom_hline(yintercept = PCKeptAtPCValue, lty =  "dashed") +
-                geom_vline(xintercept = PCValue, lty = 'dashed') +
-                ggtitle(paste("Total Amplicons", AmpliconDistribution$CumSumTotal[1], ";", PCentage, "%:", index, "samples;", round(PCKeptAtPCValue, 3), "% of Total Amplicons remain")) +
+                xlab("in No of Samples") +
+                ylab("Cumulative percentage of amplicons") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_line(color = "#999999", size = .15),
                       panel.grid.major.x = element_line(color = "#999999", size = .15))
+        
+        Tr3 <- Tr3 + 
+                geom_hline(yintercept = PCKeptAtPCValue, lty =  "dashed") +
+                geom_vline(xintercept = PCValue, lty = 'dashed') +
+                ggtitle(paste("with prevalence ", prevalence, " % (= ", PCValue, " samples); ", AmpliconDistribution$CumSumTotal[index], " of ", AmpliconDistribution$CumSumTotal[1], 
+                              " amplicons (", round(100*AmpliconDistribution$CumSumTotal[index]/AmpliconDistribution$CumSumTotal[1], 1), " %) would remain", sep = ""))
+                
         
         TrList <- list(Tr, Tr1, Tr2, Tr3, AmpliconDistribution)
         
@@ -502,14 +528,14 @@ AmpliconDistribution <- function(seqtab, PCentage = 10) {
 #######################################
 #### plotAlphaDiversity
 #######################################
-# Function related to plot_richness from phyloseq but plots each measure individually and outputs a Trlist
+# plotAlphaDiversity is related to phyloseq::plot_richness but also offers boxplots (when group != NULL) and
+# always renders each plot individually in a list instead of using facet_wraps
 
 plotAlphaDiversity <- function(physeq, measures = NULL, x = "samples", color = NULL, shape = NULL,
                                group = NULL, defCol = "#E69F00"){
         
-        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
         
-        AlphaDiv <- estimate_richness(physeq, measures = measures)
+        AlphaDiv <- suppressWarnings(estimate_richness(physeq, measures = measures))
         measures = colnames(AlphaDiv)
         ses = colnames(AlphaDiv)[grep("^se\\.", colnames(AlphaDiv))]
         measures = measures[!measures %in% ses]
@@ -537,38 +563,6 @@ plotAlphaDiversity <- function(physeq, measures = NULL, x = "samples", color = N
         
         if(!is.null(group)){
 
-                # # OLD VERSION COmmented out
-                # DF <- dplyr::group_by_(DF, group)
-                # 
-                # DF1 <- dplyr::summarise_each_(DF, funs(mean, sd), measures)
-                # 
-                # measures1 <- paste(measures, "_mean", sep = "")
-                # measures2 <- paste(measures, "_sd", sep = "")
-                # 
-                # TrList <- list()
-                # 
-                # for (i in 1:length(measures)) {
-                #         
-                #         aes_map = aes_string(x = group, y = measures1[i], shape = shape, color = color)
-                #         
-                #         if(is.null(color)){
-                #                 Tr = ggplot(DF1, aes_map) + geom_point(na.rm = TRUE, col = defCol, size = 3)
-                #         } else {
-                #                 
-                #                 Tr = ggplot(DF1, aes_map) + geom_point(na.rm = TRUE, size = 3)
-                #         }
-                #         
-                #         Tr = Tr + geom_errorbar(aes_string(ymax = paste(measures1[i], "+", measures2[i], sep =""), ymin = paste(measures1[i], "-", measures2[i], sep ="")), width = 0.1)
-                #         
-                #         Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
-                #         
-                #         Tr = Tr + theme(panel.grid.minor = element_blank(),
-                #                         panel.grid.major.y = element_blank(),
-                #                         panel.grid.major.x = element_line(color = "#999999", size = .15))
-                #         
-                #         TrList[[i]] <- Tr
-                #         
-                # }
                 
                 TrList <- list()
                 
@@ -583,11 +577,11 @@ plotAlphaDiversity <- function(physeq, measures = NULL, x = "samples", color = N
                                 Tr = ggplot(DF, aes_map) + geom_boxplot(na.rm = TRUE)
                         }
                         
-                        Tr = Tr + geom_jitter(width = .2, alpha = 0.65)
+                        Tr = Tr + geom_jitter(width = .2, height = 0, alpha = 0.65)
                         
                         Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
                         
-                        Tr <- Tr + theme_bw()
+                        Tr <- Tr + theme_bw() + xlab("")
                         
                         Tr = Tr + theme(panel.grid.minor = element_blank(),
                                         panel.grid.major.y = element_blank(),
@@ -641,22 +635,64 @@ plotAlphaDiversity <- function(physeq, measures = NULL, x = "samples", color = N
                 
         }
         
-        
-        
         names(TrList) <- measures
         return(TrList)
         
 }
-    
+
 
 #######################################
-#### plotAlphaDivVsSeqDepth
+#### boxplot_alphaDiv_fromDF
+#######################################
+# see plotAlphaDiversity
+
+boxplot_alphaDiv_fromDF <- function(DF, measures, color = NULL, shape = NULL,
+                                    group = NULL, defCol = "#E69F00") {
+        
+        
+        TrList <- list()
+        
+        measures <- c(measures, "Total")
+        
+        for (i in 1:length(measures)) {
+                
+                aes_map = aes_string(x = group, y = measures[i], shape = shape, color = color)
+                
+                if(is.null(color)){
+                        Tr = ggplot(DF, aes_map) + geom_boxplot(na.rm = TRUE, col = defCol)
+                } else {
+                        
+                        Tr = ggplot(DF, aes_map) + geom_boxplot(na.rm = TRUE)
+                }
+                
+                Tr = Tr + geom_jitter(width = .2, height = 0, alpha = 0.65)
+                
+                Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
+                
+                Tr <- Tr + theme_bw() + xlab("")
+                
+                Tr = Tr + theme(panel.grid.minor = element_blank(),
+                                panel.grid.major.y = element_blank(),
+                                panel.grid.major.x = element_line(color = "#999999", size = .15))
+                
+                TrList[[i]] <- Tr
+                
+        }
+        
+        names(TrList) <- measures
+        return(TrList)
+}
+
+
+
+#######################################
+#### plot_alphaDivVstotalAmplicons
 #######################################
 # Function plots the alpha diversity measures from estimate_richness against the total number of reads/amplicons per sample
 # and adds a linear fit.
 # if color is given the fit is individual on the different colors, but the p-value in the title is still to an overall fit!!
 
-plotAlphaDivVsSeqDepth <- function(physeq, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
+plot_alphaDivVstotalAmplicons <- function(physeq, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
         
         # needed to get the p-value from-linear fit objects (from stackoverflow)
         lmp <- function (modelobject) {
@@ -666,10 +702,8 @@ plotAlphaDivVsSeqDepth <- function(physeq, measures = NULL, color = NULL, shape 
                 attributes(p) <- NULL
                 return(p)
         }
-        
-        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-        
-        AlphaDiv <- estimate_richness(physeq, measures = measures)
+
+        AlphaDiv <- suppressWarnings(estimate_richness(physeq, measures = measures))
         measures = colnames(AlphaDiv)
         ses = colnames(AlphaDiv)[grep("^se\\.", colnames(AlphaDiv))]
         measures = measures[!measures %in% ses]
@@ -726,11 +760,11 @@ plotAlphaDivVsSeqDepth <- function(physeq, measures = NULL, color = NULL, shape 
                 adjR2 <- round(summary(fit)$adj.r.squared,3)
                 pfit <- lmp(fit)
                 
-                Tr <- Tr + geom_smooth(method = "lm", se = TRUE)
+                Tr <- Tr + geom_smooth(aes_string(x = "TotalReads", y = measures[i]), method = "lm", se = TRUE, inherit.aes = F)
                 
-                Tr <- Tr + ggtitle(paste("Linear Fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
+                Tr <- Tr + ggtitle(paste("lm fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
                 
-                Tr <- Tr + theme_bw()
+                Tr <- Tr + theme_bw() + xlab("total amplicons (taxa_sums())")
                 
                 Tr = Tr + theme(panel.grid.minor = element_blank())
                 
@@ -744,6 +778,149 @@ plotAlphaDivVsSeqDepth <- function(physeq, measures = NULL, color = NULL, shape 
 }    
 
 
+#######################################
+#### plot_alphaDivVstotalAmplicons
+#######################################
+# Function plots the alpha diversity measures from estimate_richness against the total number of reads/amplicons per sample
+# and adds a linear fit.
+# if color is given the fit is individual on the different colors, but the p-value in the title is still to an overall fit!!
+
+plot_alphaDivVstotalAmplicons_fromList <- function(DF_List, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
+        
+        TrList <- list()
+        
+        DF <- DF_List[[1]]
+        fitlist <- DF_List[[2]]
+        
+        for (i in 1:length(measures)) {
+                
+                aes_map = aes_string(x = "Total", y = measures[i], shape = shape, color = color)
+                
+                if(is.null(color)){
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE, col = defCol)
+                } else {
+                        
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE)
+                }
+                
+                
+                if (measures[i] == "Chao1") {
+                        Tr = Tr + geom_errorbar(aes(ymax = Chao1 + se.chao1, ymin = Chao1 -
+                                                            se.chao1), width = 0.1)
+                }
+                if (measures[i] == "ACE") {
+                        Tr = Tr + geom_errorbar(aes(ymax = ACE + se.ACE, ymin = ACE -
+                                                            se.ACE), width = 0.1)
+                }
+                
+                Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
+                
+                # add the regression line and the p-values
+                fit <- fitlist[[measures[i]]]
+                adjR2 <- round(summary(fit)$adj.r.squared,3)
+                pfit <- lmp(fit)
+                
+                Tr <- Tr + geom_smooth(aes_string(x = "Total", y = measures[i]), method = "lm", se = TRUE, inherit.aes = F)
+                
+                Tr <- Tr + ggtitle(paste("lm fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
+                
+                Tr <- Tr + theme_bw() + xlab("total amplicons (taxa_sums())")
+                
+                Tr = Tr + theme(panel.grid.minor = element_blank())
+                
+                TrList[[i]] <- Tr
+                
+        }
+        
+        names(TrList) <- measures
+        return(TrList)
+        
+}
+
+#######################################
+#### plot_correlations_abundance_prev_sparsity
+#######################################
+# df_ab_prev: data frame with "SV_ID", "abundance", "prevalence", "sparsity", "mean_abundance_nonzero",
+# "median_abundance_nonzero"
+# outputs a list with different plots and fits
+
+plot_correlations_abundance_prev_sparsity <- function(df_ab_prev){
+        
+        nsamples <- df_ab_prev$prevalence[1] + df_ab_prev$sparsity[1]
+        
+        Tr_ab <- ggplot(df_ab_prev, aes(x = SV_ID, y = abundance))
+        Tr_ab <- Tr_ab +
+                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                ylab("total abundance (taxa_sums())") +
+                theme_bw(12)
+        Tr_prev <- ggplot(df_ab_prev, aes(x = SV_ID, y = prevalence))
+        Tr_prev <- Tr_prev +
+                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                theme_bw(12)
+        
+        # - associations of total abundance to sparsity/prevalence -
+        fit_spar <- lm(formula = sparsity ~ abundance, data = df_ab_prev)
+        pval_spar <- lmp(fit_spar)
+        fit_prev <- lm(formula = prevalence ~ abundance, data = df_ab_prev)
+        pval_prev <- lmp(fit_prev)
+        fit_spar_mean <- lm(formula = sparsity ~ mean_abundance_nonzero, data = df_ab_prev)
+        pval_spar_mean <- lmp(fit_spar_mean)
+        fit_spar_median <- lm(formula = sparsity ~ median_abundance_nonzero, data = df_ab_prev)
+        pval_spar_median <- lmp(fit_spar_median)
+        
+        Tr_ab_vs_spar <- ggplot(df_ab_prev, aes(x = abundance, y = sparsity))
+        Tr_ab_vs_spar <- Tr_ab_vs_spar +
+                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                geom_smooth(method = "lm") +
+                scale_y_continuous(limits = c(-1, nsamples + 5)) +
+                # annotate("text", x = max(df_ab_prev$abundance)/5, y = 5, label = paste("p.val: ", format(pval_spar, digits = 4), "R.square of lm: ", as.character(round(summary(fit_spar)$r.squared,4), sep = ""))) +
+                xlab("total abundance (taxa_sums())") +
+                ggtitle(paste("lm fit: p.val: ", format(pval_spar, digits = 4), "R.square: ", as.character(round(summary(fit_spar)$r.squared,4), sep = ""))) +
+                theme_bw(12)
+        Tr_ab_vs_spar_75Q <- Tr_ab_vs_spar + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$abundance, .75)))
+        
+        Tr_ab_vs_prev <- ggplot(df_ab_prev, aes(x = abundance, y = prevalence))
+        Tr_ab_vs_prev <- Tr_ab_vs_prev +
+                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                geom_smooth(method = "lm") +
+                scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
+                # annotate("text", x = max(df_ab_prev$abundance)/5, y = 5, label = paste("R.square of lm: ", as.character(round(summary(fit_prev)$r.squared,4), sep = ""))) +
+                xlab("total abundance (taxa_sums())") +
+                ggtitle(paste("lm fit: p.val: ", format(pval_prev, digits = 4), "R.square: ", as.character(round(summary(fit_prev)$r.squared,4), sep = ""))) +
+        theme_bw(12)
+        Tr_ab_vs_prev_75Q <- Tr_ab_vs_prev + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$abundance, .75)))
+        
+        Tr_meanab_vs_spar <- ggplot(df_ab_prev, aes(x = mean_abundance_nonzero, y = sparsity))
+        Tr_meanab_vs_spar <- Tr_meanab_vs_spar +
+                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                geom_smooth(method = "lm") +
+                scale_y_continuous(limits = c(-1, nsamples + 5)) +
+                xlab("SVs mean abundance in non-zero samples") +
+                ggtitle(paste("lm fit: p.val: ", format(pval_spar_mean, digits = 4), "R.square: ", as.character(round(summary(fit_spar_mean)$r.squared,4), sep = ""))) +
+                theme_bw(12)
+        Tr_meanab_vs_spar_75Q <- Tr_meanab_vs_spar + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$mean_abundance_nonzero, .75)))
+        
+        Tr_medab_vs_spar <- ggplot(df_ab_prev, aes(x = median_abundance_nonzero, y = sparsity))
+        Tr_medab_vs_spar <- Tr_medab_vs_spar +
+                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                geom_smooth(method = "lm") +
+                scale_y_continuous(limits = c(-1, nsamples + 5)) +
+                xlab("SVs median abundance in non-zero samples") +
+                ggtitle(paste("lm fit: p.val: ", format(pval_spar_median, digits = 4), "R.square: ", as.character(round(summary(fit_spar_median)$r.squared,4), sep = ""))) +
+                theme_bw(12)
+        Tr_medab_vs_spar_75Q <- Tr_medab_vs_spar + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$median_abundance_nonzero, .75)))
+        
+        fitlist <- list(fit_spar = fit_spar, fit_prev = fit_prev, fit_spar_mean = fit_spar_mean,
+                        fit_spar_median = fit_spar_median)
+        
+        out <- list(Tr_ab = Tr_ab, Tr_prev = Tr_prev, 
+                    Tr_ab_vs_prev = Tr_ab_vs_prev, Tr_ab_vs_prev_75Q = Tr_ab_vs_prev_75Q,
+                    Tr_ab_vs_spar = Tr_ab_vs_spar, Tr_ab_vs_spar_75Q = Tr_ab_vs_spar_75Q,
+                    Tr_meanab_vs_spar = Tr_meanab_vs_spar, Tr_meanab_vs_spar_75Q = Tr_meanab_vs_spar_75Q,
+                    Tr_medab_vs_spar = Tr_medab_vs_spar, Tr_medab_vs_spar_75Q = Tr_medab_vs_spar_75Q,
+                    fitlist = fitlist)
+        
+}
 
 
 
