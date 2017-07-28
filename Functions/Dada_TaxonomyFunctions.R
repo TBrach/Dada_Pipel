@@ -427,6 +427,7 @@ rarefaction_curve_own <- function(physeq, group_var = NULL, max_total = NULL, st
 
 rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NULL, step_size = 200, seed = 123) {
         
+        
         if (taxa_are_rows(physeq)) {
                 seqtab <- t(as(otu_table(physeq), "matrix"))
         } else {
@@ -444,7 +445,7 @@ rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NUL
         }
         
         steps <- seq(from = 0, to = max_total, by = step_size)
-        NoSamples <- nsamples(ps)
+        NoSamples <- nsamples(physeq)
         NoSteps <- length(steps)
         richness_matrix <- matrix(data = NA, nrow = NoSamples, ncol = NoSteps)
         totalamplicons <- rowSums(seqtab)

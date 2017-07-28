@@ -461,9 +461,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         if (pool) { # very time and memory consuming but might help identifying rare SVs
                 
-                drp_F <- derepFastq(filtFs)
+                drp_F <- derepFastq(filtFs, verbose = T)
                 dd_F <- dada(drp_F, err = err_F, pool = pool, multithread = TRUE)
-                drp_R <- derepFastq(filtRs)
+                drp_R <- derepFastq(filtRs, verbose = TRUE)
                 dd_R <- dada(drp_R, err = err_R, pool = pool, multithread = TRUE)
                 
                 rm(errorsRV, errorsFW)
