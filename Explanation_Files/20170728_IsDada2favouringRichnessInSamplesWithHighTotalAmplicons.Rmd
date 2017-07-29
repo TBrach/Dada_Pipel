@@ -1,0 +1,130 @@
+---
+title: "Simulation to test whether rarefaction over/underestimates richness"
+author: "Thorsten Brach"
+date: "28/7/2017"
+output: html_document
+---
+
+```{r, echo = FALSE, message=FALSE, include = FALSE}
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("phyloseq")
+library(phyloseq); packageVersion("phyloseq")
+library(dada2); packageVersion("dada2")
+library(vegan); packageVersion("vegan")
+library(ggplot2); packageVersion("ggplot2")
+library(dplyr); packageVersion("dplyr")
+library(tidyr); packageVersion("tidyr")
+library(gridExtra); packageVersion("gridExtra")
+
+PackageVersions <- data.frame(R = version$version.string,
+                              dada2 = packageVersion("dada2"),
+                              vegan = packageVersion("vegan"),
+                              ggplot2 = packageVersion("ggplot2"),
+                              dplyr = packageVersion("dplyr"),
+                              tidyr = packageVersion("tidyr"),
+                              gridExtra = packageVersion("gridExtra"))
+for (i in 1:ncol(PackageVersions)){PackageVersions[,i] <- as.character(PackageVersions[,i])}
+PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version)
+
+ps <- readRDS("/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis/phyloseq/ManiAge_Dada.rds")
+functionpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions/"
+source(file.path(functionpath, "Dada_TaxonomyFunctions.R"))
+source(file.path(functionpath, "Dada_PlotFunctions.R"))
+
+
+seed <- 1234
+step_size <- 200 # for rarefaction curves
+rare_level <- NULL # IF NULL, min(sample_sums(ps)) is used!
+rare_type <- "sample" # must be either "sample" or "vegan"
+rare_max_total <- 35000 # maximal total amplicons value to which rarefaction curves are calculated, if NULL: quantile(sample_sums(ps), probs = .25) is used
+
+taxa_are_rows = FALSE 
+group_var <- "Group"
+
+```
+
+
+# Background/Summary
+
+- It seems rarefaction richness curves of dada2 data plateau early indicating that there would be little effect on richness by total amplicons in the range from 20000 to 50000
+- However, I saw in dada2 data (e.g. ManiAging see below) clear trends that samples with higher total amplicons have higher richness.
+
+- My **hypothesis**: The dada2 algorithm favours higher richness in samples with higher total amplicons, but the output SVs is robust against rarefaction correction
+
+- If the hypothesis was true, dada2 richness data had to be corrected by other means for total amplicons. I would suggest the residuals of a linear fit.
+
+- I first tested another hypothesis, namely that rarefaction does not correct sufficiently for the advantage of having higher total amplicons
+    - However, I found by contrary that rarefaction gives a slight disadvantage to samples who first have high total amplicons and are then corrected down
+    
+- Dada2 data could favour samples with high total amplicons if singletons were almost always kicked out (i.e strong errors. it needed a very low. This seems to be the case as hardly any singletons are found in our data
+    - if so, one should use the pooled option for alpha diversity
+
+# rarefaction richness curves of dada2 data plateau early even though there is a clear association in the data between total amplicons and richness (alpha diversity)
+
+- here the ManiAging data, a pretty good linear fit on total amplicons vs richness
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+TrList_lm <- plot_alphaDivVstotalAmplicons(physeq = ps, measures = "Observed", color = NULL)
+rarefaction_curves <- rarefaction_curve_own_fast(physeq = ps, group_var = group_var, max_total = rare_max_total, step_size = step_size, seed = seed)
+```
+
+```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+TrList_lm[[1]]
+```
+
+- rarefaction does not get rid of this association, the curves plateau very early
+
+```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+rarefaction_curves[["Tr_richness_grad"]]
+```
+
+# simulation: when comparing richness on rarefied samples: vegan::rrarefy does neither put advantage nor disadvantage on rarefied samples, while sample() puts a slight disadvantage on rarefied samples (i.e. samples that had high total amplicons and then get rarefied down)
+
+## The simulation also illustrates that samples with more singletons (low abundance SVs) would not plateau as quickly
+
+- This is the simple idea of the simulation
+    - Compare the richness of the same sample (composition is known), once when it has been sequenced with 50000 reads (S1) and is then rarefied to 15000 total amplicons (S3), and once when the sample has directly been seqenced with 15000 reads only (S2)
+- This is what you can see:
+        - S3 has actually slightly lower richness than S2.
+            - This makes kind of sense, the richness of S3 is always smaller or equal to that of S1. So SVs that were lost in S1 can never be in S3. 
+            
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+simul_list_vegan <- simulate_totalabVSrichness_rarefaction(physeq = ps, size1 = 50000, size2 = 15000, nsims = 150, no_low_extra = 100, type = "vegan", no_DNA_total_amplicons = 1e6, seed = 123)
+simul_list_sample <- simulate_totalabVSrichness_rarefaction(physeq = ps, size1 = 50000, size2 = 15000, nsims = 150, no_low_extra = 100, type = "sample", no_DNA_total_amplicons = 1e6, seed = 123)
+```
+
+- NB: only when using sample() instead of vegan S3 has usually lower richness than S2, i.e. rarefaction would be a disadvantage for samples with high total amplicons.
+
+```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+grid.arrange(simul_list_vegan[["Tr"]] + xlab(""), simul_list_sample[["Tr"]] + xlab(""), ncol = 2)
+```
+
+- p.values t.test for vegan version
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+simul_list_vegan[["pair_tt_of_richness"]]$p.value
+```
+
+- p.values t.test for sample versions
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+simul_list_sample[["pair_tt_of_richness"]]$p.value
+```
+
+- NB: in both cases the added SVs with low abundance guarantee that the rarefaction curves plateau later than the orginal dada2 sample.
+
+```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+grid.arrange(simul_list_vegan[["Curves"]][["Tr_richness_grad"]], simul_list_sample[["Curves"]][["Tr_richness_grad"]], ncol = 2)
+```
+
+- indeed there are far more SVs with low abundances (non-zero) in the simulated samples than in the original dada2_sam
+
+```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+grid.arrange(simul_list_vegan[["Trr"]], simul_list_sample[["Trr"]], ncol = 2)
+```
+
+
+
+
+

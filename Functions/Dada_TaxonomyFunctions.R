@@ -434,11 +434,13 @@ rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NUL
                 seqtab <- as(otu_table(physeq), "matrix")
         }
         
-        Group <- sample_data(physeq)[[group_var]]
+        if (!is.null(group_var)){
+                Group <- sample_data(physeq)[[group_var]] 
+                if (!is.null(Group) && !is.factor(Group)) {
+                        Group <- as.factor(Group)
+                }
+        } else { Group <- NULL}
         
-        if (!is.null(Group) && !is.factor(Group)) {
-                Group <- as.factor(Group)
-        }
         
         if (is.null(max_total)) {
                 max_total <- quantile(sample_sums(physeq), probs = .25)
@@ -487,6 +489,26 @@ rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NUL
         
         Tr_richness <- plot_div_df(richness_df, type = "richness")
         
+        plot_div_df3 <- function (div_df, type = "richness") {
+                
+                div_df$Sample <- rownames(div_df)
+                div_df$Total <- totalamplicons
+                div_df <- tidyr::gather(div_df, key = step, value = div, -Sample, -Total)
+                div_df <- tidyr::separate(div_df, col = step, into = c("term", "step"), sep = "_")
+                div_df$step <- as.numeric(div_df$step)
+                
+                Tr <- ggplot(div_df, aes(x = step, y = div, group = Sample, col = Total))
+                Tr <- Tr +
+                        geom_line() +
+                        scale_color_gradient2("total amp.", low = cbPalette[6], mid = cbPalette[1], high = cbPalette[2], midpoint = 
+                                                      median(div_df$Total)) +
+                        xlab("total amplicons") +
+                        ylab(type) +
+                        theme_bw(12)
+        }
+        
+        Tr_richness_grad <- plot_div_df3(richness_df, type = "richness")
+        
         
         if (!is.null(Group)) {
                 
@@ -513,24 +535,6 @@ rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NUL
                                 theme_bw(12)
                 }
                 
-                plot_div_df3 <- function (div_df, type = "richness") {
-                        
-                        div_df$Sample <- rownames(div_df)
-                        div_df$Total <- totalamplicons
-                        div_df <- tidyr::gather(div_df, key = step, value = div, -Sample, -Group, -Total)
-                        div_df <- tidyr::separate(div_df, col = step, into = c("term", "step"), sep = "_")
-                        div_df$step <- as.numeric(div_df$step)
-                        
-                        Tr <- ggplot(div_df, aes(x = step, y = div, group = Sample, col = Total))
-                        Tr <- Tr +
-                                geom_line() +
-                                scale_color_gradient2("total amp.", low = cbPalette[6], mid = cbPalette[1], high = cbPalette[2], midpoint = 
-                                                              median(div_df$Total)) +
-                                xlab("total amplicons") +
-                                ylab(type) +
-                                theme_bw(12)
-                }
-                
                 plot_div_df_group <- function (div_df, type = "alpha diversity") {
                         div_df <- tidyr::gather(div_df, key = step, value = div, - Group)
                         div_df <- tidyr::separate(div_df, col = step, into = c("term", "step"), sep = "_")
@@ -550,20 +554,17 @@ rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NUL
                 }
                 Tr_richness_col <- plot_div_df2(richness_df, type = "richness")
                 
-                Tr_richness_grad <- plot_div_df3(richness_df, type = "richness")
-                
                 Tr_richness_group <- plot_div_df_group(richness_df, type = "richness")
                 
-        }
+        } 
         
-        outlist <- list(rarefaction_richness_df = richness_df, Tr_richness = Tr_richness)
+        outlist <- list(rarefaction_richness_df = richness_df, Tr_richness = Tr_richness, Tr_richness_grad = Tr_richness_grad)
         
         if (!is.null(Group)) {
-                outlist[[3]] <- pairwise.tt_richness
-                outlist[[4]] <- Tr_richness_col
-                outlist[[5]] <- Tr_richness_grad
+                outlist[[4]] <- pairwise.tt_richness
+                outlist[[5]] <- Tr_richness_col
                 outlist[[6]] <- Tr_richness_group
-                names(outlist)[3:6] <- c("pairwise.tt_richness", "Tr_richness_col", "Tr_richness_grad", "Tr_richness_group")
+                names(outlist)[4:6] <- c("pairwise.tt_richness", "Tr_richness_col", "Tr_richness_group")
         }
         
         return(outlist)
@@ -900,7 +901,125 @@ filttaxa_by_prevalence <- function(physeq, prevalence = 30, MaxCountCheck = FALS
 
 
 
+############################################
+## simulate_totalabVSrichness_rarefaction ##
+############################################
+# Input:
+# physeq is needed to simulate the sample, i.e. the composition of the original sample
+# specifically: the sample in physeq with the highest richness is used as base_sample (only the SVs > 0)
+# no_low_extra: defines the Number of low abundance SVs that will be added to the base_sample, the "counts"
+# of these extra SVs are random numbers between 0 and min_count in base_sample
+# NB: the low_extra SVs make sure that the generated samples have more low abundance counts than the base_sample, and
+# therefore plateau slower in rarefaction curves
+# NB2: you could of course think about other ways to generate the original proportion
+# the idea of the simulation is then: 1 million amplicons of the original proportion go to the sequencer (DNA)
+# S1 is size1 amplicons from this original
+# S2 is size2 amplicons from this original
+# S3 is size2 amplicons rarefied from S1
+# richnesses are compared and rarefaction curves are generated, all is saved in the output list
 
+# further Inputs:
+# type: "sample" or "vegan" decides whether the rarefaction steps are based on sample() or vegan::rrarefy command
+# sd: is used to spread the low_extra_SVs "counts" in an rnorm command, the bigger the higher the spread, but note anyway bewtween 0 and min_count
+# no_DNA_total_amplicons: "the number of amplicons generated and put in the seqeuncer", the higher the more secure that the richness of the
+# DNA sample was 100%
+
+
+simulate_totalabVSrichness_rarefaction <- function(physeq, size1 = 50000, size2 = 15000, nsims = 100, no_low_extra = 92, type = "sample", seed = 1576,
+                                                   sd = 2, no_DNA_total_amplicons = 1e6){
+        
+        set.seed(seed)
+        seqtab <- as(otu_table(physeq), "matrix")
+        base_sample <- seqtab[which.max(rowSums(seqtab != 0)),]
+        min_count <- min(base_sample[base_sample > 0])
+        total_SVs <- no_low_extra + sum(base_sample > 0)
+        
+        DNA_richness <- vector("numeric", length = nsims)
+        S1_richness <- vector("numeric", length = nsims)
+        S2_richness <- vector("numeric", length = nsims)
+        S3_richness <- vector("numeric", length = nsims)
+        S1s <- matrix(nrow = nsims, ncol = total_SVs)
+        
+        for (i in 1:nsims) {
+                
+                factors <- abs(rnorm(n = no_low_extra, sd = 2))
+                factors <- factors/max(factors)
+                extra_low_SVs <- factors*min_count
+                
+                sample_prop <- c(extra_low_SVs, base_sample[base_sample > 0])
+                sample_prop <- sample_prop/sum(sample_prop)
+                
+                DNA_sample <- round(sample_prop * no_DNA_total_amplicons)
+                DNA_richness[i] <- sum(DNA_sample > 0)
+                
+                if (type == "vegan") {
+                        S1 <- rrarefy(matrix(DNA_sample, nrow = 1), sample = size1)
+                        S2 <- rrarefy(matrix(DNA_sample, nrow = 1), sample = size2)
+                        S3 <- rrarefy(S1, sample = size2)
+                        S1 <- as.vector(S1)
+                        S2 <- as.vector(S2)
+                        S3 <- as.vector(S3)
+                        S1_richness[i] <- sum(S1 > 0)
+                        S2_richness[i] <- sum(S2 > 0)
+                        S3_richness[i] <- sum(S3 > 0)
+                        S1s[i,] <- S1
+                        
+                } else if (type == "sample") {
+                        
+                        S1 <- rarefy_sample(DNA_sample, size = size1)
+                        S2 <- rarefy_sample(DNA_sample, size = size2)
+                        S3 <- rarefy_sample(S1, size = size2)
+                        S1_richness[i] <- sum(S1 > 0)
+                        S2_richness[i] <- sum(S2 > 0)
+                        S3_richness[i] <- sum(S3 > 0)
+                        S1s[i,] <- S1
+                        
+                } else {
+                        stop("wrong type")
+                }
+                
+        }
+        
+        DF <- data.frame(DNA = DNA_richness, S1 = S1_richness, S2 = S2_richness, S3 = S3_richness)
+        
+        DFl <- gather(DF, key = sample, value = richness)
+        DFl$Sample <- factor(DFl$sample, levels <- c("DNA", "S1", "S2", "S3"), ordered = TRUE)
+        
+        pair_tt <- pairwise.t.test(x = DFl$richness, g = DFl$Sample, alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        
+        Tr <- ggplot(DFl, aes(x = sample, y = richness, col = sample))
+        
+        Tr <- Tr +
+                geom_boxplot() +
+                geom_jitter(alpha = .7) +
+                scale_color_manual("", values = cbPalette[2:8]) +
+                theme_bw(12)
+        
+        
+        # add rarefaction curves for 5 of the S1s plus the base_sampled supplied with 0s for the low_extra
+        CT <- rbind(S1s[sample(nsims, 5),], c(rep(0, no_low_extra), base_sample[base_sample > 0]))
+        samdf <- sample_data(ps)
+        samdf <- samdf[1:nrow(CT),]
+        rownames(CT) <- rownames(samdf)
+        colnames(CT) <- paste("T_", 1:ncol(CT), sep = "")
+        pss <- phyloseq(otu_table(CT, taxa_are_rows = FALSE), 
+                        sample_data(samdf))
+        
+        Curves <- rarefaction_curve_own_fast(physeq = pss, group_var = NULL)
+        
+        # show distribution of SVs with abundance below 20 and above 0
+        low_abund_SVs <- apply(CT, 1, function(x){x[x > 0 & x < 20]})
+        df_plot <- data.frame(Sample = rep(names(low_abund_SVs), sapply(low_abund_SVs, length)),
+                              Abund = unlist(low_abund_SVs))
+        Trr <- ggplot(df_plot, aes(x = Abund, group = Sample, col = Sample))
+        Trr <- Trr + geom_density() +
+                scale_color_manual("", values = cbPalette[2:8], labels = c(paste("Sim", 1:5), "dada2_sam")) +
+                xlab("Abundances below 20") +
+                theme_bw(20)
+        
+        out <- list(S1s = S1s, DF_richness = DF, pair_tt_of_richness = pair_tt, Tr = Tr, CT = CT, Curves = Curves, Trr = Trr, sample_prop = sample_prop, base_sample = base_sample)
+        
+}
 
 
 

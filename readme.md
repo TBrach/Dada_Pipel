@@ -1,6 +1,9 @@
-# What to update:
+# What to update or recent updates:
 
-- add the pool option into the denoised section
+- the "pool" option of the dada() command has been added: pool = TRUE in Dada_Wrapper 
+	- <https://benjjneb.github.io/dada2/pool.html>
+	- NB: pooling for e.g. 70 samples makes the code really slow
+	- it might however tackle dada2 assumed issue of favoring samples with high total amplicons when it comes to alpha diversity
 
 # Requirements
 
@@ -35,7 +38,10 @@ To run the function from the terminal, use:
 
 ## Step 2: Run the actual Dada pipeline (**Dada_Wrapper.R**)
 
-- nohup /usr/local/R-3.4.1/bin/Rscript Dada_Wrapper.R &
+- on hulk:
+	- nohup /usr/local/R-3.4.1/bin/Rscript Dada_Wrapper.R &
+- on porus (here Rscript is directly linked to the new R.version 3.4.1)
+	- nohup Rscript Dada_Wrapper.R &
 
 ### Steps of the Dada2_wrap function
 

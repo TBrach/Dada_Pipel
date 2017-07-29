@@ -420,6 +420,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 
         }
         
+        # in case both err_F and err_R had been given, they would not have been saved if not:
+        save(err_F, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
+        
         ##############################
         ### Estimate err_R matrix
         ##############################
@@ -466,7 +469,6 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 drp_R <- derepFastq(filtRs, verbose = TRUE)
                 dd_R <- dada(drp_R, err = err_R, pool = pool, multithread = TRUE)
                 
-                rm(errorsRV, errorsFW)
                 
                 # NB: the following demands that the samples were denoised in the given order, I therefore removed tha randomize option from learnErrorsAdj
                 names(dd_F) <- SampleNames
@@ -486,8 +488,6 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 rm(drp_F, drp_R, dd_F, dd_R)
                 
                 
-                
-                
         } else if (exists("errorsFW", inherits = FALSE) && exists("errorsRV", inherits = FALSE) && # do not do dereplication and denoising again if all samples had been used for determining the error matrixes
                    !is.null(errorsFW$dds) && !is.null(errorsRV$dds)) {
                 
@@ -496,7 +496,11 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 dd_R <- errorsRV$dds
                 drp_R <- errorsRV$drps
                 
-                rm(errorsRV, errorsFW)
+                # just to not save the huge files:
+                errorsFW$dds <- NULL
+                errorsFW$drps <- NULL
+                errorsRV$dds <- NULL
+                errorsRV$drps <- NULL
                 
                 # NB: the following demands that the samples were denoised in the given order, I therefore removed tha randomize option from learnErrorsAdj
                 names(dd_F) <- SampleNames
@@ -518,10 +522,12 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         } else {
                 
                 if (exists("errorsFW", inherits = FALSE)) {
-                        rm(errorsFW)
+                        errorsFW$dds <- NULL
+                        errorsFW$drps <- NULL
                 }
                 if (exists("errorsRV", inherits = FALSE)) {
-                        rm(errorsRV)
+                        errorsRV$dds <- NULL
+                        errorsRV$drps <- NULL
                 }
                 
                 mergers <- vector("list", length(SampleNames))
@@ -617,6 +623,14 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ReadSummary$UniqueAmpliconsWOBimera <- rowSums(seqtab.nochim != 0)
         rownames(ReadSummary) <- NULL
         
+        # I know also save errorsFW and RV to be able to recapitulate the error plots in later analyses
+        if (!exists("errorsFW", inherits = FALSE)) {
+                errorsFW <- NULL
+        }
+        if (!exists("errorsRV", inherits = FALSE)) {
+                errorsRV <- NULL
+        }
+        
         save(seqtab.nochim, seqtab, mergers, ReadSummary, file = file.path(DataFolder, "DenoisedData.RData"))
         
         message("*********************** Sequence table generated, Data saved ***********************
@@ -688,6 +702,8 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         message("*********************** Dada_wrap done ***********************
                         ********************************************************************")
 }
+
+
 
 
 
