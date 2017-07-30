@@ -60,10 +60,10 @@ dist_methods <- c("bray", "jsd", "jaccard") # c("unifrac", "wunifrac", "jsd", "b
 #
 
 # - file/path inputs -
-datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
+datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis_Pooled_Hulk"
 
 # NB: taxonomy path should start in datapath
-taxonomy.path <- "Dada_Taxonomy/Silva_v128/Taxonomy_Silva128_minBoot50_allowMT.RData"
+taxonomy.path <- "Dada_Taxonomy/Silva_v128/Taxonomy.RData"
 
 functionpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions/"
 # -- 
@@ -246,13 +246,13 @@ grid.arrange(Tr, TrR, nrow = 2)
 ## Plot the error rates determined by dada2
 
 ```{r, echo = FALSE, message=FALSE}
-Tr <- plotErrors(err_F, nominalQ = TRUE)
-Tr <- Tr + ggtitle("err_F error rates")
-TrR <- plotErrors(err_R, nominalQ = TRUE)
-TrR <- TrR + ggtitle("err_R error rates")
+# Tr <- plotErrors(err_F, nominalQ = TRUE)
+# Tr <- Tr + ggtitle("err_F error rates")
+# TrR <- plotErrors(err_R, nominalQ = TRUE)
+# TrR <- TrR + ggtitle("err_R error rates")
 ```
 ```{r, fig.width = 14, fig.height = 14, warning = FALSE, message = FALSE}
-grid.arrange(Tr, TrR, nrow = 2)
+# grid.arrange(Tr, TrR, nrow = 2)
 ```
 
 

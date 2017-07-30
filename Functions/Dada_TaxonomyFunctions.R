@@ -734,6 +734,124 @@ adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, plots = FALSE) 
         }
 }
 
+#######################################
+### FUNCTION: alpha_diversity_wrapper
+#######################################
+# just wraps around other functions here to save writing time
+# currently onlh works for alpha_div_measures = c("Observed", "Shannon")
+alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "Shannon")){
+        
+        DF_alpha_list <- calculate_alphadiversity(physeq = ps, measures = alpha_div_measures)
+        DF_alpha <- DF_alpha_list[[1]]
+        
+        # just I prefer Richness over Observed
+        alpha_div_measures2 <- alpha_div_measures
+        if ("Observed" %in% alpha_div_measures) {
+                alpha_div_measures2[alpha_div_measures2 == "Observed"] <- "Richness" 
+        }
+        
+        pairwise.tt_rich <- pairwise.t.test(x = DF_alpha$Richness, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        # compare, to get the same results as individual t.test you need pool.sd = F
+        # t.test(x = DF_alpha$Richness[DF_alpha$Group == "Old"], y = DF_alpha$Richness[DF_alpha$Group == "MiddleAged"], alternative = "two", var.equal = F)$p.value
+        
+        pairwise.tt_shannon <- pairwise.t.test(x = DF_alpha$Shannon, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        
+        pairwise.tt_total <- pairwise.t.test(x = DF_alpha$Total, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        
+        pairwise.tt_rich_resids <- pairwise.t.test(x = DF_alpha$Richness_resids, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        
+        pairwise.tt_shannon_resids <- pairwise.t.test(x = DF_alpha$Shannon_resids, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        
+        TrListBP <- boxplot_alphaDiv_fromDF(DF = DF_alpha, color = group_var, group = group_var, measures = c(alpha_div_measures2, paste(alpha_div_measures2, "resids", sep = "_")))
+        
+        TrList_lm <- plot_alphaDivVstotalAmplicons_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var)
+        
+        out <- list(DF_alpha_list = DF_alpha_list, TrListBP = TrListBP, TrList_lm = TrList_lm, pairwise.tt_rich = pairwise.tt_rich,
+                    pairwise.tt_shannon = pairwise.tt_shannon, pairwise.tt_total = pairwise.tt_total, pairwise.tt_rich_resids = pairwise.tt_rich_resids,
+                    pairwise.tt_shannon_resids = pairwise.tt_shannon_resids)
+        
+}
+
+#######################################
+### FUNCTION: calc_distances
+#######################################
+
+calc_distances <- function(physeq, dist_methods = c("bray")) {
+        
+        dist_list <- vector("list", length(dist_methods))
+        names(dist_list) = dist_methods
+        
+        for (i in dist_methods) {
+                iDist <- phyloseq::distance(physeq, method=i)
+                dist_list[[i]] = iDist
+        }
+        
+        return(dist_list)
+        
+}
+
+#######################################
+### FUNCTION: calc_ordination_from_distances
+#######################################
+
+calc_ordination_from_distances <- function(physeq, dist_list, ordination_type = "PCoA", group_var = NULL){
+        
+        ordination_list <- vector("list", length(dist_list))
+        DFList <- vector("list", length(dist_list))
+        TrList <- vector("list", length(dist_list))
+        TrList_own <- vector("list", length(dist_list))
+        
+        axes <- 1:2 # currently only allowed to plot first and second
+        
+        for (i in seq_along(dist_list)) {
+                
+                ordination <- phyloseq::ordinate(physeq, method = ordination_type, distance = dist_list[[i]])
+                ordination_list[[i]] <- ordination
+                DF <- phyloseq::plot_ordination(physeq, ordination_list[[i]], color = group_var, justDF = TRUE)
+                DFList[[i]] <- DF # just the first two axes cbind to sample_data in physeq
+                
+                x = colnames(DF)[1]
+                y = colnames(DF)[2]
+                Tr <- ggplot(DF, aes_string(x = x, y = y, col = group_var)) 
+                Tr <- Tr + geom_point() +
+                        scale_color_manual("", values = cbPalette[2:8]) +
+                        theme_bw(12) +
+                        ggtitle(names(dist_list)[i])
+                
+                # for labelling axes
+                if (ordination_type == "PCoA" || ordination_type == "NMDS") {
+                        if (ordination_type == "PCoA") {
+                                eigvec <- phyloseq:::extract_eigenvalue.pcoa(ordination)
+                        } else {
+                                eigvec <- phyloseq:::extract_eigenvalue.default(ordination)
+                        }
+                        
+                        if (length(eigvec[axes]) > 0){
+                                fracvar = eigvec[axes]/sum(eigvec)
+                                percvar = round(100 * fracvar, 1)
+                                strivar = as(c(Tr$label$x, Tr$label$y), "character")
+                                strivar = paste0(strivar, " (", percvar, " %)")
+                                Tr <- Tr + xlab(strivar[1]) + ylab(strivar[2]) 
+                        }
+                        
+                }
+                 
+                TrList_own[[i]] <- Tr
+                rm(Tr)
+                        
+                
+                TrList[[i]] <- phyloseq::plot_ordination(physeq, ordination_list[[i]], color = group_var) + ggtitle(names(dist_list)[i])
+        }
+        
+        names(ordination_list) <- names(TrList) <- names(DFList) <- names(TrList_own) <- names(dist_list)
+        out <- list(ordination_list = ordination_list, DFList = DFList, ordination_Tr_own = TrList_own, ordination_Tr = TrList)
+}
+
+
+
+
+
+
 
 #######################################
 ### FUNCTION: KeepAmplicons
