@@ -295,7 +295,7 @@ do.call("grid.arrange", c(TrList[1:4], nrow=4))
 ```
 
 
-# Taxonomic assignment
+# Explore taxonomic assignment
 
 - the assignment distribution including all found SVs:
 
@@ -342,11 +342,11 @@ grid.arrange(TrList[[1]], TrList[[4]], TrList[[2]], TrList[[5]], TrList[[3]], Tr
 
 
 
+# raw **alpha-diversity**, i.e. without correction for total amplicons (i.e. no rarifying)
 
-# Phyloseq analyses
+## Construct phylogenetic tree
 
 
-## raw **alpha-diversity**, i.e. without correction for total amplicons (i.e. no rarifying)
 
 - NB: estimate_richness warns if no singletons are in the data, i.e. if !any(otu_table(ps) == 1) = TRUE (= !any(seqtab.nochim == 1))
     - dada2 seqtabs tend to be without singletons, most likely because low abundance SVs are considered errors from more abundant SVs

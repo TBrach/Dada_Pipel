@@ -83,6 +83,97 @@ assignTaxonomyaddSpecies <- function(seqtab,
 
 
 #######################################
+### FUNCTION: construct_phylogenetic_tree
+#######################################
+## Background: 
+# the entire function is basically a copy from: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4955027/ (page 8)
+# the function uses the packages DECIPHER (bioconductor) and phangorn (cran)
+# I had once a clash of the DECIPHER package with dada2 when dada2 was loaded first, so maybe function needs to be run in a fresh session
+# you should run the wrapper on the server because the last phangorn::optim.pml takes long time
+## Inputs, 
+# savepath = determines were the output data list will be saved
+# all other inputs: refer to arguments for phangorn::optim.pml and I have honestly no clue about them at the moment
+# so read code and help
+## output: 
+# a list with the GTR: generalized time-reversible with Gamma rate variation model fit containing the tree, and the Input data saved
+# the list is saved as phylogenetic_tree.rds in savepath
+
+
+construct_phylogenetic_tree <- function(seqtab.nochim, savepath,
+                                        k = 4, inv = .2, 
+                                        model = "GTR", rearrangement = "stochastic",
+                                        trace = 0) {
+        
+        library(DECIPHER)
+        library(phangorn); packageVersion("phangorn")
+        
+        RVer <- R.Version()
+        RVer <- RVer$version.string
+        PackageVersions <- data.frame(Package = c("R", "DECIPHER", "phangorn"),
+                                      Version = c(RVer,
+                                                  as.character(packageVersion("DECIPHER")),
+                                                  as.character(packageVersion("phangorn"))))
+        
+        
+        seqs <- getSequences(seqtab.nochim) # simple character string
+        names(seqs) <- seqs
+        
+        Inputs <- list(seqs = seqs,
+                       savepath = savepath,
+                       k = k,
+                       inv = inv,
+                       model = model,
+                       rearrangement = rearrangement,
+                       trace = trace)
+        
+        # ---- multiple alignment of SVs using "DECIPHER" (takes only 10 seconds) ----
+        
+        alignment <- DECIPHER::AlignSeqs(DNAStringSet(seqs), anchor = NA)
+        
+        # --------
+        
+        # ---- use alignment to construct phylogenetic tree (phangorn package) -----
+        
+        # -- First construct a neighbor-joining tree --
+        
+        phang.align <- phangorn::phyDat(as(alignment, "matrix"), type = "DNA") # just transformation of DNA data into phyDat format
+        dm <- phangorn::dist.ml(phang.align) # computes pairwise distances
+        
+        treeNJ <- phangorn::NJ(dm)
+        
+        # NB: They warn: tip order != sequence order
+        # however, I got a TRUE here
+        # all.equal(treeNJ$tip.label, seqs, check.attributes = FALSE)
+        
+        fit <- phangorn::pml(treeNJ, data = phang.align) # warns: negative edges length changed to 0!
+        
+        # ----
+        
+        # -- use the neighbor-joining tree as a start point to fit a GTR+G+I (generalized time-reversible with Gamma rate variation) maximum 
+        # likelihood tree --
+        
+        fitGTR <- update(fit, k = k, inv = inv)
+        message("starting the time consuming fit now")
+        fitGTR <- phangorn::optim.pml(fitGTR, model = model, optInv = TRUE, optGamma = TRUE,
+                                      rearrangement = rearrangement, control = pml.control(trace = trace))
+        message("done with the time consuming fit:)")
+        
+        
+        out <- list(fitGTR = fitGTR,
+                    Inputs = Inputs,
+                    PackageVersions = PackageVersions)
+        
+        saveRDS(out, file = file.path(savepath, "phylog_tree.rds"))
+        # ----
+        
+        # --------
+        
+        return(out)
+}
+
+
+
+#######################################
 ### FUNCTION: get_assignemnt_distribution
 #######################################
 
