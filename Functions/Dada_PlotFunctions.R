@@ -458,8 +458,8 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
         # The number of samples the SVs are present in
         Tr <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = UniqueAmplicons))
         Tr <- Tr + geom_point(col = "#E69F00", size = 3) +
-                xlab("in No of Samples") +
-                ylab("Number of SVs") +
+                xlab("prevalence") +
+                ylab("number of SVs") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
@@ -468,15 +468,15 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
         
         In1Index <- which(AmpliconDistribution$InNumberSamples == 1)
         if (length(In1Index) != 0) {
-                Tr <- Tr + ggtitle(paste(AmpliconDistribution$UniqueAmplicons[In1Index], " of ", AmpliconDistribution$CumSumUnique[In1Index], " SVs (", round(100*AmpliconDistribution$UniqueAmplicons[In1Index]/AmpliconDistribution$CumSumUnique[In1Index], 1), " %)", " were only found in 1 sample", sep = ""))
+                Tr <- Tr + ggtitle(paste(AmpliconDistribution$UniqueAmplicons[In1Index], " of ", AmpliconDistribution$CumSumUnique[1], " SVs (", round(100*AmpliconDistribution$UniqueAmplicons[In1Index]/AmpliconDistribution$CumSumUnique[1], 1), " %)", " were only found in 1 sample", sep = ""))
         } 
         
         
         # Cumulative Percentage of SVs
         Tr1 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCUnique))
         Tr1 <- Tr1 + geom_point(col = "#E69F00", size = 3) +
-                xlab("in No of Samples") +
-                ylab("Cumulative percentage of SVs") +
+                xlab("prevalence") +
+                ylab("cumulative percentage of SVs") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
@@ -484,29 +484,29 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
         
         Tr1 <- Tr1 + 
                 geom_hline(yintercept = SVskeptAtPCValue, lty =  "dashed") +
-                geom_vline(xintercept = PCValue, lty = 'dashed') +
-                ggtitle(paste("with prevalence ", prevalence, " % (= ", PCValue, " samples); ", AmpliconDistribution$CumSumUnique[index], " of ", AmpliconDistribution$CumSumUnique[1], 
-                              " SVs (", round(100*AmpliconDistribution$CumSumUnique[index]/AmpliconDistribution$CumSumUnique[1], 1), " %) would remain", sep = ""))
+                geom_vline(xintercept = (prevalence/100)*dim(seqtab)[1], lty = 'dashed') +
+                ggtitle(paste("prevalence ", prevalence, " % = ", round((prevalence/100)*dim(seqtab)[1],1), "; ", AmpliconDistribution$CumSumUnique[index], " of ", AmpliconDistribution$CumSumUnique[1], 
+                              " SVs (", round(100*AmpliconDistribution$CumSumUnique[index]/AmpliconDistribution$CumSumUnique[1], 1), " %) have higher prevalence", sep = ""))
         
         
         # The number of samples the total amplicons are present in
         Tr2 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = TotalAmplicons))
         Tr2 <- Tr2 + geom_point(col = "#E69F00", size = 3) +
-                xlab("in No of Samples") +
-                ylab("Total Amplicons") +
+                xlab("prevalence") +
+                ylab("amplicons") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
                       panel.grid.major.x = element_line(color = "#999999", size = .15))
         
         Tr2 <- Tr2 + ggtitle(paste(AmpliconDistribution$CumSumTotal[1] - AmpliconDistribution$CumSumTotal[index], " of ",
-                                   AmpliconDistribution$CumSumTotal[index], " (", round(100*(AmpliconDistribution$CumSumTotal[1] - AmpliconDistribution$CumSumTotal[index])/AmpliconDistribution$CumSumTotal[index], 2),
-                                    " %) of amplicons were from SVs present in less than ", PCValue, " samples.", sep = ""))
+                                   AmpliconDistribution$CumSumTotal[1], " (", round(100*(AmpliconDistribution$CumSumTotal[1] - AmpliconDistribution$CumSumTotal[index])/AmpliconDistribution$CumSumTotal[1], 2),
+                                    " %) amplicons are from SVs present in less than ", round((prevalence/100)*dim(seqtab)[1],1), " samples.", sep = ""))
         
         Tr3 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCTotal))
         Tr3 <- Tr3 + geom_point(col = "#E69F00", size = 3) +
-                xlab("in No of Samples") +
-                ylab("Cumulative percentage of amplicons") +
+                xlab("prevalence") +
+                ylab("cumulative percentage of amplicons") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_line(color = "#999999", size = .15),
@@ -514,8 +514,8 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
         
         Tr3 <- Tr3 + 
                 geom_hline(yintercept = PCKeptAtPCValue, lty =  "dashed") +
-                geom_vline(xintercept = PCValue, lty = 'dashed') +
-                ggtitle(paste("with prevalence ", prevalence, " % (= ", PCValue, " samples); ", AmpliconDistribution$CumSumTotal[index], " of ", AmpliconDistribution$CumSumTotal[1], 
+                geom_vline(xintercept = (prevalence/100)*dim(seqtab)[1], lty = 'dashed') +
+                ggtitle(paste("prevalence ", prevalence, " % = ", round((prevalence/100)*dim(seqtab)[1],1), "; ", AmpliconDistribution$CumSumTotal[index], " of ", AmpliconDistribution$CumSumTotal[1], 
                               " amplicons (", round(100*AmpliconDistribution$CumSumTotal[index]/AmpliconDistribution$CumSumTotal[1], 1), " %) would remain", sep = ""))
                 
         
@@ -667,7 +667,7 @@ boxplot_alphaDiv_fromDF <- function(DF, measures, color = NULL, shape = NULL,
                 
                 Tr = Tr + geom_jitter(width = .2, height = 0, alpha = 0.65)
                 
-                Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
+                Tr <- Tr + scale_colour_manual("", values = cbPalette[2:8])
                 
                 Tr <- Tr + theme_bw() + xlab("")
                 
@@ -813,18 +813,22 @@ plot_alphaDivVstotalAmplicons_fromList <- function(DF_List, measures = NULL, col
                                                             se.ACE), width = 0.1)
                 }
                 
-                Tr <- Tr + scale_colour_manual(values = cbPalette[2:8])
+                Tr <- Tr + scale_colour_manual("", values = cbPalette[2:8])
                 
                 # add the regression line and the p-values
                 fit <- fitlist[[measures[i]]]
                 adjR2 <- round(summary(fit)$adj.r.squared,3)
-                pfit <- lmp(fit)
+                if (adjR2 != 0){
+                        pfit <- lmp(fit)
+                } else {
+                        pfit <- NA
+                }
                 
                 Tr <- Tr + geom_smooth(aes_string(x = "Total", y = measures[i]), method = "lm", se = TRUE, inherit.aes = F)
                 
                 Tr <- Tr + ggtitle(paste("lm fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
                 
-                Tr <- Tr + theme_bw() + xlab("total amplicons (taxa_sums())")
+                Tr <- Tr + theme_bw() + xlab("total amplicons (sample_sums())")
                 
                 Tr = Tr + theme(panel.grid.minor = element_blank())
                 
@@ -840,15 +844,15 @@ plot_alphaDivVstotalAmplicons_fromList <- function(DF_List, measures = NULL, col
 #######################################
 #### plot_correlations_abundance_prev_sparsity
 #######################################
-# df_ab_prev: data frame with "SV_ID", "abundance", "prevalence", "sparsity", "mean_abundance_nonzero",
+# df_ab_prev: data frame with "SV_ID", "total_abundance", "prevalence", "sparsity", "mean_abundance_nonzero",
 # "median_abundance_nonzero"
 # outputs a list with different plots and fits
 
-plot_correlations_abundance_prev_sparsity <- function(df_ab_prev){
+plot_correlations_abundance_prev_sparsity <- function(df_ab_prev){ # NB: you could color by Phylum for example
         
         nsamples <- df_ab_prev$prevalence[1] + df_ab_prev$sparsity[1]
         
-        Tr_ab <- ggplot(df_ab_prev, aes(x = SV_ID, y = abundance))
+        Tr_ab <- ggplot(df_ab_prev, aes(x = SV_ID, y = total_abundance))
         Tr_ab <- Tr_ab +
                 geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
                 ylab("total abundance (taxa_sums())") +
@@ -858,70 +862,207 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev){
                 geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
                 theme_bw(12)
         
-        # - associations of total abundance to sparsity/prevalence -
-        fit_spar <- lm(formula = sparsity ~ abundance, data = df_ab_prev)
-        pval_spar <- lmp(fit_spar)
-        fit_prev <- lm(formula = prevalence ~ abundance, data = df_ab_prev)
-        pval_prev <- lmp(fit_prev)
-        fit_spar_mean <- lm(formula = sparsity ~ mean_abundance_nonzero, data = df_ab_prev)
-        pval_spar_mean <- lmp(fit_spar_mean)
-        fit_spar_median <- lm(formula = sparsity ~ median_abundance_nonzero, data = df_ab_prev)
-        pval_spar_median <- lmp(fit_spar_median)
+        # - associations of total abundance and log10(total_abundance) to sparsity/prevalence -
+        # NB: turned out: log10(total_abundance) is far better correlated with prevalence/sparsity, so I stick with the log fits
+        # Also NB: since prevalence = constant - sparsity, a fit prevalence ~ abundance is equal to fit sparsity ~ abundance just with
+        # opposite coefficient signs
         
-        Tr_ab_vs_spar <- ggplot(df_ab_prev, aes(x = abundance, y = sparsity))
-        Tr_ab_vs_spar <- Tr_ab_vs_spar +
-                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
-                geom_smooth(method = "lm") +
-                scale_y_continuous(limits = c(-1, nsamples + 5)) +
-                # annotate("text", x = max(df_ab_prev$abundance)/5, y = 5, label = paste("p.val: ", format(pval_spar, digits = 4), "R.square of lm: ", as.character(round(summary(fit_spar)$r.squared,4), sep = ""))) +
-                xlab("total abundance (taxa_sums())") +
-                ggtitle(paste("lm fit: p.val: ", format(pval_spar, digits = 4), "R.square: ", as.character(round(summary(fit_spar)$r.squared,4), sep = ""))) +
-                theme_bw(12)
-        Tr_ab_vs_spar_75Q <- Tr_ab_vs_spar + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$abundance, .75)))
+        # fit_spar <- lm(formula = sparsity ~ total_abundance, data = df_ab_prev)
+        # pval_spar <- lmp(fit_spar)
+        # fit_prev <- lm(formula = prevalence ~ total_abundance, data = df_ab_prev)
+        # pval_prev <- lmp(fit_prev)
+        fit_prev_log10 <- lm(formula = prevalence ~ log10(total_abundance), data = df_ab_prev)
+        pval_prev_log10 <- lmp(fit_prev_log10)
+        # fit_spar_log10 <- lm(formula = sparsity ~ log10(total_abundance), data = df_ab_prev)
+        # pval_spar_log10 <- lmp(fit_spar_log10)
+        # identical(pval_prev_log10, pval_spar_log10) # TRUE
         
-        Tr_ab_vs_prev <- ggplot(df_ab_prev, aes(x = abundance, y = prevalence))
-        Tr_ab_vs_prev <- Tr_ab_vs_prev +
+        # it comes natural that total abundance and prevalence/sparsity are correlated, but how about mean abundance in non zero samples
+        # here I prepare all combinations, but stick to prevalence for now (comment sparsity out) since correlations are the same
+        
+        
+        # fit_spar_mean <- lm(formula = sparsity ~ mean_abundance_nonzero, data = df_ab_prev)
+        # pval_spar_mean <- lmp(fit_spar_mean)
+        # fit_spar_mean_log10 <- lm(formula = sparsity ~ log10(mean_abundance_nonzero), data = df_ab_prev)
+        # pval_spar_mean_log10 <- lmp(fit_spar_mean_log10)
+        # fit_spar_median <- lm(formula = sparsity ~ median_abundance_nonzero, data = df_ab_prev)
+        # pval_spar_median <- lmp(fit_spar_median)
+        # fit_spar_median_log10 <- lm(formula = sparsity ~ log10(median_abundance_nonzero), data = df_ab_prev)
+        # pval_spar_median_log10 <- lmp(fit_spar_median_log10)
+        
+        fit_prev_mean <- lm(formula = prevalence ~ mean_abundance_nonzero, data = df_ab_prev)
+        pval_prev_mean <- lmp(fit_prev_mean)
+        fit_prev_mean_log10 <- lm(formula = prevalence ~ log10(mean_abundance_nonzero), data = df_ab_prev)
+        pval_prev_mean_log10 <- lmp(fit_prev_mean_log10)
+        fit_prev_median <- lm(formula = prevalence ~ median_abundance_nonzero, data = df_ab_prev)
+        pval_prev_median <- lmp(fit_prev_median)
+        fit_prev_median_log10 <- lm(formula = prevalence ~ log10(median_abundance_nonzero), data = df_ab_prev)
+        pval_prev_median_log10 <- lmp(fit_prev_median_log10)
+        
+        
+        # Tr_ab_vs_prev <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        # Tr_ab_vs_prev <- Tr_ab_vs_prev +
+        #         geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+        #         geom_smooth(method = "lm") +
+        #         scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
+        #         # annotate("text", x = max(df_ab_prev$abundance)/5, y = 5, label = paste("R.square of lm: ", as.character(round(summary(fit_prev)$r.squared,4), sep = ""))) +
+        #         xlab("total abundance (taxa_sums())") +
+        #         ggtitle(paste("lm fit: p.val: ", format(pval_prev, digits = 4), "R.square: ", as.character(round(summary(fit_prev)$r.squared,4), sep = ""))) +
+        # theme_bw(12)
+        # Tr_ab_vs_prev_75Q <- Tr_ab_vs_prev + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$abundance, .75)))
+        
+        Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab +
                 geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                scale_x_log10() +
                 geom_smooth(method = "lm") +
-                scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
                 # annotate("text", x = max(df_ab_prev$abundance)/5, y = 5, label = paste("R.square of lm: ", as.character(round(summary(fit_prev)$r.squared,4), sep = ""))) +
                 xlab("total abundance (taxa_sums())") +
-                ggtitle(paste("lm fit: p.val: ", format(pval_prev, digits = 4), "R.square: ", as.character(round(summary(fit_prev)$r.squared,4), sep = ""))) +
-        theme_bw(12)
-        Tr_ab_vs_prev_75Q <- Tr_ab_vs_prev + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$abundance, .75)))
+                ggtitle(paste("lm fit: p.val: ", format(pval_prev_log10, digits = 4), "R.square: ", as.character(round(summary(fit_prev_log10)$r.squared,4), sep = ""))) +
+                theme_bw(12)
         
-        Tr_meanab_vs_spar <- ggplot(df_ab_prev, aes(x = mean_abundance_nonzero, y = sparsity))
-        Tr_meanab_vs_spar <- Tr_meanab_vs_spar +
+        # NB: you could color or facet by phylum
+        
+        # Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        # Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab +
+        #         geom_point(aes(col = Phylum), size = 2, alpha = 0.7) +
+        #         scale_x_log10() +
+        #         geom_smooth(method = "lm") +
+        #         # annotate("text", x = max(df_ab_prev$abundance)/5, y = 5, label = paste("R.square of lm: ", as.character(round(summary(fit_prev)$r.squared,4), sep = ""))) +
+        #         xlab("total abundance (taxa_sums())") +
+        #         ggtitle(paste("lm fit: p.val: ", format(pval_prev_log10, digits = 4), "R.square: ", as.character(round(summary(fit_prev_log10)$r.squared,4), sep = ""))) +
+        #         theme_bw(12)
+        
+        
+        # Tr_spar_vs_meanab <- ggplot(df_ab_prev, aes(x = mean_abundance_nonzero, y = sparsity))
+        # Tr_spar_vs_meanab <- Tr_spar_vs_meanab +
+        #         geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+        #         geom_smooth(method = "lm") +
+        #         scale_y_continuous(limits = c(-1, nsamples + 5)) +
+        #         xlab("SVs mean abundance in non-zero samples") +
+        #         ggtitle(paste("lm fit: p.val: ", format(pval_spar_mean, digits = 4), "R.square: ", as.character(round(summary(fit_spar_mean)$r.squared,4), sep = ""))) +
+        #         theme_bw(12)
+        # Tr_spar_vs_meanab_75Q <- Tr_spar_vs_meanab + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$mean_abundance_nonzero, .75)))
+        # 
+        
+        # Tr_spar_vs_log10_meanab <- ggplot(df_ab_prev, aes(x = mean_abundance_nonzero, y = sparsity))
+        # Tr_spar_vs_log10_meanab <- Tr_spar_vs_log10_meanab +
+        #         geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+        #         scale_x_log10() +
+        #         geom_smooth(method = "lm") +
+        #         xlab("SVs mean abundance in non-zero samples") +
+        #         ggtitle(paste("lm fit: p.val: ", format(pval_spar_mean_log10, digits = 4), "R.square: ", as.character(round(summary(fit_spar_mean_log10)$r.squared,4), sep = ""))) +
+        #         theme_bw(12)
+        
+        Tr_prev_vs_log10_meanab <- ggplot(df_ab_prev, aes(x = mean_abundance_nonzero, y = prevalence))
+        Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab +
                 geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                scale_x_log10() +
                 geom_smooth(method = "lm") +
-                scale_y_continuous(limits = c(-1, nsamples + 5)) +
+                scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
                 xlab("SVs mean abundance in non-zero samples") +
-                ggtitle(paste("lm fit: p.val: ", format(pval_spar_mean, digits = 4), "R.square: ", as.character(round(summary(fit_spar_mean)$r.squared,4), sep = ""))) +
+                ggtitle(paste("lm fit: p.val: ", format(pval_prev_mean_log10, digits = 4), "R.square: ", as.character(round(summary(fit_prev_mean_log10)$r.squared,4), sep = ""))) +
                 theme_bw(12)
-        Tr_meanab_vs_spar_75Q <- Tr_meanab_vs_spar + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$mean_abundance_nonzero, .75)))
         
-        Tr_medab_vs_spar <- ggplot(df_ab_prev, aes(x = median_abundance_nonzero, y = sparsity))
-        Tr_medab_vs_spar <- Tr_medab_vs_spar +
+        Tr_prev_vs_log10_medianab <- ggplot(df_ab_prev, aes(x = median_abundance_nonzero, y = prevalence))
+        Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab +
                 geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                scale_x_log10() +
                 geom_smooth(method = "lm") +
-                scale_y_continuous(limits = c(-1, nsamples + 5)) +
-                xlab("SVs median abundance in non-zero samples") +
-                ggtitle(paste("lm fit: p.val: ", format(pval_spar_median, digits = 4), "R.square: ", as.character(round(summary(fit_spar_median)$r.squared,4), sep = ""))) +
+                scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
+                xlab("SVs mean abundance in non-zero samples") +
+                ggtitle(paste("lm fit: p.val: ", format(pval_prev_median_log10, digits = 4), "R.square: ", as.character(round(summary(fit_prev_median_log10)$r.squared,4), sep = ""))) +
                 theme_bw(12)
-        Tr_medab_vs_spar_75Q <- Tr_medab_vs_spar + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$median_abundance_nonzero, .75)))
         
-        fitlist <- list(fit_spar = fit_spar, fit_prev = fit_prev, fit_spar_mean = fit_spar_mean,
-                        fit_spar_median = fit_spar_median)
+  
         
-        out <- list(Tr_ab = Tr_ab, Tr_prev = Tr_prev, 
-                    Tr_ab_vs_prev = Tr_ab_vs_prev, Tr_ab_vs_prev_75Q = Tr_ab_vs_prev_75Q,
-                    Tr_ab_vs_spar = Tr_ab_vs_spar, Tr_ab_vs_spar_75Q = Tr_ab_vs_spar_75Q,
-                    Tr_meanab_vs_spar = Tr_meanab_vs_spar, Tr_meanab_vs_spar_75Q = Tr_meanab_vs_spar_75Q,
-                    Tr_medab_vs_spar = Tr_medab_vs_spar, Tr_medab_vs_spar_75Q = Tr_medab_vs_spar_75Q,
+        
+        fitlist <- list(fit_prev_log10 = fit_prev_log10, fit_prev_mean = fit_prev_mean, 
+                        fit_prev_mean_log10 = fit_prev_mean_log10, fit_prev_median = fit_prev_median,
+                        fit_prev_median_log10 = fit_prev_median_log10)
+        
+        out <- list(Tr_ab = Tr_ab, 
+                    Tr_prev = Tr_prev, 
+                    Tr_prev_vs_log10_ab = Tr_prev_vs_log10_ab, 
+                    Tr_prev_vs_log10_meanab = Tr_prev_vs_log10_meanab,
+                    Tr_prev_vs_log10_medianab = Tr_prev_vs_log10_medianab,
                     fitlist = fitlist)
         
 }
 
+
+
+#######################################
+#### plot_abundance_prev_filter
+#######################################
+# df_ab_prev: data frame with "SV_ID", "total_abundance", "prevalence", "sparsity", "mean_abundance_nonzero",
+# "median_abundance_nonzero" plus tax_table
+
+plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){ 
+        
+        df_ab_prev <- data.frame(SV_ID = 1:ntaxa(physeq), 
+                                 total_abundance = taxa_sums(physeq),
+                                 prevalence = colSums(as(otu_table(physeq), "matrix") != 0),
+                                 sparsity = colSums(as(otu_table(physeq), "matrix") == 0), 
+                                 mean_abundance_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){mean(x[x > 0])}),
+                                 median_abundance_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){median(x[x > 0])}))
+        df_ab_prev <- cbind(df_ab_prev, tax_table(physeq))
+        
+        prev_thresh <- (prevalence/100)*nsamples(physeq)
+        abund_thresh <- quantile(taxa_sums(physeq), probs = taxa_sums_quantile/100)
+        
+        df_ab_prev_filt <- dplyr::filter(df_ab_prev, prevalence > prev_thresh | total_abundance > abund_thresh)
+        
+        df_ab_prev <- cbind(df_ab_prev, tax_table(physeq))
+        
+        shade_df <- data.frame(total_abundance = 0, prevalence = 0)
+        
+        
+        Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab +
+                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
+                scale_x_log10() +
+                geom_rect(data = shade_df, xmin = -Inf, xmax = log10(abund_thresh), ymin = -Inf, ymax = prev_thresh, fill = "#660033", alpha = 0.4) +
+                geom_hline(yintercept = (prevalence/100)*nsamples(physeq), col = cbPalette[1], lty = "dashed") +
+                geom_vline(xintercept = quantile(taxa_sums(physeq), probs = taxa_sums_quantile/100), col = cbPalette[1], lty = "dashed") +
+                xlab("total abundance (taxa_sums())") + 
+                theme_bw(12) +
+                ggtitle(paste(nrow(df_ab_prev_filt), " of ", nrow(df_ab_prev), " SVs (", round(100*nrow(df_ab_prev_filt)/nrow(df_ab_prev), 1),
+                              " %) and ", round(sum(df_ab_prev_filt$total_abundance)), " of ", round(sum(df_ab_prev$total_abundance)), " amplicons (",
+                              round((sum(df_ab_prev_filt$total_abundance)/sum(df_ab_prev$total_abundance))*100, 1), " %) remain", sep = ""))
+        
+        
+        Tr_prev_vs_log10_ab_col <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        Tr_prev_vs_log10_ab_col <- Tr_prev_vs_log10_ab_col +
+                geom_point(aes(col = Phylum), size = 2, alpha = 0.7) +
+                scale_x_log10() +
+                geom_rect(data = shade_df, xmin = -Inf, xmax = log10(abund_thresh), ymin = -Inf, ymax = prev_thresh, fill = "#660033", alpha = 0.4) +
+                geom_hline(yintercept = (prevalence/100)*nsamples(physeq), col = cbPalette[1], lty = "dashed") +
+                geom_vline(xintercept = quantile(taxa_sums(physeq), probs = taxa_sums_quantile/100), col = cbPalette[1], lty = "dashed") +
+                xlab("total abundance (taxa_sums())") +
+                facet_wrap(~Phylum) +
+                theme_bw(12) +
+                theme(legend.position = "none")
+        
+        
+        phylum_df <- df_ab_prev[, c("Phylum", "total_abundance", "prevalence")]
+        phylum_df <- group_by(phylum_df, Phylum)
+        phylum_df <- dplyr::summarise(phylum_df, SVs = n(), abundance = round(sum(total_abundance)))
+        phylum_df_filt <- df_ab_prev_filt[, c("Phylum", "total_abundance", "prevalence")]
+        phylum_df_filt <- group_by(phylum_df_filt, Phylum)
+        phylum_df_filt <- dplyr::summarise(phylum_df_filt, SVs = n(), abundance = round(sum(total_abundance)))
+        phylum_df_summary <- merge(phylum_df, phylum_df_filt, by = "Phylum")
+        colnames(phylum_df_summary) <- c("Phylum", "SVs_before", "abundance_before", "SVs_after", 'abundance_after')
+        phylum_df_summary <- mutate(phylum_df_summary, SV_r_PC = round(100*SVs_after/SVs_before, 1), abundance_r_PC = round(100*abundance_after/abundance_before, 1),
+                                    SV_PC = round(100*SVs_after/sum(SVs_after), 1), abundance_PC = round(100*abundance_after/sum(abundance_after), 1))
+        
+        
+        
+        out <- list(Tr_prev_vs_log10_ab = Tr_prev_vs_log10_ab,
+                    Tr_prev_vs_log10_ab_col = Tr_prev_vs_log10_ab_col,
+                    phylum_df_summary = phylum_df_summary)
+        
+}
 
 
 ###################### OLD FUNCTIONS #############################

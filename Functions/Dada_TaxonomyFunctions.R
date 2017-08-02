@@ -48,14 +48,14 @@ assignTaxonomyaddSpecies <- function(seqtab,
         }
         
         ## list the input
-        InputSave <- list(seqtab = seqtab, minBoot = minBoot,
+        InputSave <- list(seqtab = seqtab, 
+                          minBoot = minBoot,
                           allowMultiple = allowMultiple,
                           tryRC = tryRC,
                           PathToRefs = PathToRefs, 
                           RefDataBase = RefDataBase,
                           SpeciesDB = SpeciesDB,
-                          PathToSave = PathToSave,
-                          tryRC = tryRC)
+                          PathToSave = PathToSave)
         
         
         ## run assignTaxonomy and save
@@ -115,7 +115,7 @@ construct_phylogenetic_tree <- function(seqtab.nochim, savepath,
                                                   as.character(packageVersion("phangorn"))))
         
         
-        seqs <- getSequences(seqtab.nochim) # simple character string
+        seqs <- colnames(seqtab.nochim) # simple character string
         names(seqs) <- seqs
         
         Inputs <- list(seqs = seqs,
@@ -755,11 +755,13 @@ adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, plots = FALSE) 
         if(taxa_are_rows(physeq)){
                 if (!identical(colnames(otu_table(physeq)), names(SFs))) {stop("names SFs do not fit to physeq")}
                 Mat <- sweep(otu_table(physeq),2,SFs, "/")
-                phynew <- phyloseq(otu_table(Mat, taxa_are_rows = TRUE), sample_data(physeq), tax_table(physeq))
+                phynew <- physeq
+                otu_table(phynew) <- otu_table(Mat, taxa_are_rows = TRUE)
         } else {
                 if (!identical(rownames(otu_table(physeq)), names(SFs))) {stop("names SFs do not fit to physeq")}
                 Mat <- sweep(otu_table(physeq),1,SFs, "/") 
-                phynew <- phyloseq(otu_table(Mat, taxa_are_rows = FALSE), sample_data(physeq), tax_table(physeq))
+                phynew <- physeq
+                otu_table(phynew) <- otu_table(Mat, taxa_are_rows = FALSE)
         }
         
         if (plots){
@@ -829,10 +831,10 @@ adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, plots = FALSE) 
 ### FUNCTION: alpha_diversity_wrapper
 #######################################
 # just wraps around other functions here to save writing time
-# currently onlh works for alpha_div_measures = c("Observed", "Shannon")
+# currently only works for alpha_div_measures = c("Observed", "Shannon")
 alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "Shannon")){
         
-        DF_alpha_list <- calculate_alphadiversity(physeq = ps, measures = alpha_div_measures)
+        DF_alpha_list <- calculate_alphadiversity(physeq = physeq, measures = alpha_div_measures)
         DF_alpha <- DF_alpha_list[[1]]
         
         # just I prefer Richness over Observed
@@ -847,7 +849,11 @@ alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "
         
         pairwise.tt_shannon <- pairwise.t.test(x = DF_alpha$Shannon, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
         
-        pairwise.tt_total <- pairwise.t.test(x = DF_alpha$Total, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        if(var(DF_alpha$Total) > 0) {
+                pairwise.tt_total <- pairwise.t.test(x = DF_alpha$Total, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        } else {
+                pairwise.tt_total <- NA
+        }
         
         pairwise.tt_rich_resids <- pairwise.t.test(x = DF_alpha$Richness_resids, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
         
@@ -862,6 +868,27 @@ alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "
                     pairwise.tt_shannon_resids = pairwise.tt_shannon_resids)
         
 }
+
+#######################################
+### FUNCTION: arrange_p_values
+#######################################
+# see Generalized_Phyloseq_Analysis to understand it, it is just about putting a lot of p-value matrixes into one wide data.frame
+
+arrange_p_values <- function(pairwise_list){
+        pvalue_types <- strsplit(names(pairwise_list), split = "t_")
+        pvalue_types <- sapply(pvalue_types, `[`, 2)
+        pairwise_list <- lapply(pairwise_list, function(pairw) {
+                pmat <- pairw$p.value
+                rowCol <- expand.grid(rownames(pmat), colnames(pmat))
+                labs <- rowCol[as.vector(lower.tri(pmat,diag=T)),]
+                cbind(labs, p_value = pmat[lower.tri(pmat, diag = T)])
+        })
+        pairwise_list <- lapply(1:length(pairwise_list), function(i){cbind(pairwise_list[[i]], Type = pvalue_types[i])})
+        pairwise_long <- do.call("rbind", pairwise_list)
+        pairwise_wide <- spread(pairwise_long, key = Type, value = p_value)
+}
+
+
 
 #######################################
 ### FUNCTION: calc_distances

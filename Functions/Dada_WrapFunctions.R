@@ -623,7 +623,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ReadSummary$UniqueAmpliconsWOBimera <- rowSums(seqtab.nochim != 0)
         rownames(ReadSummary) <- NULL
         
-        # I know also save errorsFW and RV to be able to recapitulate the error plots in later analyses
+        # I now also save errorsFW and RV to be able to recapitulate the error plots in later analyses
         if (!exists("errorsFW", inherits = FALSE)) {
                 errorsFW <- NULL
         }
@@ -631,7 +631,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 errorsRV <- NULL
         }
         
-        save(seqtab.nochim, seqtab, mergers, ReadSummary, file = file.path(DataFolder, "DenoisedData.RData"))
+        save(errorsFW, errorsRV, seqtab.nochim, seqtab, mergers, ReadSummary, file = file.path(DataFolder, "DenoisedData.RData"))
         
         message("*********************** Sequence table generated, Data saved ***********************
                         ********************************************************************")

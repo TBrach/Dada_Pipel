@@ -1,5 +1,5 @@
 ---
-title: "Generalized phyloseq analysis"
+title: "Generalized phyloseq analysis of dada2 data"
 author: "Thorsten Brach"
 date: "24/7/2017"
 output: html_document
@@ -15,6 +15,7 @@ library(ggplot2); packageVersion("ggplot2")
 library(dplyr); packageVersion("dplyr")
 library(tidyr); packageVersion("tidyr")
 library(gridExtra); packageVersion("gridExtra")
+library(xtable); packageVersion("xtable")
 
 PackageVersions <- data.frame(R = version$version.string,
                               dada2 = packageVersion("dada2"),
@@ -22,18 +23,21 @@ PackageVersions <- data.frame(R = version$version.string,
                               ggplot2 = packageVersion("ggplot2"),
                               dplyr = packageVersion("dplyr"),
                               tidyr = packageVersion("tidyr"),
-                              gridExtra = packageVersion("gridExtra"))
+                              gridExtra = packageVersion("gridExtra"),
+                              xtable = packageVersion("xtable"))
 for (i in 1:ncol(PackageVersions)){PackageVersions[,i] <- as.character(PackageVersions[,i])}
 PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version)
-
 ```
 
 # Set Input data and load data
 
-- parameters that should be defined here
-    - prevalence in percent
+- **NB: this file only works for complete phyloseq objects**, i.e. you need to load seqtab.nochim, taxa.species, a sample_data dataframe = samdf, and a phylogenetic tree (see - file/path inputs - in the following code chunk)
+    - samdf must be a data.frame in which rows are samples and columns different variables, the row/sample order must fit to seqtab.nochim, i.e. same rownames!
+    - a phylogenetic tree can be generated using construct_phylogenetic_tree (in Dada_TaxonomyFunctions.R) 
+
 
 ```{r, echo = FALSE, message=FALSE}
+# ---- Set input arguments including file paths ----
 # - filtering inputs -
 prevalence <- 20 # in percent
 min_obs <- 0L # a taxon will be considered present (for prevalence) if count > min_obs
@@ -50,24 +54,28 @@ rare_max_total <- NULL # maximal total amplicons value to which rarefaction curv
 
 # - plot/statistics inputs -
 taxa_are_rows = FALSE 
-group_var <- "Group" # tha variable based on which samples will be grouped HAS TO BE SET IN samdf BELOW!!
-group_var_levels <- c("Young", "MiddleAged", "Old") # the factor levels of the group_var in the order you want them in your plots
+group_var <- "Group" # tha variable based on which samples will be grouped 
+group_var_levels <- c("Young", "MiddleAged", "Old") # the factor levels of the group_var in the order you want them in your plots (set to NULL if you do not care)
 alpha_div_measures <- c("Observed", "Shannon")
-# 
+# --
 
 # - beta diversity -
-dist_methods <- c("bray", "jsd", "jaccard") # c("unifrac", "wunifrac", "jsd", "bray", "jaccard", "euclidean")
-#
+dist_methods <- c("bray", "unifrac", "wunifrac") # otions: see unlist(distanceMethodList)
+# --
 
 # - file/path inputs -
-datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
+datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis_Pooled_Porus"
 
-# NB: taxonomy path should start in datapath
-taxonomy.path <- "Dada_Taxonomy/Silva_v128/Taxonomy_Silva128_minBoot50_allowMT.RData"
+# NB: taxonomy, tree, and sample path should start in datapath (otherwise change code below)
+taxonomy.path <- "Dada_Taxonomy/Silva_v128/Taxonomy.RData"
+
+tree.path <- "Dada_phylogenetic_tree/phylog_tree.rds"
+
+sample.path <- "sample_data/samdf.rds"
 
 functionpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions/"
 # -- 
-
+# ----
 
 # -- Load all data in --
 # laod seqtab.nochim
@@ -79,12 +87,22 @@ load(file.path(datapath, "Dada_Data/QualityStats.RData"))
 # load Taxonomy
 load(file.path(datapath, taxonomy.path))
 
+# load tree
+tree_list <- readRDS(file.path(datapath, tree.path)) 
+
+# load samdf
+samdf <- readRDS(file.path(datapath, sample.path))
+
+if (!is.null(group_var) && !is.null(group_var_levels)){
+        samdf[[group_var]] <- factor(samdf[[group_var]], levels = group_var_levels, ordered = TRUE)
+}
+
 # sanity checks if sample names fit
 sample.names <- rownames(seqtab.nochim)
-if (!all.equal(rownames(seqtab.nochim), names(F_QualityStats))) {
+if (!all.equal(sample.names, names(F_QualityStats))) {
         stop("check sample names")
 }
-if (!all.equal(rownames(seqtab.nochim), as.character(ReadSummary$Sample))) {
+if (!all.equal(sample.names, as.character(ReadSummary$Sample))) {
         stop("check sample names")
 }
 
@@ -95,99 +113,68 @@ if (!all.equal(rownames(seqtab.nochim), as.character(ReadSummary$Sample))) {
 #         object_memory[i] <- object.size(get(all_objects[i]))
 # }
 # data.frame(all_objects, object_memory)
-rm(mergers, seqtab, taxa)
 # ---- 
 
 # -- load all functions in --
 source(file.path(functionpath, "Dada_TaxonomyFunctions.R"))
 source(file.path(functionpath, "Dada_PlotFunctions.R"))
 # ----
-```
 
-## Generate the data.frame holding the sample data of your study for phyloseq
-
-- **NB: the generated samdf must be a data.frame in which rows are samples and columns different variables, the row/sample order must fit to seqtab.nochim, i.e. same rownames!**
-- **NB: the variable you later group the samples with, e.g. for alpha diversity comparison, should be a factor with the levels in the order you like**
-- NB3: file does not work without sample_data for your phyloseq object, so make up some if you do not have it
-
-```{r, echo = FALSE, message = FALSE}
-# generate the data frame with the sample data
-sample.path <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/Results_RAnalysis"
-load(file.path(sample.path, "ManiAging.RData"))
-
-# I start with the quality report from the sequencing
-samdf <- ManiAging[["QR"]]
-
-# remove columns without information
-samdf <- dplyr::select(samdf, -Tube.No., -TotalMass_mug, -Library.Type)
-
-# adjust sample order in samdf to that of seqtab.nochim, and add rownames = rownames(seqtab.nochim)
-samples.out <- rownames(seqtab.nochim)
-Study <- sapply(strsplit(samples.out, "-"), `[`, 1)
-IDfirst <- paste(sapply(strsplit(samples.out, "-"), `[`, 2))
-IDsecond <- paste(sapply(strsplit(samples.out, "-"), `[`, 3))
-IDorder <- vector(mode = "character", length = length(samples.out))
-IDorder[IDsecond == "NA"] <- IDfirst[IDsecond == "NA"]
-IDorder[IDsecond != "NA"] <- paste(IDfirst[IDsecond != "NA"], ".", IDsecond[IDsecond != "NA"], sep = "")
-
-samdf <- samdf[match(IDorder, samdf$Mouse_ID),]
-
-# add more columns/data collected for the samples: Example Hematology
-Hematology <- ManiAging[["Hematology"]]
-colnames(Hematology)[4:24] <- c("Leukocytes", "Erythrocytes", "Hemoglobin", "Hematocrit", "MCV", "MCHC", "Thrombocytes", "MPV", "MPC",
-                                "PC_Neutrophils", "PC_Lymphocytes", "PC_Monocytes", "PC_Eosinophils", "PC_Basophils", "PC_LUC", "Neutrophils",
-                                "Lymphocytes", "Monocytes", "Eosinophils", "Basophils", "LUC")
-# add Lymphoid/Myeoloid Ratio CHECK
-Hematology <- mutate(Hematology, Myeloid = Neutrophils + Monocytes + Eosinophils + Basophils + LUC, LymphoidToMyeloid = Lymphocytes/Myeloid)
-Hematology <- select(Hematology, 1, 4:10,19:20, 25, 27) #remove also Group as it would be double
-
-samdf <- merge(samdf, Hematology, by = "Mouse_ID", all.x = TRUE)
-
-samdf$Group <- factor(samdf$Group, levels = group_var_levels, ordered = TRUE)
-rownames(samdf) <- samples.out
-
-# sanity check
-if (!identical(samples.out, sample.names)) {
-        stop("sample names in samdf do not fit to seqtab.nochim, check")
-}
-
+# -- generate phyloseq object --
 # Generate the phyloseq file
 ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows = taxa_are_rows), 
                sample_data(samdf), 
-               tax_table(taxa.species))
+               tax_table(taxa.species),
+               phy_tree(tree_list[["fitGTR"]]$tree))
 ps
 
+if (!identical(sample_names(ps), sample.names)) {
+        stop("check sample names")
+}
 
+# ----
 ```
 
 
-# Input parameters and package versions used
+# print input parameters and package versions used in the different dada2 analyses
 
-## DadaWrapper
+```{r, echo = FALSE, message = FALSE}
+# -- DadaWrapper -- 
 
-```{r, echo = FALSE, message=FALSE}
-InputDada <- data.frame(Argument = names(unlist(Input)), Value = unlist(Input))
-rownames(InputDada) <- NULL
-knitr::kable(PackageVersions)
-knitr::kable(InputDada)
-```
+Input_DadaWrapper <- data.frame(Argument = names(Input), 
+                        Value = sapply(Input, function(x){
+                                if (is.null(x)){
+                                        "NULL"
+                                } else if (length(x) > 5) {
+                                        "long entry"
+                                } else if (length(x) > 1 && length(x) < 6){
+                                        paste(x, collapse = "; ")
+                                } else {
+                                        as.character(x)
+                                }}))
+rownames(Input_DadaWrapper) <- NULL
+# ----
 
- 
-## Dada_WrapperAssignTaxonomyAddSpecies
+# -- Dada_WrapperAssignTaxonomyAddSpecies --
 
-```{r, echo = FALSE, message=FALSE}
-InputSave <- InputSave[c("minBoot", "allowMultiple", "PathToRefs", "RefDataBase", "SepciesDB", "PathToSave", "tryRC")]
-InputAssign <- data.frame(Argument = names(unlist(InputSave)), Value = unlist(InputSave))
-rownames(InputAssign) <- NULL
-knitr::kable(InputAssign)
-```
+InputSave <- InputSave[c("minBoot", "allowMultiple", "tryRC", "PathToRefs", "RefDataBase", "SpeciesDB", "PathToSave")]
+Input_DadaAssignTaxonomy <- data.frame(Argument = names(unlist(InputSave)), Value = unlist(InputSave))
+rownames(Input_DadaAssignTaxonomy) <- NULL
+# ----
 
-## In this analysis
+# -- construct_phylogenetic_tree -
+Input_constructTree <- data.frame(Argument = names(tree_list[["Inputs"]]), 
+                        Value = sapply(tree_list[["Inputs"]], function(x){ 
+                                if (length(x) > 1) {
+                                        "long entry"
+                                } else {
+                                        as.character(x)
+                                }}))
+rownames(Input_constructTree) <- NULL
+# ----
 
-- Inputs and PackageVersions
+# -- This phyloseq analysis --
 
-```{r, echo = FALSE, message=FALSE}
-# -- Store Inputs --
 if (is.null(rare_level)) {
         rare_level <- min(sample_sums(ps))
 }
@@ -196,30 +183,58 @@ if (is.null(rare_max_total)){
         rare_max_total <- quantile(sample_sums(ps), probs = .25)
 }
 
-Inputs <- list(prevalence = prevalence,
+Inputs_phyloseqAnalysis <- list(prevalence = prevalence,
                min_obs = min_obs,
+               taxa_sums_quantile = taxa_sums_quantile,
                seed = seed,
                step_size = step_size,
                rare_level = rare_level,
                rare_type = rare_type,
                rare_max_total = rare_max_total,
+               taxa_are_rows = taxa_are_rows,
                group_var = group_var,
                group_var_levels = group_var_levels,
                alpha_div_measures = alpha_div_measures,
-               taxa_are_rows = taxa_are_rows,
+               dist_methods = dist_methods,
                datapath = datapath,
                taxonomy.path = taxonomy.path,
+               tree.path = tree.path,
+               sample.path = sample.path,
                functionpath = functionpath)
+
+
+Inputs_phyloseqAnalysis <- data.frame(Argument = names(Inputs_phyloseqAnalysis), 
+                        Value = sapply(Inputs_phyloseqAnalysis, function(x){
+                                if (is.null(x)){
+                                        "NULL"
+                                } else if (length(x) > 7) {
+                                        "long entry"
+                                } else if (length(x) > 1 && length(x) < 8){
+                                        paste(x, collapse = "; ")
+                                } else {
+                                        as.character(x)
+                                }}))
+
+rownames(Inputs_phyloseqAnalysis) <- NULL
 # ----
 
-InputAnalysis <- data.frame(Argument = names(unlist(Inputs)), Value = unlist(Inputs))
-rownames(InputAnalysis) <- NULL
-knitr::kable(InputAnalysis)
-knitr::kable(PackageVersionsAnal)
+
+knitr::kable(PackageVersions, caption = "Package Versions DadaWrapper")
+knitr::kable(Input_DadaWrapper, caption = "input arguments DadaWrapper")
+
+knitr::kable(Input_DadaAssignTaxonomy, caption = "input arguments Dada_WrapperAssignTaxonomyAddSpecies")
+
+knitr::kable(Input_constructTree, caption = "input arguments for function construct_phylogenetic_tree")
+knitr::kable(tree_list[["PackageVersions"]], caption = "package Versions for contruct_phylogenetic_tree")
+
+knitr::kable(Inputs_phyloseqAnalysis, caption = "input arguments for this phyloseq analysis")
+knitr::kable(PackageVersionsAnal, caption = "package Versions for this phyloseq analysis")
 ```
 
 
 # Plots illustrating the quality of the reads and the dada2 steps
+
+- read cycle quality
 
 ```{r, echo = FALSE, message=FALSE}
 Tr <- QS_Median_OverviewPlot(QStatsList = F_QualityStats, SampleNames = sample.names)
@@ -235,28 +250,36 @@ TrR <- TrR +
         geom_vline(xintercept = Input$truncLen[2], color = 'darkred', linetype = "dashed", size = .5) +
         ggtitle(paste("Median quality scores: RV reads. No Samples: ", length(sample.names), "; trimLeft: ", Input$trimLeft[1],
                 "; truncLen: ", Input$truncLen[2], sep = ""))
-
 ```
 
 ```{r, fig.width = 8, fig.height = 8, warning = FALSE, message = FALSE}
+# pdf(file = "QualityPlots.pdf", width = 12, height = 10)
 grid.arrange(Tr, TrR, nrow = 2)
+# dev.off()
 ```
 
-
-## Plot the error rates determined by dada2
+- Error rates (fits)
 
 ```{r, echo = FALSE, message=FALSE}
-Tr <- plotErrors(err_F, nominalQ = TRUE)
-Tr <- Tr + ggtitle("err_F error rates")
-TrR <- plotErrors(err_R, nominalQ = TRUE)
-TrR <- TrR + ggtitle("err_R error rates")
+if (exists("errorsFW", inherits = FALSE) && exists("errorsRV", inherits = FALSE) && !is.null(errorsFW) && !is.null(errorsRV)) {
+        Tr <- plotErrors(errorsFW, nominalQ = TRUE)
+        Tr <- Tr + ggtitle("err_F error rates")
+        TrR <- plotErrors(errorsRV, nominalQ = TRUE)
+        TrR <- TrR + ggtitle("err_R error rates") 
+} else {
+        Tr <- plotErrors(err_F, nominalQ = TRUE)
+        Tr <- Tr + ggtitle("err_F error rates")
+        TrR <- plotErrors(err_R, nominalQ = TRUE)
+        TrR <- TrR + ggtitle("err_R error rates")
+        
+}
 ```
+
 ```{r, fig.width = 14, fig.height = 14, warning = FALSE, message = FALSE}
 grid.arrange(Tr, TrR, nrow = 2)
 ```
 
-
-## plot the number of reads that survived the different dada2 steps
+- number of reads that survived the different dada2 steps
 
 ```{r, echo = FALSE, message=FALSE}
 Tr <- NoReads_StepsSimple(ReadSummary = ReadSummary, SampleNames = sample.names, sort = TRUE)
@@ -264,43 +287,68 @@ Tr <- Tr + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, 
                  text = element_text(size=14))
 ```
 ```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE}
+# pdf(file = "NoReads_pooled.pdf", width = 10, height = 8)
 Tr
+# dev.off()
 ```
 
 
-# Sample distribution of the `r ncol(seqtab.nochim)` found sequence variants (SVs)
+# abundances and prevalences of the `r ntaxa(ps)` found sequence variants (SVs)
 
 ```{r, echo = FALSE, message=FALSE}
-df_ab_prev <- data.frame(SV_ID = 1:ncol(seqtab.nochim), abundance = colSums(seqtab.nochim), prevalence = colSums(seqtab.nochim != 0), sparsity = colSums(seqtab.nochim == 0), mean_abundance_nonzero = apply(seqtab.nochim, 2, function(x){mean(x[x > 0])}),
-                         median_abundance_nonzero = apply(seqtab.nochim, 2, function(x){median(x[x > 0])}))
+# phyloseq analysis starts here: so clear workspace:
+# remove everything but input arguments, the phyloseq object, cbPalette, and loaded functions
+rm(list = setdiff(ls(), c("cbPalette", "ps", as.character(Inputs_phyloseqAnalysis$Argument), lsf.str())))
+```
+
+```{r, echo = FALSE, message=FALSE}
+df_ab_prev <- data.frame(SV_ID = 1:ntaxa(ps), 
+                         total_abundance = taxa_sums(ps),
+                         prevalence = colSums(as(otu_table(ps), "matrix") != 0),
+                         sparsity = colSums(as(otu_table(ps), "matrix") == 0), 
+                         mean_abundance_nonzero = apply(as(otu_table(ps), "matrix"), 2, function(x){mean(x[x > 0])}),
+                         median_abundance_nonzero = apply(as(otu_table(ps), "matrix"), 2, function(x){median(x[x > 0])}))
+df_ab_prev <- cbind(df_ab_prev, tax_table(ps))
 
 TrrList <- plot_correlations_abundance_prev_sparsity(df_ab_prev)
+TrList <- plotSVdistributions(seqtab = as(otu_table(ps), "matrix"), prevalence = prevalence)
 ```
 
-```{r, fig.width = 14, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
-grid.arrange(TrrList[[1]], TrrList[[2]], ncol = 2)
-```
-
-```{r, fig.width = 14, fig.height = 20, warning = FALSE, message = FALSE, echo = FALSE}
-do.call("grid.arrange", c(TrrList[3:10], ncol = 2))
-```
-
-
-```{r, echo = FALSE, message=FALSE}
-TrList <- plotSVdistributions(seqtab.nochim, prevalence = prevalence)
+```{r, fig.width = 14, fig.height = 15, warning = FALSE, message = FALSE, echo = FALSE}
+grid.arrange(TrrList[[1]], TrrList[[1]] + scale_y_log10(), TrrList[[2]], TrrList[[3]],
+             TrrList[[4]], TrrList[[5]], ncol = 2)
+# pdf(file = "AbundanceandPrevalence_p.pdf", width = 12, height = 7)
+# grid.arrange(TrrList[[1]] + scale_y_log10(), TrrList[[2]], ncol = 2)
+# dev.off()
 ```
 
 ```{r, fig.width = 14, fig.height = 20, warning = FALSE, message = FALSE, echo = FALSE}
-do.call("grid.arrange", c(TrList[1:4], nrow=4))
+grid.arrange(TrList[[1]], TrList[[2]], TrList[[3]] + scale_y_log10(), TrList[[4]], nrow = 4)
+# pdf(file = "CumAbandPrev_p.pdf", width = 10, height = 10)
+# grid.arrange(TrList[[2]], TrList[[4]], ncol = 1)
+# dev.off()
 ```
 
 
 # Explore taxonomic assignment
 
-- the assignment distribution including all found SVs:
+## Removal of SVs with Phylum = NA
 
 ```{r, echo = FALSE, message=FALSE}
-assignment_distribution <- get_assignemnt_distribution(taxa.species)
+Phyla <- as.data.frame(table(tax_table(ps)[, "Phylum"], exclude = NULL))
+names(Phyla) <- c("Phylum", "assigned_SVs")
+Phyla$SV_PC <- round(100*Phyla$assigned_SVs/sum(Phyla$assigned_SVs),1)
+knitr::kable(Phyla)
+# print(xtable(Phyla, align = "|c|c|c|c|", digits = 1), include.rownames = FALSE)
+ps <- subset_taxa(ps, !is.na(Phylum))
+```
+
+- `r Phyla$assigned_SVs[is.na(Phyla$Phylum)]` SVs were removed, leaving `r ntaxa(ps)` SVs
+
+## Assignment distribution
+
+```{r, echo = FALSE, message=FALSE}
+assignment_distribution <- get_assignemnt_distribution(tax_table(ps))
 knitr::kable(assignment_distribution)
 ```
 
@@ -308,127 +356,75 @@ knitr::kable(assignment_distribution)
 
 ```{r, echo = FALSE, message=FALSE}
 # look at the species that have been assigned ambiguously
-the_ambiguous_species <- unname(taxa.species[grep(pattern = "/", taxa.species[,'Species']), c('Genus', 'Species')])
+the_ambiguous_species <- unname(tax_table(ps)[grep(pattern = "/", tax_table(ps)[,'Species']), c('Genus', 'Species')])
 colnames(the_ambiguous_species) <- c("Genus", "Species")
 knitr::kable(as.data.frame(the_ambiguous_species))
 ```
 
 ## Is the taxonomic assignment better for more abundant/pevalent SVs?
 
-- NB: abundance filters of taxa are based on total abundance over all samples (taxa_sums) without library size correction
+- NB: abundance filters of taxa are based on total abundance over all samples (taxa_sums) without library size correction here
+- NB: these analyses could maybe be done individually for the different phyla?
 
 ```{r, echo = FALSE, message=FALSE}
-assign_vs_ab <- check_assignment_vs_abundance(taxa.species, seqtab.nochim, abundanceQuantiles = seq(0, 95, by = 5))
+assign_vs_ab <- check_assignment_vs_abundance(taxa = tax_table(ps), seqtab = as(otu_table(ps), "matrix"), abundanceQuantiles = seq(0, 95, by = 5))
 
-assign_vs_prev <- check_assignment_vs_prevalence(taxa.species, seqtab.nochim, prevalences = seq(0, 95, by = 5))
+assign_vs_prev <- check_assignment_vs_prevalence(taxa = tax_table(ps), seqtab = as(otu_table(ps), "matrix"), prevalences = seq(0, 95, by = 5))
+
+# TrLists <- plotTaxLevelvsAbundPrev(taxa = tax_table(ps), seqtab = as(otu_table(ps), "matrix"))
+# TrList_ab <- TrLists[["TrList_ab"]]
+# TrList_prev <- TrLists[["TrList_prev"]]
+# Last3Levels <- colnames(tax_table(ps))[(ncol(tax_table(ps))-2):ncol(tax_table(ps))]
+# TrList <- c(TrList_ab[Last3Levels], TrList_prev[Last3Levels])
+# rm(TrLists)
 ```
 
 ```{r, fig.width = 14, fig.height = 10, warning = FALSE, message = FALSE, echo = FALSE}
 grid.arrange(assign_vs_prev[[2]], assign_vs_ab[[2]], nrow = 2)
+# pdf(file = "taxassignment_p.pdf", width = 8, height = 6)
+# assign_vs_prev[[2]]
+# dev.off()
 ```
 
-```{r, echo = FALSE, message=FALSE}
-TrLists <- plotTaxLevelvsAbundPrev(taxa = taxa.species, seqtab = seqtab.nochim)
-TrList_ab <- TrLists[["TrList_ab"]]
-TrList_prev <- TrLists[["TrList_prev"]]
-Last3Levels <- colnames(taxa.species)[(ncol(taxa.species)-2):ncol(taxa.species)]
-TrList <- c(TrList_ab[Last3Levels], TrList_prev[Last3Levels])
-rm(TrLists)
+```{r, fig.width = 14, fig.height = 15, warning = FALSE, message = FALSE, echo = FALSE}
+#grid.arrange(TrList[[1]] + scale_x_log10(), TrList[[4]], TrList[[2]] + scale_x_log10(), TrList[[5]], TrList[[3]] + scale_x_log10(), TrList[[6]], ncol = 2)
 ```
-
-```{r, fig.width = 14, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
-grid.arrange(TrList[[1]], TrList[[4]], TrList[[2]], TrList[[5]], TrList[[3]], TrList[[6]], ncol = 2)
-```
-
 
 
 # raw **alpha-diversity**, i.e. without correction for total amplicons (i.e. no rarifying)
-
-## Construct phylogenetic tree
-
-
 
 - NB: estimate_richness warns if no singletons are in the data, i.e. if !any(otu_table(ps) == 1) = TRUE (= !any(seqtab.nochim == 1))
     - dada2 seqtabs tend to be without singletons, most likely because low abundance SVs are considered errors from more abundant SVs
 
 ```{r, message = FALSE, warning = FALSE, echo = FALSE}
-DF_alpha_list <- calculate_alphadiversity(physeq = ps, measures = alpha_div_measures)
-DF_alpha <- DF_alpha_list[[1]]
-DF_alpha_no_rare <- DF_alpha # just to save it for comparison later
-
-alpha_div_measures2 <- alpha_div_measures
-if ("Observed" %in% alpha_div_measures) {
-        alpha_div_measures2[alpha_div_measures2 == "Observed"] <- "Richness" 
-}
-
-pairwise.tt_rich <- pairwise.t.test(x = DF_alpha$Richness, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-# compare, to get the same results as individual t.test you need pool.sd = F
-# t.test(x = DF_alpha$Richness[DF_alpha$Group == "Old"], y = DF_alpha$Richness[DF_alpha$Group == "MiddleAged"], alternative = "two", var.equal = F)$p.value
-
-pairwise.tt_shannon <- pairwise.t.test(x = DF_alpha$Shannon, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-
-pairwise.tt_total <- pairwise.t.test(x = DF_alpha$Total, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-
-pairwise.tt_rich_resids <- pairwise.t.test(x = DF_alpha$Richness_resids, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-
-pairwise.tt_shannon_resids <- pairwise.t.test(x = DF_alpha$Shannon_resids, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-
-# TrListBP <- plotAlphaDiversity(ps, x = group_var, color = group_var, group = group_var, measures = c("Observed", "Shannon"))
-TrListBP <- boxplot_alphaDiv_fromDF(DF = DF_alpha, color = group_var, group = group_var, measures = c(alpha_div_measures2, paste(alpha_div_measures2, "resids", sep = "_")))
-
-# TrList_lm <- plot_alphaDivVstotalAmplicons(physeq = ps, measures = alpha_div_measures, color = group_var)
-TrList_lm <- plot_alphaDivVstotalAmplicons_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var)
+alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps, alpha_div_measures = alpha_div_measures)
+DF_alpha_no_rare <- alpha_div_wrap[["DF_alpha_list"]]$DF_alpha # just for rarefaction sanity check later
+TrListBP <- alpha_div_wrap[["TrListBP"]]
+TrList_lm <- alpha_div_wrap[["TrList_lm"]]
+pairwise_list <- alpha_div_wrap[grep("pairwise", names(alpha_div_wrap))]
+pairwise_list <- pairwise_list[!is.na(pairwise_list)]
+# generate a nice table of the p.values
+p_values_wide <- arrange_p_values(pairwise_list)
 ```
 
-```{r, fig.width = 14, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
-grid.arrange(TrListBP[["Richness"]], TrListBP[["Shannon"]], ncol = 2)
+```{r, fig.width = 14, fig.height = 18, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "alpha_div_no_rare_p.pdf", width = 10, height = 10)
+grid.arrange(TrListBP[["Richness"]], TrListBP[["Shannon"]],
+             TrList_lm[["Richness"]], TrList_lm[["Shannon"]],
+             TrListBP[["Richness_resids"]], TrListBP[["Shannon_resids"]],
+             ncol = 2)
+#dev.off()
 ```
 
-- p.values for Richness
-
-```{r, fig.width = 14, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(pairwise.tt_rich$p.value)
-```
-
-- p.values for Shannon
-
-```{r, fig.width = 14, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(pairwise.tt_shannon$p.value)
-```
-
-
-### Illustrate possible influence of total amplicons on alpha diversity
-
-```{r, fig.width = 7, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
-TrListBP[["Total"]] + ylab("total amplicons (sample_sums())")
-```
+- p.values:
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(pairwise.tt_total$p.value)
-```
-
-```{r, fig.width = 14, fig.height = 8, warning = FALSE, message = FALSE, echo = FALSE}
-grid.arrange(TrList_lm[["Richness"]], TrList_lm[["Shannon"]], ncol = 2)
-```
-
-```{r, fig.width = 14, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
-grid.arrange(TrListBP[["Richness_resids"]], TrListBP[["Shannon_resids"]], ncol = 2)
-```
-
-- p.values for residuals lm richness vs total amplicons
-
-```{r, fig.width = 14, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(pairwise.tt_rich_resids$p.value)
-```
-
-- p.values for residuals lm shannon vs total amplicons
-
-```{r, fig.width = 14, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(pairwise.tt_shannon_resids$p.value)
+knitr::kable(p_values_wide)
+# print(xtable(p_values_wide, align = "|c|c|c|c|c|c|c|c|", digits = 5), include.rownames = FALSE)
 ```
 
 
-## alpha diversity after **rarefaction**
+# alpha diversity after **rarefaction**
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 # -- rarefaction using vegan package: --
@@ -440,12 +436,12 @@ set.seed(seed)
 
 if (rare_type == "vegan"){
         
-        seqtab.nochim.rare <- rrarefy(seqtab.nochim, sample = rare_level)
+        seqtab.nochim.rare <- rrarefy(as(otu_table(ps), "matrix"), sample = rare_level)
         
 } else if (rare_type == "sample"){
         
-        seqtab.nochim.rare <- t(apply(seqtab.nochim, 1, function(cnts){rarefy_sample(cnts, size = rare_level)}))
-        dimnames(seqtab.nochim.rare) <- dimnames(seqtab.nochim)
+        seqtab.nochim.rare <- t(apply(as(otu_table(ps), "matrix"), 1, function(cnts){rarefy_sample(cnts, size = rare_level)}))
+        dimnames(seqtab.nochim.rare) <- dimnames(as(otu_table(ps), "matrix"))
         
 } else {
         
@@ -453,60 +449,49 @@ if (rare_type == "vegan"){
         
 }
 
-ps.rare <- phyloseq(otu_table(seqtab.nochim.rare, taxa_are_rows=FALSE), 
-               sample_data(samdf), 
-               tax_table(taxa.species))
+ps.rare <- ps
+otu_table(ps.rare) <- otu_table(seqtab.nochim.rare, taxa_are_rows = taxa_are_rows)
 
-DF_alpha_list <- calculate_alphadiversity(physeq = ps.rare, measures = alpha_div_measures)
-DF_alpha <- DF_alpha_list[[1]]
-
-alpha_div_measures2 <- alpha_div_measures
-if ("Observed" %in% alpha_div_measures) {
-        alpha_div_measures2[alpha_div_measures2 == "Observed"] <- "Richness" 
-}
-
-pairwise.tt_rich <- pairwise.t.test(x = DF_alpha$Richness, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-
-pairwise.tt_shannon <- pairwise.t.test(x = DF_alpha$Shannon, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-
-# NB: since Totals is now constant the residual p.values would be the same as richness directly
-# pairwise.tt_rich_resids <- pairwise.t.test(x = DF_alpha$Richness_resids, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-
-# TrListBP <- plotAlphaDiversity(ps, x = group_var, color = group_var, group = group_var, measures = c("Observed", "Shannon"))
-TrListBP <- boxplot_alphaDiv_fromDF(DF = DF_alpha, color = group_var, group = group_var, measures = c(alpha_div_measures2, paste(alpha_div_measures2, "resids", sep = "_")))
+alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps.rare, alpha_div_measures = alpha_div_measures)
+TrListBP <- alpha_div_wrap[["TrListBP"]]
+TrList_lm <- alpha_div_wrap[["TrList_lm"]]
+pairwise_list <- alpha_div_wrap[grep("pairwise", names(alpha_div_wrap))]
+pairwise_list <- pairwise_list[!is.na(pairwise_list)]
+# generate a nice table of the p.values
+p_values_wide <- arrange_p_values(pairwise_list)
 ```
 
 - **Rarefaction level: `r rare_level`, rarefaction type: `r rare_type`**
 
-```{r, fig.width = 14, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
-grid.arrange(TrListBP[["Richness"]], TrListBP[["Shannon"]], TrListBP[["Richness_resids"]], TrListBP[["Shannon_resids"]], ncol = 2)
+```{r, fig.width = 14, fig.height = 18, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "alpha_div_rare_p.pdf", width = 10, height = 10)
+grid.arrange(TrListBP[["Richness"]], TrListBP[["Shannon"]],
+             TrList_lm[["Richness"]], TrList_lm[["Shannon"]],
+             TrListBP[["Richness_resids"]], TrListBP[["Shannon_resids"]],
+             ncol = 2)
+# dev.off()
 ```
 
-- p.values for Richness
+- p.values:
 
-```{r, fig.width = 14, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(pairwise.tt_rich$p.value)
-```
-
-- p.values for Shannon
-
-```{r, fig.width = 14, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(pairwise.tt_shannon$p.value)
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+knitr::kable(p_values_wide)
+# print(xtable(p_values_wide, align = "|c|c|c|c|c|c|c|", digits = 5), include.rownames = FALSE)
 ```
 
 - looks too similar to without rarefaction? Sanity check:
 
 ```{r, warning = FALSE, message = FALSE}
 all(sample_sums(ps.rare) == rare_level)
-
+DF_alpha <- alpha_div_wrap[["DF_alpha_list"]]$DF_alpha
 Comp_DF <- data.frame(Sample = rownames(DF_alpha), Diff_richness = DF_alpha_no_rare$Richness - DF_alpha$Richness, Diff_shannon = DF_alpha_no_rare$Shannon - DF_alpha$Shannon)
 head(arrange(Comp_DF, desc(Diff_richness)))
 ```
 
-- **NB: since in dada2 data there are often no singletons, the alpha diversity measures will be less dependent on total amplicons (since it is usually the singletons that get lost by resampling to lower total amplicons amount)**
+- **NB: since in dada2 (non-pooled!) data there are often no singletons, the alpha diversity measures will be less dependent on total amplicons (since it is usually the singletons that get lost by rarefaction to lower total amplicons amount)**
 
 
-### Rarefaction curves
+## Rarefaction curves
 
 - calculates alpha diversity (richness) for each sample for different No of total amplicons in steps from 0 up to maximum total (chosen max_total) amplicons value.
     - samples with total number of reads < max_total have consequently shorter rarefaction curves
@@ -514,50 +499,65 @@ head(arrange(Comp_DF, desc(Diff_richness)))
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 # rare_curves <- rarefaction_curve_own(physeq = ps, group_var = group_var, step_size = step_size, seed = seed, type = "vegan")
 # rare_curves_own <- rarefaction_curve_own(physeq = ps, group_var = group_var, step_size = step_size, seed = seed, type = "sample")
-
 rarefaction_curves <- rarefaction_curve_own_fast(physeq = ps, group_var = group_var, max_total = rare_max_total, step_size = step_size, seed = seed)
 ```
 
-```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
-grid.arrange(rarefaction_curves[["Tr_richness_col"]], rarefaction_curves[["Tr_richness_group"]], ncol = 2)
+```{r, fig.width = 12, fig.height = 20, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "rarefaction_p.pdf", width = 12, height = 10)
+grid.arrange(rarefaction_curves[["Tr_richness_col"]], rarefaction_curves[["Tr_richness_group"]], rarefaction_curves[["Tr_richness_grad"]], ncol = 1)
+# dev.off()
 ```
 
-- dependence on total amplicons of the samples
-
-```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
-rarefaction_curves[["Tr_richness_grad"]]
-```
 
 # beta-diversity distances (non-rarefied data) and ordination
 
 ## Preprocessing (filtering)
 
 - filtering thoughts:
-    - I filter on prevalence (keeping taxa with prevalence > `r prevalence`) and taxa_sums() (keeping taxa whose taxa sums higher than the `r taxa_sums_quantile` quantile of taxa_sums)
+    - I filter on prevalence (keeping taxa with prevalence > `r prevalence`) and taxa_sums() (keeping taxa whose taxa sums are above the `r taxa_sums_quantile` quantile)
         - prevalence filter so that SVs that are very rare and only in few samples have no effect on the distance measures
-        - taxa_sums_quantile filter, so that very abundant SVs (clearly real species you would think) stay, even if they are only in a few samples, these might well separate these samples
+        - taxa_sums_quantile filter, so that very abundant SVs (clearly real species you would think) stay, even if they are only in a few samples. These might well separate these samples
     - because of the taxa_sums_quantile filter, I first do a DeSEQ total amplicons adjustment on the samples. NB: this only affects the taxa_sums_quantile filter, it does not affect prevalence nor the subsequent relative abundances that are used for distance calculations.
-    - another "filter" that could be interesting, is to do the analysis on genus level (tax_glom) and potentially exclude NAs, so only distances between the ones we know by name
+    - another "filter" that could be interesting, is to do the distance analysis on genus level (tax_glom) and potentially exclude NAs (I.e. doing distance analysis only on the genera we actually know)
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 ps_taa <- adj_LS(ps) # taa for total amplicons adjusted
 
+filterList <- plot_abundance_prev_filter(physeq = ps_taa, prevalence = prevalence, taxa_sums_quantile = taxa_sums_quantile)
+
 ps_taa_filt <- filter_taxa(ps_taa, function(x){(sum(x > min_obs) > (prevalence/100)*length(x)) || (sum(x) > quantile(taxa_sums(ps_taa), probs = taxa_sums_quantile/100))}, prune = TRUE)
 
-ps_filt <- prune_taxa(taxa_names(ps_taa_filt), ps)
+ps_filt_ra <- transform_sample_counts(ps_taa_filt, function(x){x/sum(x)})
 ```
 
-- `r ntaxa(ps_filt)` out of `r ntaxa(ps)` survived the filter
+- `r ntaxa(ps_taa_filt)` out of `r ntaxa(ps)` survived the filter
+
+```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "filter_p.pdf", width = 7, height = 6)
+filterList[[1]]
+#dev.off()
+```
+
+```{r, fig.width = 10, fig.height = 8, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "filter2_p.pdf", width = 8, height = 8)
+filterList[[2]]
+# dev.off()
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+knitr::kable(filterList[[3]])
+#print(xtable(filterList[[3]][,c(1,2,4,6:9)], align = "|c|c|c|c|c|c|c|c|", digits = 1), include.rownames = FALSE)
+```
 
 
 ## calculate distances
 
-```{r, warning = FALSE, message = FALSE, echo = FALSE}
-
-ps_filt_ra <- transform_sample_counts(ps_filt, function(x){x/sum(x)})
+```{r, warning = FALSE, message = FALSE, echo = FALSE, include = FALSE}
 
 dist_list <- calc_distances(ps_filt_ra, dist_methods)
+
+dist_list2 <- calc_distances(ps_taa_filt, dist_methods)
 
 # ========= recapitulate Bray Crutis Distance ==========
 # mat <- as(t(otu_table(ps_filt_ra)), "matrix")
@@ -570,22 +570,43 @@ dist_list <- calc_distances(ps_filt_ra, dist_methods)
 # this is the ordination, just like in ordination_list in calc_ordination_from_distances that can be used for the plot
 # ====
 
-pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "PCoA", group_var = group_var)   
+pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "PCoA", group_var = group_var) 
 
-nmdss <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "NMDS", group_var = group_var)   
+pcoas2 <- calc_ordination_from_distances(ps_taa_filt, dist_list = dist_list2, ordination_type = "PCoA", group_var = group_var) 
 
+nmdss <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "NMDS", group_var = group_var) 
+
+nmdss2 <- calc_ordination_from_distances(ps_taa_filt, dist_list = dist_list2, ordination_type = "NMDS", group_var = group_var) 
 
 ```
 
-- PCoA:
+- **PCoA**:
 
-```{r, fig.width = 14, fig.height = 10, warning = FALSE, message = FALSE, echo = FALSE}
+- relative abundance
+
+```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "beta_p.pdf", width = 10, height = 8)
 do.call("grid.arrange", c(pcoas[["ordination_Tr_own"]], ncol = 2))
+# dev.off()
+```
+
+- counts:
+
+```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(pcoas2[["ordination_Tr_own"]], ncol = 2))
 ```
     
-- NMDS (non-metric multidimensional scaling)
+- **NMDS (non-metric multidimensional scaling)**
 
-```{r, fig.width = 14, fig.height = 10, warning = FALSE, message = FALSE, echo = FALSE}
+- relative abundance
+
+```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(nmdss[["ordination_Tr_own"]], ncol = 2))
+```
+
+- counts:
+
+```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(nmdss2[["ordination_Tr_own"]], ncol = 2))
 ```
 
