@@ -1,5 +1,5 @@
 # ---- Sourcing the plot and wrapper functions ----
-datapath <- "/emc/cbmr/data/MICROBIOME/raw/mouse/stool/2017-07-13_DK_age_ManiAging/"
+datapath <- "/emc/cbmr/data/MICROBIOME/raw/mouse/stool/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
 load(file.path(datapath, "Dada_Data/QualityStats.RData"))
 
 namesF <- names(filtFs)

@@ -36,12 +36,12 @@ To run the function from the terminal, use:
 - nohup Rscript Dada_QualityCheck.R &
 
 
-## Step 2: Run the actual Dada pipeline (**Dada_Wrapper.R**)
+## Step 2: Run the actual Dada pipeline (**DadaWrapper.R**)
 
 - on hulk:
-	- nohup /usr/local/R-3.4.1/bin/Rscript Dada_Wrapper.R &
+	- nohup /usr/local/R-3.4.1/bin/Rscript DadaWrapper.R &
 - on porus (here Rscript is directly linked to the new R.version 3.4.1)
-	- nohup Rscript Dada_Wrapper.R &
+	- nohup Rscript DadaWrapper.R &
 
 ### Steps of the Dada2_wrap function
 
@@ -90,12 +90,27 @@ Links:
 
 - <https://benjjneb.github.io/dada2/assign.html>
 
+## Step 4: construct_phylogenetic_tree
 
-
-
+- 
 
 
 # Possible Improvements:
 
 - Dada2 now offers filterAndTrim which is a multithreaded convenience interface for the fastqFilter and fastqPairedFilter filtering functions
     - it offers multithread, If TRUE, input files are filtered in parallel via mclapply. So I think it is just a matter of speed no outcome changes. 
+    
+# Possible issues 
+
+## alpha diversity confounded by total amplicons in a way that cannot be corrected for by rarefaction
+
+- dada non pooled produces often data without singletons, rarefaction curves of this data plateau very early (e.g. at 10000 reads)
+- in other words the data implies almost no influence of total amplicons above 15000 reads on richness
+- there was however so far always a clear trend in the data that samples with higher total amplicons had higher richness
+- I therefore think it is more likely to get rare SVs for samples with higher total amplicons, but still these amplicons get counts above 3 or so.
+- to illustrate the trend: split your data samples into 2 groups high and low richness and test if total amplicons (taxa_sums) differs
+- Solutions: 
+    - test alpha diversity on residuals to lm richness ~ total amplicons
+    - rarefy on filtered reads
+    - use pooled
+ 

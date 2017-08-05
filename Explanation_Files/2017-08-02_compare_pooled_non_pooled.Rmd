@@ -1,0 +1,85 @@
+---
+title: "Generalized phyloseq analysis of dada2 data"
+author: "Thorsten Brach"
+date: "24/7/2017"
+output: html_document
+---
+
+```{r, echo = FALSE, message=FALSE, include = FALSE}
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("phyloseq")
+library(phyloseq); packageVersion("phyloseq")
+library(dada2); packageVersion("dada2")
+library(vegan); packageVersion("vegan")
+library(ggplot2); packageVersion("ggplot2")
+library(dplyr); packageVersion("dplyr")
+library(tidyr); packageVersion("tidyr")
+library(gridExtra); packageVersion("gridExtra")
+library(xtable); packageVersion("xtable")
+
+PackageVersions <- data.frame(R = version$version.string,
+                              dada2 = packageVersion("dada2"),
+                              vegan = packageVersion("vegan"),
+                              ggplot2 = packageVersion("ggplot2"),
+                              dplyr = packageVersion("dplyr"),
+                              tidyr = packageVersion("tidyr"),
+                              gridExtra = packageVersion("gridExtra"),
+                              xtable = packageVersion("xtable"))
+for (i in 1:ncol(PackageVersions)){PackageVersions[,i] <- as.character(PackageVersions[,i])}
+PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version)
+```
+
+- <https://benjjneb.github.io/dada2/pool.html>
+
+# load the sequencing tables
+
+```{r, echo = FALSE, message=FALSE}
+
+# - load pooled data then non pooled-
+
+datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis_Pooled_Porus"
+
+load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
+
+taxonomy.path <- "Dada_Taxonomy/Silva_v128/Taxonomy.RData"
+
+load(file.path(datapath, taxonomy.path))
+
+seqtab.nochim_p <- seqtab.nochim
+taxa.species_p <- taxa.species
+
+
+datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
+
+load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
+
+# NB: taxonomy, tree, and sample path should start in datapath (otherwise change code below)
+taxonomy.path <- "Dada_Taxonomy/Silva_v128/Taxonomy_Silva128_minBoot50_allowMT.RData"
+
+load(file.path(datapath, taxonomy.path))
+
+rm(list = setdiff(ls(), c("seqtab.nochim", "taxa.species", "seqtab.nochim_p", "taxa.species_p")))
+
+functionpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions/"
+# -- load all functions in --
+source(file.path(functionpath, "Dada_TaxonomyFunctions.R"))
+source(file.path(functionpath, "Dada_PlotFunctions.R"))
+# ----
+
+sq.sep <- getSequences(seqtab.nochim)
+sq.pool <- getSequences(seqtab.nochim_p)
+
+DF <- data.frame(Type = c("in sep but not in pooled", "intersection", "in pooled but not in sep", "ab SVs in sep but not in pooled",
+                          "total abundance sep", "PC ab SVs in sep but not in pooled", "ab SVs in pooled but not in sep",
+                          "total abundance pooled", "PC ab SVs in pooled but not sep", "PC abundance intersection in sep",
+                          "PC abundance intersection in pooled"),
+                 SVs = c(sum(!sq.sep %in% sq.pool), length(intersect(sq.sep, sq.pool)), sum(!sq.pool %in% sq.sep), sum(seqtab.nochim[,!sq.sep %in% sq.pool]), sum(seqtab.nochim), round(100*sum(seqtab.nochim[,!sq.sep %in% sq.pool])/sum(seqtab.nochim),1), sum(seqtab.nochim_p[,!sq.pool %in% sq.sep]), sum(seqtab.nochim_p),
+                         round(100*sum(seqtab.nochim_p[,!sq.pool %in% sq.sep])/sum(seqtab.nochim_p),1),
+                         round(100*sum(seqtab.nochim[,intersect(sq.sep, sq.pool)])/sum(seqtab.nochim),1),
+                         round(100*sum(seqtab.nochim_p[,intersect(sq.sep, sq.pool)])/sum(seqtab.nochim_p),1)))
+
+knitr::kable(DF)
+```
+
+- So indeed the vast majority of amplicons is assigned to SVs that are found by both pooled and separate. 
+- That probably means indeed, the pooled is mainly a way to tackle the alpha diversity problem, and if you aim to find differences in rare SVs

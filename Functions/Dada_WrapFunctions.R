@@ -454,6 +454,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 
         }
         
+        save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
         
         ##############################
         ### Denoising (dada command for all samples)
