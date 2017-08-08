@@ -912,7 +912,7 @@ calc_distances <- function(physeq, dist_methods = c("bray")) {
 ### FUNCTION: calc_ordination_from_distances
 #######################################
 
-calc_ordination_from_distances <- function(physeq, dist_list, ordination_type = "PCoA", group_var = NULL){
+calc_ordination_from_distances <- function(physeq, dist_list, ordination_type = "PCoA", group_var = NULL, coord_cor = FALSE){
         
         ordination_list <- vector("list", length(dist_list))
         DFList <- vector("list", length(dist_list))
@@ -950,6 +950,10 @@ calc_ordination_from_distances <- function(physeq, dist_list, ordination_type = 
                                 strivar = as(c(Tr$label$x, Tr$label$y), "character")
                                 strivar = paste0(strivar, " (", percvar, " %)")
                                 Tr <- Tr + xlab(strivar[1]) + ylab(strivar[2]) 
+                        }
+                        
+                        if (!is.null(eigvec) && coord_cor) {
+                                Tr <- Tr + coord_fixed(sqrt(eigvec[2] / eigvec[1]))
                         }
                         
                 }
