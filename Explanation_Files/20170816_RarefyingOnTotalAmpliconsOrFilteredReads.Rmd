@@ -1,0 +1,175 @@
+---
+title: "Rarefying on total amplicons or already on filtered reads"
+author: "Thorsten Brach"
+date: "16/8/2017"
+output: html_document
+---
+
+```{r, echo = FALSE, message=FALSE, include = FALSE}
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("phyloseq")
+library(phyloseq); packageVersion("phyloseq")
+library(dada2); packageVersion("dada2")
+library(vegan); packageVersion("vegan")
+library(ggplot2); packageVersion("ggplot2")
+library(dplyr); packageVersion("dplyr")
+library(tidyr); packageVersion("tidyr")
+library(gridExtra); packageVersion("gridExtra")
+library(xtable); packageVersion("xtable")
+
+PackageVersions <- data.frame(R = version$version.string,
+                              dada2 = packageVersion("dada2"),
+                              vegan = packageVersion("vegan"),
+                              ggplot2 = packageVersion("ggplot2"),
+                              dplyr = packageVersion("dplyr"),
+                              tidyr = packageVersion("tidyr"),
+                              gridExtra = packageVersion("gridExtra"),
+                              xtable = packageVersion("xtable"))
+for (i in 1:ncol(PackageVersions)){PackageVersions[,i] <- as.character(PackageVersions[,i])}
+PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version)
+```
+
+# How the samples were rarefied: NB: rare vs filt_rare
+
+![](/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Explanation_Files/2017_08_16_Dada2_Rarefaction.png)
+
+# Overview Boxplot
+
+```{r, echo = FALSE, message=FALSE, warning = FALSE}
+
+DF_alpha_list <- readRDS("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Explanation_Files/DFAlphaList.rds")
+
+
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+Types <- c("none", "rare", "filt", "filt_rare")
+
+for (i in 1:length(DF_alpha_list)){
+        df <- DF_alpha_list[[i]]
+        df$Type <- Types[i]
+        DF_alpha_list[[i]] <- df
+}
+
+DF <- do.call(rbind, DF_alpha_list)
+
+DF <- DF[DF$Group != "MiddleAged",]
+
+DF$Type <- factor(DF$Type, levels = c("none", "rare", "filt", "filt_rare"), ordered = TRUE)
+
+Tr <- ggplot(DF, aes(x = Type, y = Richness, col = Group))
+Tr <- Tr +
+        geom_boxplot() +
+        scale_color_manual(values = c(cbPalette[2], cbPalette[4])) +
+        geom_point(position=position_jitterdodge()) +
+        xlab("") +
+        theme_bw() +
+        theme(legend.title = element_blank())
+
+```
+
+
+```{r, fig.width = 8, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "NoReads_pooled.pdf", width = 10, height = 8)
+Tr
+# dev.off()
+```
+
+# Comparing rare vs filt_rare for "Old"
+
+```{r, echo = FALSE, message=FALSE, warning = FALSE}
+
+DF1 <- DF
+DF1 <- filter(DF1, Type %in% c("rare", "filt_rare"), Group == "Old")
+DF1$TypeDouble <- 1
+DF1$TypeDouble[DF1$Type == "filt_rare"] <- 2
+set.seed(2016)
+jitterVal <- runif(nrow(DF1), max = 0.1)
+jitterVal <- jitterVal * sample(c(-1, 1), size = nrow(DF1), replace = TRUE)
+
+
+Tr <- ggplot(DF1, aes(x = TypeDouble, y = Richness, col = Group))
+Tr <- Tr +
+        geom_boxplot(aes(group = TypeDouble)) +
+        geom_point(aes(x = TypeDouble + jitterVal)) +
+        geom_line(aes(x = TypeDouble + jitterVal, group = Sample), col = "black") +
+        scale_color_manual(values = c(cbPalette[4])) +
+        scale_x_continuous(breaks = c(1, 2), labels = c("rare", "filt_rare")) +
+        xlab("") +
+        theme_bw() +
+        theme(legend.title = element_blank())
+
+
+DF1$filtered_reads[DF1$Type == "filt_rare"] <- DF1$filtered_reads[DF1$Type == "rare"]
+
+Trr <- ggplot(DF1, aes(x = filtered_reads, y = Richness, col = Type, shape = Type))
+
+Trr <- Trr +
+        geom_point() +
+        geom_smooth(method = "lm", se = FALSE) +
+        theme_bw() +
+        xlab("No filtered reads before rarefying")
+
+```
+
+
+```{r, fig.width = 8, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "NoReads_pooled.pdf", width = 10, height = 8)
+Tr
+# dev.off()
+```
+
+```{r, fig.width = 8, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "NoReads_pooled.pdf", width = 10, height = 8)
+Trr
+# dev.off()
+```
+
+# Comparing rare vs filt_rare for "Young"
+
+```{r, echo = FALSE, message=FALSE, warning = FALSE}
+
+DF2 <- DF
+DF2 <- filter(DF2, Type %in% c("rare", "filt_rare"), Group == "Young")
+DF2$TypeDouble <- 1
+DF2$TypeDouble[DF2$Type == "filt_rare"] <- 2
+set.seed(2017)
+jitterVal <- runif(nrow(DF2), max = 0.1)
+jitterVal <- jitterVal * sample(c(-1, 1), size = nrow(DF2), replace = TRUE)
+
+
+Tr <- ggplot(DF2, aes(x = TypeDouble, y = Richness, col = Group))
+Tr <- Tr +
+        geom_boxplot(aes(group = TypeDouble)) +
+        geom_point(aes(x = TypeDouble + jitterVal)) +
+        geom_line(aes(x = TypeDouble + jitterVal, group = Sample), col = "black") +
+        scale_color_manual(values = c(cbPalette[2])) +
+        scale_x_continuous(breaks = c(1, 2), labels = c("rare", "filt_rare")) +
+        xlab("") + 
+        theme_bw() +
+        theme(legend.title = element_blank())
+
+DF2$filtered_reads[DF2$Type == "filt_rare"] <- DF2$filtered_reads[DF2$Type == "rare"]
+
+Trr <- ggplot(DF1, aes(x = filtered_reads, y = Richness, col = Type, shape = Type))
+
+Trr <- Trr +
+        geom_point() +
+        geom_smooth(method = "lm", se = FALSE) +
+        theme_bw() +
+        xlab("No filtered reads before rarefying")
+
+```
+
+
+```{r, fig.width = 8, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "NoReads_pooled.pdf", width = 10, height = 8)
+Tr
+# dev.off()
+```
+
+```{r, fig.width = 8, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "NoReads_pooled.pdf", width = 10, height = 8)
+Trr
+# dev.off()
+```
+

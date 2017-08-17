@@ -40,7 +40,7 @@ Dada2_wrap(path = "/emc/cbmr/data/MICROBIOME/raw/mouse/stool/2017-07-13_DK_age_M
            R_QualityStats = R_QualityStats,
            filtFs = filtFs, # if given and FilteredFolder with files exist, Filtering can be jumped over
            filtRs = filtRs,
-           pool = TRUE)
+           pool = FALSE)
 
 # Then call on terminal: Rscript DadaWrapper.R
 

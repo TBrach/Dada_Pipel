@@ -652,7 +652,9 @@ boxplot_alphaDiv_fromDF <- function(DF, measures, color = NULL, shape = NULL,
         
         TrList <- list()
         
-        measures <- c(measures, "Total")
+        if (!is.null(DF$Total) && !is.null(DF$filtered_reads)) {
+                measures <- c(measures, "Total", "filtered_reads")
+        }
         
         for (i in 1:length(measures)) {
                 
@@ -790,7 +792,7 @@ plot_alphaDivVstotalAmplicons_fromList <- function(DF_List, measures = NULL, col
         TrList <- list()
         
         DF <- DF_List[[1]]
-        fitlist <- DF_List[[2]]
+        fitlist <- DF_List[["fitlist"]]
         
         for (i in 1:length(measures)) {
                 
@@ -842,25 +844,407 @@ plot_alphaDivVstotalAmplicons_fromList <- function(DF_List, measures = NULL, col
 }
 
 #######################################
+#### plot_alphaDivVsfilteredReads_fromList
+#######################################
+# Function plots the alpha diversity measures from estimate_richness against the given number of filteredReads per sample
+# and adds a linear fit.
+# if color is given the fit is individual on the different colors, but the p-value in the title is still to an overall fit!!
+
+plot_alphaDivVsfilteredReads_fromList <- function(DF_List, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
+        
+        TrList <- list()
+        
+        DF <- DF_List[[1]]
+        fitlist <- DF_List[["fitlist_FilteredReads"]]
+        
+        for (i in 1:length(measures)) {
+                
+                aes_map = aes_string(x = "filtered_reads", y = measures[i], shape = shape, color = color)
+                
+                if(is.null(color)){
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE, col = defCol)
+                } else {
+                        
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE)
+                }
+                
+                
+                if (measures[i] == "Chao1") {
+                        Tr = Tr + geom_errorbar(aes(ymax = Chao1 + se.chao1, ymin = Chao1 -
+                                                            se.chao1), width = 0.1)
+                }
+                if (measures[i] == "ACE") {
+                        Tr = Tr + geom_errorbar(aes(ymax = ACE + se.ACE, ymin = ACE -
+                                                            se.ACE), width = 0.1)
+                }
+                
+                Tr <- Tr + scale_colour_manual("", values = cbPalette[2:8])
+                
+                # add the regression line and the p-values
+                fit <- fitlist[[measures[i]]]
+                adjR2 <- round(summary(fit)$adj.r.squared,3)
+                if (adjR2 != 0){
+                        pfit <- lmp(fit)
+                } else {
+                        pfit <- NA
+                }
+                
+                Tr <- Tr + geom_smooth(aes_string(x = "filtered_reads", y = measures[i]), method = "lm", se = TRUE, inherit.aes = F)
+                
+                Tr <- Tr + ggtitle(paste("lm fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
+                
+                Tr <- Tr + theme_bw() + xlab("number of filtered reads that entered dada command")
+                
+                Tr = Tr + theme(panel.grid.minor = element_blank())
+                
+                TrList[[i]] <- Tr
+                
+        }
+        
+        names(TrList) <- measures
+        return(TrList)
+        
+}
+
+#######################################
+#### plot_alphaDivVSoriginalTotalAmplicons
+#######################################
+# wanted to add this plot after rarefaction
+
+plot_alphaDivVSoriginalTotalAmplicons <- function(DF_alpha_rare, DF_alpha_no_rare, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
+        
+        measures2 <- measures
+        if ("Observed" %in% measures2) {
+                measures2[measures2 == "Observed"] <- "Richness" 
+        }
+        
+        DF_alpha_rare$originalTotal <- DF_alpha_no_rare$Total
+        DF <- DF_alpha_rare
+        
+        TrList <- list()
+        
+        for (i in 1:length(measures2)) {
+                
+                aes_map = aes_string(x = "originalTotal", y = measures2[i], shape = shape, color = color)
+                
+                if(is.null(color)){
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE, col = defCol)
+                } else {
+                        
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE)
+                }
+                
+                
+                if (measures[i] == "Chao1") {
+                        Tr = Tr + geom_errorbar(aes(ymax = Chao1 + se.chao1, ymin = Chao1 -
+                                                            se.chao1), width = 0.1)
+                }
+                if (measures[i] == "ACE") {
+                        Tr = Tr + geom_errorbar(aes(ymax = ACE + se.ACE, ymin = ACE -
+                                                            se.ACE), width = 0.1)
+                }
+                
+                Tr <- Tr + scale_colour_manual("", values = cbPalette[2:8])
+                
+                # add the regression line and the p-values
+                fit <- lm(DF[, measures2[i]] ~ DF[,"originalTotal"])
+                adjR2 <- round(summary(fit)$adj.r.squared,3)
+                if (adjR2 != 0){
+                        pfit <- lmp(fit)
+                } else {
+                        pfit <- NA
+                }
+                
+                Tr <- Tr + geom_smooth(aes_string(x = "originalTotal", y = measures2[i]), method = "lm", se = TRUE, inherit.aes = F)
+                
+                Tr <- Tr + ggtitle(paste("lm fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
+                
+                Tr <- Tr + theme_bw() + xlab("total amplicons before rarefying")
+                
+                Tr = Tr + theme(panel.grid.minor = element_blank())
+                
+                TrList[[i]] <- Tr
+                
+        }
+        
+        names(TrList) <- measures2
+        return(TrList)
+        
+}
+
+
+
+#######################################
+#### plot_alphaDivVSoriginalTotalAmplicons2
+#######################################
+# wanted to add this plot after rarefaction
+
+plot_alphaDivVSoriginalTotalAmplicons2 <- function(DF_alpha_rare, DF_alpha_no_rare, measures = NULL, color = NULL, defCol = "#E69F00"){
+        
+        measures2 <- measures
+        if ("Observed" %in% measures2) {
+                measures2[measures2 == "Observed"] <- "Richness" 
+        }
+        
+        DF_alpha_no_rare <- DF_alpha_no_rare[, c("Sample", measures2, "Total", "filtered_reads", color)]
+        DF_alpha_no_rare$Type <- "Before rarefaction"
+        DF_alpha_rare <- DF_alpha_rare[, c("Sample", measures2, "Total", "filtered_reads", color)]
+        to_level <- DF_alpha_rare$Total[1]
+        DF_alpha_rare$Type <- paste("After rarefaction to ", to_level, " amplicons", sep = "")
+        DF_alpha_rare$Total <- DF_alpha_no_rare$Total
+        
+        DF <- rbind(DF_alpha_no_rare, DF_alpha_rare)
+        DF$Type <- factor(DF$Type, levels = c("Before rarefaction", paste("After rarefaction to ", to_level, " amplicons", sep = "")),
+                          ordered = TRUE)
+        
+        TrList <- list()
+        
+        for (i in 1:length(measures2)) {
+                
+                aes_map = aes_string(x = "Total", y = measures2[i], color = color)
+                
+                if(is.null(color)){
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE, col = defCol)
+                } else {
+                        
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE)
+                }
+                
+                
+                Tr <- Tr + scale_colour_manual("", values = cbPalette[2:8])
+                
+                # for the regressin lines and the p-values
+                fit <- lm(DF_alpha_no_rare[, measures2[i]] ~ DF_alpha_no_rare[,"Total"])
+                adjR2 <- round(summary(fit)$adj.r.squared,3)
+                if (adjR2 != 0){
+                        pfit <- lmp(fit)
+                } else {
+                        pfit <- NA
+                }
+                
+                fit_rare <- lm(DF_alpha_rare[, measures2[i]] ~ DF_alpha_rare[,"Total"])
+                adjR2_rare <- round(summary(fit_rare)$adj.r.squared,3)
+                if (adjR2_rare != 0){
+                        pfit_rare <- lmp(fit)
+                } else {
+                        pfit_rare <- NA
+                }
+                
+                
+                
+                Tr <- Tr + geom_smooth(aes_string(x = "Total", y = measures2[i]), method = "lm", se = TRUE, inherit.aes = F)
+                
+                Tr <- Tr + facet_grid(~ Type, scales = "free_y")
+                
+                Tr <- Tr + ggtitle(paste("fit before: p: ", format(pfit, digits = 4), ", R^2: ", adjR2, "; after: p: ",
+                                         format(pfit_rare, digits = 4), ", R^2: ", adjR2_rare, sep = ""))
+                
+                Tr <- Tr + theme_bw() + xlab("total amplicons before rarefaction")
+                
+                Tr = Tr + theme(panel.grid.minor = element_blank())
+                
+                TrList[[i]] <- Tr
+                
+        }
+        
+        names(TrList) <- measures2
+        
+        TrList2 <- list()
+        
+        for (i in 1:length(measures2)) {
+                
+                aes_map = aes_string(x = "filtered_reads", y = measures2[i], color = color)
+                
+                if(is.null(color)){
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE, col = defCol)
+                } else {
+                        
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE)
+                }
+                
+                
+                Tr <- Tr + scale_colour_manual("", values = cbPalette[2:8])
+                
+                # for the regressin lines and the p-values
+                fit <- lm(DF_alpha_no_rare[, measures2[i]] ~ DF_alpha_no_rare[,"filtered_reads"])
+                adjR2 <- round(summary(fit)$adj.r.squared,3)
+                if (adjR2 != 0){
+                        pfit <- lmp(fit)
+                } else {
+                        pfit <- NA
+                }
+                
+                fit_rare <- lm(DF_alpha_rare[, measures2[i]] ~ DF_alpha_rare[,"filtered_reads"])
+                adjR2_rare <- round(summary(fit_rare)$adj.r.squared,3)
+                if (adjR2_rare != 0){
+                        pfit_rare <- lmp(fit)
+                } else {
+                        pfit_rare <- NA
+                }
+                
+                
+                
+                Tr <- Tr + geom_smooth(aes_string(x = "filtered_reads", y = measures2[i]), method = "lm", se = TRUE, inherit.aes = F)
+                
+                Tr <- Tr + facet_grid(~ Type, scales = "free_y")
+                
+                Tr <- Tr + ggtitle(paste("fit before: p: ", format(pfit, digits = 4), ", R^2: ", adjR2, "; after: p: ",
+                                         format(pfit_rare, digits = 4), ", R^2: ", adjR2_rare, sep = ""))
+                
+                Tr <- Tr + theme_bw() + xlab("No of filtered reads (that entered dada algorithm)")
+                
+                Tr = Tr + theme(panel.grid.minor = element_blank())
+                
+                TrList2[[i]] <- Tr
+                
+        }
+        
+        names(TrList2) <- measures2
+        
+        TrList3 <- list()
+        
+        for (i in 1:length(measures2)) {
+                
+                aes_map = aes_string(x = "Total", y = measures2[i], color = color, shape = "Type")
+                
+                if(is.null(color)){
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE, col = defCol)
+                } else {
+                        
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE)
+                }
+                
+                
+                Tr <- Tr + scale_colour_manual("", values = cbPalette[2:8])
+                
+                
+                # for the regressin lines and the p-values
+                fit <- lm(DF_alpha_no_rare[, measures2[i]] ~ DF_alpha_no_rare[,"Total"])
+                adjR2 <- round(summary(fit)$adj.r.squared,3)
+                if (adjR2 != 0){
+                        pfit <- lmp(fit)
+                } else {
+                        pfit <- NA
+                }
+                
+                fit_rare <- lm(DF_alpha_rare[, measures2[i]] ~ DF_alpha_rare[,"Total"])
+                adjR2_rare <- round(summary(fit_rare)$adj.r.squared,3)
+                if (adjR2_rare != 0){
+                        pfit_rare <- lmp(fit)
+                } else {
+                        pfit_rare <- NA
+                }
+                
+                
+                
+                Tr <- Tr + geom_smooth(aes_string(x = "Total", y = measures2[i], fill = "Type"), method = "lm", se = FALSE, inherit.aes = F)
+                
+                
+                Tr <- Tr + ggtitle(paste("fit before: p: ", format(pfit, digits = 4), ", R^2: ", adjR2, "; after: p: ",
+                                         format(pfit_rare, digits = 4), ", R^2: ", adjR2_rare, sep = ""))
+                
+                Tr <- Tr + theme_bw() + xlab("total amplicons before rarefaction")
+                
+                Tr = Tr + theme(panel.grid.minor = element_blank(),
+                                legend.title = element_blank(),
+                                legend.position = "top")
+                
+                TrList3[[i]] <- Tr
+                
+        }
+        
+        names(TrList3) <- measures2
+        
+        TrList4 <- list()
+        
+        for (i in 1:length(measures2)) {
+                
+                aes_map = aes_string(x = "filtered_reads", y = measures2[i], color = color, shape = "Type")
+                
+                if(is.null(color)){
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE, col = defCol)
+                } else {
+                        
+                        Tr = ggplot(DF, aes_map) + geom_point(na.rm = TRUE)
+                }
+                
+                
+                Tr <- Tr + scale_colour_manual("", values = cbPalette[2:8])
+                
+                
+                # for the regressin lines and the p-values
+                fit <- lm(DF_alpha_no_rare[, measures2[i]] ~ DF_alpha_no_rare[,"filtered_reads"])
+                adjR2 <- round(summary(fit)$adj.r.squared,3)
+                if (adjR2 != 0){
+                        pfit <- lmp(fit)
+                } else {
+                        pfit <- NA
+                }
+                
+                fit_rare <- lm(DF_alpha_rare[, measures2[i]] ~ DF_alpha_rare[,"filtered_reads"])
+                adjR2_rare <- round(summary(fit_rare)$adj.r.squared,3)
+                if (adjR2_rare != 0){
+                        pfit_rare <- lmp(fit)
+                } else {
+                        pfit_rare <- NA
+                }
+                
+                
+                
+                Tr <- Tr + geom_smooth(aes_string(x = "filtered_reads", y = measures2[i], fill = "Type"), method = "lm", se = FALSE, inherit.aes = F)
+                
+                
+                Tr <- Tr + ggtitle(paste("fit before: p: ", format(pfit, digits = 4), ", R^2: ", adjR2, "; after: p: ",
+                                         format(pfit_rare, digits = 4), ", R^2: ", adjR2_rare, sep = ""))
+                
+                Tr <- Tr + theme_bw() + xlab("No of filtered reads (that entered dada algorithm)")
+                
+                Tr = Tr + theme(panel.grid.minor = element_blank(),
+                                legend.title = element_blank(),
+                                legend.position = "top")
+                
+                TrList4[[i]] <- Tr
+                
+        }
+        
+        names(TrList4) <- measures2
+        
+        list(TrList_total = TrList, TrList_filtered_reads = TrList2, 
+             TrList_total_one = TrList3, TrList_filtered_reads_one = TrList4)
+}
+
+
+#######################################
 #### plot_correlations_abundance_prev_sparsity
 #######################################
 # df_ab_prev: data frame with "SV_ID", "total_abundance", "prevalence", "sparsity", "mean_abundance_nonzero",
 # "median_abundance_nonzero"
 # outputs a list with different plots and fits
 
-plot_correlations_abundance_prev_sparsity <- function(df_ab_prev){ # NB: you could color by Phylum for example
+plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ # NB: you could color by Phylum for example
         
         nsamples <- df_ab_prev$prevalence[1] + df_ab_prev$sparsity[1]
         
         Tr_ab <- ggplot(df_ab_prev, aes(x = SV_ID, y = total_abundance))
+        if (is.null(col)) {
+                Tr_ab <- Tr_ab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+        } else {
+                Tr_ab <- Tr_ab + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+        }
         Tr_ab <- Tr_ab +
-                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
                 ylab("total abundance (taxa_sums())") +
                 theme_bw(12)
+        
+        
         Tr_prev <- ggplot(df_ab_prev, aes(x = SV_ID, y = prevalence))
+        if (is.null(col)) {
+                Tr_prev <- Tr_prev + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+        } else {
+                Tr_prev <- Tr_prev + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+        }
         Tr_prev <- Tr_prev +
-                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
                 theme_bw(12)
+        
         
         # - associations of total abundance and log10(total_abundance) to sparsity/prevalence -
         # NB: turned out: log10(total_abundance) is far better correlated with prevalence/sparsity, so I stick with the log fits
@@ -912,9 +1296,14 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev){ # NB: you cou
         # Tr_ab_vs_prev_75Q <- Tr_ab_vs_prev + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$abundance, .75)))
         
         Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        if (is.null(col)) {
+                Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+        } else {
+                Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+        }
         Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab +
-                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
                 scale_x_log10() +
+                scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
                 geom_smooth(method = "lm") +
                 # annotate("text", x = max(df_ab_prev$abundance)/5, y = 5, label = paste("R.square of lm: ", as.character(round(summary(fit_prev)$r.squared,4), sep = ""))) +
                 xlab("total abundance (taxa_sums())") +
@@ -955,22 +1344,30 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev){ # NB: you cou
         #         theme_bw(12)
         
         Tr_prev_vs_log10_meanab <- ggplot(df_ab_prev, aes(x = mean_abundance_nonzero, y = prevalence))
+        if (is.null(col)) {
+                Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+        } else {
+                Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+        }
         Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab +
-                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
                 scale_x_log10() +
                 geom_smooth(method = "lm") +
                 scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
-                xlab("SVs mean abundance in non-zero samples") +
+                xlab("mean abundance of SV in non-zero samples") +
                 ggtitle(paste("lm fit: p.val: ", format(pval_prev_mean_log10, digits = 4), "R.square: ", as.character(round(summary(fit_prev_mean_log10)$r.squared,4), sep = ""))) +
                 theme_bw(12)
         
         Tr_prev_vs_log10_medianab <- ggplot(df_ab_prev, aes(x = median_abundance_nonzero, y = prevalence))
+        if (is.null(col)) {
+                Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+        } else {
+                Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+        }
         Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab +
-                geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
                 scale_x_log10() +
                 geom_smooth(method = "lm") +
                 scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
-                xlab("SVs mean abundance in non-zero samples") +
+                xlab("median abundance of SV in non-zero samples") +
                 ggtitle(paste("lm fit: p.val: ", format(pval_prev_median_log10, digits = 4), "R.square: ", as.character(round(summary(fit_prev_median_log10)$r.squared,4), sep = ""))) +
                 theme_bw(12)
         
@@ -1006,6 +1403,7 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
                                  sparsity = colSums(as(otu_table(physeq), "matrix") == 0), 
                                  mean_abundance_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){mean(x[x > 0])}),
                                  median_abundance_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){median(x[x > 0])}))
+        
         df_ab_prev <- cbind(df_ab_prev, tax_table(physeq))
         
         prev_thresh <- (prevalence/100)*nsamples(physeq)
@@ -1013,8 +1411,7 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
         
         df_ab_prev_filt <- dplyr::filter(df_ab_prev, prevalence > prev_thresh | total_abundance > abund_thresh)
         
-        df_ab_prev <- cbind(df_ab_prev, tax_table(physeq))
-        
+        no_samples <- df_ab_prev$prevalence[1] + df_ab_prev$sparsity[1]
         shade_df <- data.frame(total_abundance = 0, prevalence = 0)
         
         
@@ -1045,22 +1442,70 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
                 theme(legend.position = "none")
         
         
-        phylum_df <- df_ab_prev[, c("Phylum", "total_abundance", "prevalence")]
-        phylum_df <- group_by(phylum_df, Phylum)
-        phylum_df <- dplyr::summarise(phylum_df, SVs = n(), abundance = round(sum(total_abundance)))
-        phylum_df_filt <- df_ab_prev_filt[, c("Phylum", "total_abundance", "prevalence")]
-        phylum_df_filt <- group_by(phylum_df_filt, Phylum)
-        phylum_df_filt <- dplyr::summarise(phylum_df_filt, SVs = n(), abundance = round(sum(total_abundance)))
-        phylum_df_summary <- merge(phylum_df, phylum_df_filt, by = "Phylum")
-        colnames(phylum_df_summary) <- c("Phylum", "SVs_before", "abundance_before", "SVs_after", 'abundance_after')
-        phylum_df_summary <- mutate(phylum_df_summary, SV_r_PC = round(100*SVs_after/SVs_before, 1), abundance_r_PC = round(100*abundance_after/abundance_before, 1),
-                                    SV_PC = round(100*SVs_after/sum(SVs_after), 1), abundance_PC = round(100*abundance_after/sum(abundance_after), 1))
+        # phylum_df <- df_ab_prev[, c("Phylum", "total_abundance", "prevalence")]
+        # phylum_df <- group_by(phylum_df, Phylum)
+        # phylum_df <- dplyr::summarise(phylum_df, SVs = n(), abundance = round(sum(total_abundance)))
+        # phylum_df_filt <- df_ab_prev_filt[, c("Phylum", "total_abundance", "prevalence")]
+        # phylum_df_filt <- group_by(phylum_df_filt, Phylum)
+        # phylum_df_filt <- dplyr::summarise(phylum_df_filt, SVs = n(), abundance = round(sum(total_abundance)))
+        # phylum_df_summary <- merge(phylum_df, phylum_df_filt, by = "Phylum")
+        # colnames(phylum_df_summary) <- c("Phylum", "SVs_before", "abundance_before", "SVs_after", 'abundance_after')
+        # phylum_df_summary <- mutate(phylum_df_summary, SV_r_PC = round(100*SVs_after/SVs_before, 1), abundance_r_PC = round(100*abundance_after/abundance_before, 1),
+        #                             SV_PC = round(100*SVs_after/sum(SVs_after), 1), abundance_PC = round(100*abundance_after/sum(abundance_after), 1))
+        
+        Before <- summarise(group_by(df_ab_prev, Phylum), SVs_bef = n(), PC_SV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
+                           PC_total_ab_bef = round(100*sum(total_abundance)/sum(df_ab_prev$total_abundance), 1), 
+                           mean_pre_bef = round(100*mean(prevalence)/no_samples, 1),
+                           mean_tot_ab_bef = round(mean(total_abundance)), 
+                           mean_mean_ab_nonzero_bef = round(mean(mean_abundance_nonzero)),
+                           med_med_ab_nonzero_bef = round(median(median_abundance_nonzero)),
+                           total_ab_bef = sum(total_abundance))
+        
+        After <- summarise(group_by(df_ab_prev_filt, Phylum), SVs_aft = n(), PC_SV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
+                           PC_total_ab_aft = round(100*sum(total_abundance)/sum(df_ab_prev_filt$total_abundance), 1), 
+                           mean_pre_aft = round(100*mean(prevalence)/no_samples, 1),
+                           mean_tot_ab_aft = round(mean(total_abundance)),
+                           mean_mean_ab_nonzero_aft = round(mean(mean_abundance_nonzero)),
+                           med_med_ab_nonzero_aft = round(median(median_abundance_nonzero)),
+                           total_ab_aft = sum(total_abundance))
+        
+        Before_total <- summarise(df_ab_prev, SVs_bef = n(), PC_SV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
+                            PC_total_ab_bef = round(100*sum(total_abundance)/sum(df_ab_prev$total_abundance), 1), 
+                            mean_pre_bef = round(100*mean(prevalence)/no_samples, 1),
+                            mean_tot_ab_bef = round(mean(total_abundance)), 
+                            mean_mean_ab_nonzero_bef = round(mean(mean_abundance_nonzero)),
+                            med_med_ab_nonzero_bef = round(median(median_abundance_nonzero)),
+                            total_ab_bef = sum(total_abundance))
+        
+        Before_total <- data.frame(Phylum = "Total", Before_total)
+        
+        After_total <- summarise(df_ab_prev_filt, SVs_aft = n(), PC_SV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
+                           PC_total_ab_aft = round(100*sum(total_abundance)/sum(df_ab_prev_filt$total_abundance), 1), 
+                           mean_pre_aft = round(100*mean(prevalence)/no_samples, 1),
+                           mean_tot_ab_aft = round(mean(total_abundance)),
+                           mean_mean_ab_nonzero_aft = round(mean(mean_abundance_nonzero)),
+                           med_med_ab_nonzero_aft = round(median(median_abundance_nonzero)),
+                           total_ab_aft = sum(total_abundance))
+        
+        After_total <- data.frame(Phylum = "Total", After_total)
+        
+        Before <- rbind(Before, Before_total)
+        
+        After <- rbind(After, After_total)
         
         
+        Merged <- merge(Before, After, by = "Phylum", all = TRUE, sort = FALSE)
+        
+        Merged <- mutate(Merged, PC_SV_rem = round(100*SVs_aft/SVs_bef, 1), PC_ab_rem = round(100*total_ab_aft/total_ab_bef, 1))
+        
+        Merged <- select(Merged, 1, 20, 21, 2, 11, 3, 12, 4, 13, 5, 14, 6, 15, 7, 16, 8, 17, 9, 18)
+        
+        Merged$tot_ab_bef <- round(Before$total_ab_bef)
+        Merged$tot_ab_aft <- round(After$total_ab_aft)
         
         out <- list(Tr_prev_vs_log10_ab = Tr_prev_vs_log10_ab,
                     Tr_prev_vs_log10_ab_col = Tr_prev_vs_log10_ab_col,
-                    phylum_df_summary = phylum_df_summary)
+                    phylum_df_summary = Merged)
         
 }
 

@@ -690,9 +690,11 @@ calculate_alphadiversity <- function(physeq, measures = c("Observed", "Shannon")
                 colnames(DF_alpha)[colnames(DF_alpha) == "Observed"] <- "Richness" 
                 measures[measures == "Observed"] <- "Richness"
         }
+        
         DF_alpha$Total <- sample_sums(physeq)
+        
         ncol_df_alpha <- ncol(DF_alpha)
-        # add residuals of lm fits
+        # add residuals of lm fits to total_amplicons
         fitlist <- list()
         for (i in 1:length(measures)){
                 fit <- lm(DF_alpha[,measures[i]] ~ DF_alpha[,"Total"])
@@ -703,9 +705,27 @@ calculate_alphadiversity <- function(physeq, measures = c("Observed", "Shannon")
         
         names(fitlist) <- measures
         
+        # if you have, add lm fits to FilteredReads
+        fitlist_FilteredReads <- list()
+        
+        if (!is.null(sample_data(physeq)$FilteredReads)){
+                DF_alpha$filtered_reads <- sample_data(physeq)$FilteredReads
+                
+                
+                ncol_df_alpha <- ncol(DF_alpha)
+                for (i in 1:length(measures)){
+                        fit <- lm(DF_alpha[,measures[i]] ~ DF_alpha[,"filtered_reads"])
+                        fitlist_FilteredReads[[i]] <- fit
+                        DF_alpha[, ncol_df_alpha + i] <- residuals(fit)
+                        colnames(DF_alpha)[ncol_df_alpha + i] <- paste(measures[i], "resids", "FilteredReads", sep = "_")
+                }
+        }
+        
+        names(fitlist_FilteredReads) <- measures
+        
         DF_alpha <- data.frame(Sample = rownames(DF_alpha), DF_alpha, sample_data(physeq))
         
-        outlist <- list(DF_alpha = DF_alpha, fitlist = fitlist)
+        outlist <- list(DF_alpha = DF_alpha, fitlist = fitlist, fitlist_FilteredReads = fitlist_FilteredReads)
 }
 
 
@@ -859,13 +879,36 @@ alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "
         
         pairwise.tt_shannon_resids <- pairwise.t.test(x = DF_alpha$Shannon_resids, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
         
-        TrListBP <- boxplot_alphaDiv_fromDF(DF = DF_alpha, color = group_var, group = group_var, measures = c(alpha_div_measures2, paste(alpha_div_measures2, "resids", sep = "_")))
+        if(var(DF_alpha$filtered_reads) > 0) {
+                pairwise.tt_filtered_reads <- pairwise.t.test(x = DF_alpha$filtered_reads, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        } else {
+                pairwise.tt_filtered_reads <- NA
+        }
+        
+        pairwise.tt_rich_resids_filt <- pairwise.t.test(x = DF_alpha$Richness_resids_FilteredReads, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        
+        pairwise.tt_shannon_resids_filt <- pairwise.t.test(x = DF_alpha$Shannon_resids_FilteredReads, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+        
+        # add the linear models correcting for total or filtered amplicons
+        fitter_rich_total <- lm(DF_alpha[["Richness"]] ~ DF_alpha[["Total"]] + DF_alpha[[group_var]])
+        fitter_shannon_total <- lm(DF_alpha[["Shannon"]] ~ DF_alpha[["Total"]] + DF_alpha[[group_var]])
+        fitter_rich_filtered_amplicons <- lm(DF_alpha[["Richness"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
+        fitter_shannon_filtered_amplicons <- lm(DF_alpha[["Shannon"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
+        fitter.list <- list(fitter_rich_total = fitter_rich_total, fitter_shannon_total = fitter_shannon_total,
+                            fitter_shannon_filtered_amplicons = fitter_shannon_filtered_amplicons, 
+                            fitter_shannon_filtered_amplicons = fitter_shannon_filtered_amplicons)
+        
+        
+        TrListBP <- boxplot_alphaDiv_fromDF(DF = DF_alpha, color = group_var, group = group_var, measures = c(alpha_div_measures2, paste(alpha_div_measures2, "resids", sep = "_"), paste(alpha_div_measures2, "resids", "FilteredReads", sep = "_")))
         
         TrList_lm <- plot_alphaDivVstotalAmplicons_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var)
         
-        out <- list(DF_alpha_list = DF_alpha_list, TrListBP = TrListBP, TrList_lm = TrList_lm, pairwise.tt_rich = pairwise.tt_rich,
-                    pairwise.tt_shannon = pairwise.tt_shannon, pairwise.tt_total = pairwise.tt_total, pairwise.tt_rich_resids = pairwise.tt_rich_resids,
-                    pairwise.tt_shannon_resids = pairwise.tt_shannon_resids)
+        TrList_lm_filteredReads <- plot_alphaDivVsfilteredReads_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var)
+        
+        out <- list(DF_alpha_list = DF_alpha_list, TrListBP = TrListBP, TrList_lm = TrList_lm, TrList_lm_filteredReads = TrList_lm_filteredReads, pairwise.tt_rich = pairwise.tt_rich,
+                    fitter_list = fitter.list, pairwise.tt_shannon = pairwise.tt_shannon, pairwise.tt_total = pairwise.tt_total, pairwise.tt_rich_resids = pairwise.tt_rich_resids,
+                    pairwise.tt_shannon_resids = pairwise.tt_shannon_resids, pairwise.tt_filtered_reads = pairwise.tt_filtered_reads,
+                    pairwise.tt_rich_resids_filt = pairwise.tt_rich_resids_filt, pairwise.tt_shannon_resids_filt = pairwise.tt_shannon_resids_filt)
         
 }
 
