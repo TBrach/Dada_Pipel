@@ -1,0 +1,389 @@
+---
+title: "Richness: rarefy on total amplicons vs rarefy on filtered reads"
+author: "Thorsten Brach"
+date: "22/8/2017"
+output: html_document
+---
+
+```{r, echo = FALSE, message=FALSE, include = FALSE}
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("phyloseq")
+library(phyloseq); packageVersion("phyloseq")
+library(dada2); packageVersion("dada2")
+library(vegan); packageVersion("vegan")
+library(ggplot2); packageVersion("ggplot2")
+library(dplyr); packageVersion("dplyr")
+library(tidyr); packageVersion("tidyr")
+library(gridExtra); packageVersion("gridExtra")
+library(xtable); packageVersion("xtable")
+
+PackageVersions <- data.frame(R = version$version.string,
+                              dada2 = packageVersion("dada2"),
+                              vegan = packageVersion("vegan"),
+                              ggplot2 = packageVersion("ggplot2"),
+                              dplyr = packageVersion("dplyr"),
+                              tidyr = packageVersion("tidyr"),
+                              gridExtra = packageVersion("gridExtra"),
+                              xtable = packageVersion("xtable"))
+for (i in 1:ncol(PackageVersions)){PackageVersions[,i] <- as.character(PackageVersions[,i])}
+PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version)
+```
+
+
+```{r, echo = FALSE, message=FALSE}
+# # - rarefaction inputs -
+# seed <- 1234
+# step_size <- 200 # for rarefaction curves
+# rare_level <- NULL # if NULL, min(sample_sums(ps)) is used!
+# rare_type <- "vegan" # either "sample" or "vegan"
+# rare_max_total <- NULL # maximal total amplicons value to which rarefaction curves are calculated, if NULL: quantile(sample_sums(ps), probs = .25) is used
+# # --
+# 
+# # - plot/statistics inputs -
+# taxa_are_rows = FALSE 
+# group_var <- "Group" # tha variable based on which samples will be grouped 
+# group_var_levels <- c("Young", "MiddleAged", "Old") # the factor levels of the group_var in the order you want them in your plots (set to NULL if you do not care)
+# # --
+# 
+# # - alpha diversity -
+# alpha_div_measures <- c("Observed", "Shannon") # not to change currently
+# alpha_at_genus <- FALSE
+# # --
+# 
+# 
+# # load the data where all filtered reads have been used
+# # - file/path inputs -
+# # datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
+# datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis_filt_rare"
+# 
+# # -- Load all data in --
+# # laod seqtab.nochim
+# load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
+# # load QualityStats
+# load(file.path(datapath, "Dada_Data/QualityStats.RData"))
+# 
+# # NB: taxonomy, tree, and sample path should start in datapath (otherwise change code below)
+# # taxonomy.path <- "Dada_Taxonomy/Silva_v128/Taxonomy_Silva128_minBoot50_allowMT.RData"
+# # tree.path <- "Dada_phylogenetic_tree/phylog_tree.rds"
+# datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
+# sample.path <- "sample_data/samdf.rds"
+# 
+# functionpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions/"
+# 
+# 
+# # # load Taxonomy
+# # load(file.path(datapath, taxonomy.path))
+# # # load tree
+# # tree_list <- readRDS(file.path(datapath, tree.path))
+# # load samdf
+# samdf <- readRDS(file.path(datapath, sample.path))
+# 
+# sample.names <- rownames(seqtab.nochim)
+# 
+# if (!is.null(group_var) && !is.null(group_var_levels)){
+#         samdf[[group_var]] <- factor(samdf[[group_var]], levels = group_var_levels, ordered = TRUE)
+# }
+# 
+# 
+# # -- load all functions in --
+# source(file.path(functionpath, "Dada_TaxonomyFunctions.R"))
+# source(file.path(functionpath, "Dada_PlotFunctions.R"))
+# # ----
+# 
+# # -- generate phyloseq object --
+# # ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows = taxa_are_rows), 
+# #                sample_data(samdf), 
+# #                tax_table(taxa.species),
+# #                phy_tree(tree_list[["fitGTR"]]$tree))
+# 
+# ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows = taxa_are_rows), 
+#                sample_data(samdf))
+# # the number of Filtered reads are added to later check the relation of alpha diversity measures to the number of filtered reads
+# FilteredReads <- ReadSummary[,c("Sample","FilteredReads")]
+# # usually should be in same order but better check:
+# FilteredReads <- FilteredReads[match(sample_names(ps), FilteredReads$Sample),]
+# sample_data(ps)$FilteredReads <- FilteredReads$FilteredReads
+# 
+# 
+# ps
+# # ----
+# ```
+# 
+# 
+# ```{r, message = FALSE, warning = FALSE, echo = FALSE}
+# alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps, alpha_div_measures = alpha_div_measures)
+# DF_alpha_no_rare <- alpha_div_wrap[["DF_alpha_list"]]$DF_alpha # used later for comparison plots to rarefied 
+# 
+# # -- rarefaction using vegan package: --
+# if (is.null(rare_level)) {
+#         rare_level <- min(sample_sums(ps))
+# }
+# # rare_level <- 200
+# set.seed(seed)
+# 
+# if (rare_type == "vegan"){
+#         
+#         seqtab.nochim.rare <- rrarefy(as(otu_table(ps), "matrix"), sample = rare_level)
+#         
+# } else if (rare_type == "sample"){
+#         
+#         seqtab.nochim.rare <- t(apply(as(otu_table(ps), "matrix"), 1, function(cnts){rarefy_sample(cnts, size = rare_level)}))
+#         dimnames(seqtab.nochim.rare) <- dimnames(as(otu_table(ps), "matrix"))
+#         
+# } else {
+#         
+#         stop("rare_type must be vegan or sample")
+#         
+# }
+# 
+# ps.rare <- ps
+# otu_table(ps.rare) <- otu_table(seqtab.nochim.rare, taxa_are_rows = taxa_are_rows)
+# 
+# alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps.rare, alpha_div_measures = alpha_div_measures)
+# DF_alpha_rare <- alpha_div_wrap[["DF_alpha_list"]]$DF_alpha
+# 
+# 
+# 
+# 
+# # rarefaction_curves <- rarefaction_curve_own_fast(physeq = ps, group_var = group_var, max_total = rare_max_total, step_size = step_size, seed = seed)
+# # div_df <- rarefaction_curves[[1]]
+# # 
+# # div_df$Sample <- rownames(div_df)
+# # div_df <- tidyr::gather(div_df, key = step, value = Richness, -Sample, -Group)
+# # div_df <- tidyr::separate(div_df, col = step, into = c("term", "Total"), sep = "_")
+# # div_df$Total <- as.numeric(div_df$Total)
+# # div_df$Type <- "rarefy_total_amplicons"
+# # div_df <- dplyr::select(div_df, "Sample", "Group", "Total", "Richness", "Type")
+
+
+```
+
+```{r, echo = FALSE}
+# # save all the data as list, I did one after the other by HAND, then saved, see below
+# DF_alphas_no_rare <- list(total_amplicons = DF_alpha_no_rare)
+# DF_alphas_rare <- list(total_amplicons = DF_alpha_rare)
+# rarefaction_curve <- list(div_df)
+
+
+# rare_compare <- readRDS("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Explanation_Files/rare_compare.rds")
+# 
+# DF_alphas_no_rare <- rare_compare[["DF_alphas_no_rare"]]
+# DF_alphas_rare <- rare_compare[["DF_alphas_rare"]]
+# rarefaction_curve <- rare_compare[["rarefaction_curve"]]
+# 
+# DF_alphas_no_rare <- c(DF_alphas_no_rare, filt_40389 = list(DF_alpha_no_rare))
+# DF_alphas_rare <- c(DF_alphas_rare, filt_40389 = list(DF_alpha_rare))
+# 
+# rare_compare <- list(rarefaction_curve = rarefaction_curve, DF_alphas_no_rare = DF_alphas_no_rare,
+#                      DF_alphas_rare = DF_alphas_rare)
+# saveRDS(rare_compare, file = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Explanation_Files/rare_compare.rds")
+```
+
+# Background:
+
+- default dada2, i.e. dada(, pooled = FALSE) produces count tables with hardly any singletons. In consequence classical rarefaction on total amplicons results in rarefaction curves that plateau early and do not seem to correct for the effect of total amplicons/sequencing depth on richness/alpha diversity
+    - see also our question on the dada github: <https://github.com/benjjneb/dada2/issues/317>
+- Mani had the idea to maybe already rarefy on filtered reads. This results in much lower richness and curves that plateau much slower. This is illustrateed here.
+
+
+# Overview
+
+![](/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Explanation_Files/2017_08_22_Dada2_Rarefaction_2.png)
+
+# Plots
+
+```{r, echo = FALSE}
+rare_compare <- readRDS("/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Explanation_Files/rare_compare.rds")
+
+DF_alphas_no_rare <- rare_compare[["DF_alphas_no_rare"]]
+DF_alphas_rare <- rare_compare[["DF_alphas_rare"]]
+rarefaction_curve <- rare_compare[["rarefaction_curve"]]
+
+
+types <- names(DF_alphas_no_rare)
+DF_filt_List <- list()
+for (i in 2:length(DF_alphas_no_rare)) {
+        
+        DF <- DF_alphas_no_rare[[i]]
+        DF$Type <- types[i]
+        DF <- select(DF, c("Sample", "Group", "Total", "Richness", "Type"))
+        DF_filt_List[[i-1]] <- DF
+}
+DF_filt <- do.call(rbind, DF_filt_List)
+DF_filt <- group_by(DF_filt, Type, Group)
+DF_filt_sum <- summarise(DF_filt, total = mean(Total), sd_total = sd(Total), richness = mean(Richness), sd_richness = sd(Richness),
+                         n = n())
+
+DF_filt_sum$se_richness <- DF_filt_sum$sd_richness/sqrt(DF_filt_sum$n)
+DF_filt_sum$se_total <- DF_filt_sum$sd_total/sqrt(DF_filt_sum$n)
+zeros <- data.frame(Type = c("filt_0", "filt_0", "filt_0"), Group = c("Young", "MiddleAged", "Old"),
+                    total = c(0, 0, 0), sd_total = c(0, 0, 0), richness = c(0, 0, 0),
+                    sd_richness = c(0, 0, 0), n = c(0, 0, 0), se_richness = c(0, 0, 0),
+                    se_total = c(0, 0, 0))
+DF_filt_sum <- as.data.frame(DF_filt_sum)
+
+
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+Tr <- ggplot(DF_filt_sum, aes(x = total, y = richness, col = Group))
+Tr <- Tr +
+        geom_point() +
+        geom_line() +
+        geom_errorbar(aes(ymin = richness-se_richness, ymax = richness + se_richness), width = 1000) +
+        geom_errorbarh(aes(xmin = total - se_total, xmax = total + se_total), height = 5) +
+        scale_color_manual("", values = cbPalette[2:4]) +
+        xlab("total_amplicons") +
+        theme_bw()
+
+zeros$Type <- as.character(zeros$Type)
+zeros$Group <- factor(zeros$Group, levels = c("Young", "MiddleAged", "Old"), ordered = TRUE)
+DF_filt_sum <- as.data.frame(rbind(zeros, DF_filt_sum))
+
+Tr1 <- ggplot(DF_filt_sum, aes(x = total, y = richness, col = Group))
+Tr1 <- Tr1 +
+        geom_point() +
+        geom_line() +
+        geom_errorbar(aes(ymin = richness-se_richness, ymax = richness + se_richness), width = 1000) +
+        geom_errorbarh(aes(xmin = total - se_total, xmax = total + se_total), height = 5) +
+        scale_color_manual("", values = cbPalette[2:4]) +
+        xlab("total_amplicons") +
+        theme_bw()
+
+
+DF_rare <- rarefaction_curve[[1]]
+DF_rare_sum <- summarise(group_by(DF_rare, Type, Group, Total), richness = mean(Richness), sd_richness = sd(Richness), n = n(), se_richness = sd_richness/sqrt(n))
+DF_rare_sum$sd_total = 0
+DF_rare_sum$se_total = 0
+DF_rare_sum <- select(DF_rare_sum, Type, Group, total = Total, sd_total, richness, sd_richness, n, se_richness, se_total)
+DF_rare_sum <- as.data.frame(DF_rare_sum)
+DF_filt_sum$Type <- "rarefy on filtered reads"
+DF_final <- rbind(DF_rare_sum, DF_filt_sum)
+DF_final$Type[DF_final$Type == "rarefy_total_amplicons"] <- "rarefy on total amplicons"
+DF_final$Type <- factor(DF_final$Type, levels = c("rarefy on total amplicons", "rarefy on filtered reads"), order = TRUE)
+
+Tr2 <- ggplot(DF_final, aes(x = total, y = richness, col = Group, shape = Type))
+Tr2 <- Tr2 +
+        geom_errorbar(aes(ymin = richness-se_richness, ymax = richness + se_richness), width = 1000) +
+        geom_point() +
+        geom_line() +
+        # geom_errorbarh(aes(xmin = total - se_total, xmax = total + se_total), height = 5) +
+        scale_color_manual("", values = cbPalette[2:4]) +
+        xlab("total_amplicons") +
+        theme_bw() +
+        theme(legend.title = element_blank())
+
+
+Tr2f <- ggplot(DF_final, aes(x = total, y = richness, col = Group))
+Tr2f <- Tr2f +
+        geom_errorbar(aes(ymin = richness-se_richness, ymax = richness + se_richness), width = 1000) +
+        geom_point() +
+        geom_line() +
+        facet_grid(~ Type) +
+        # geom_errorbarh(aes(xmin = total - se_total, xmax = total + se_total), height = 5) +
+        scale_color_manual("", values = cbPalette[2:4]) +
+        xlab("total_amplicons") +
+        theme_bw() +
+        theme(legend.title = element_blank())
+
+
+# only for the young group
+
+DF_final_young <- DF_final[DF_final$Group == "Young", ]
+Tr3 <- ggplot(DF_final_young, aes(x = total, y = richness, shape = Type))
+Tr3 <- Tr3 +
+        geom_errorbar(aes(ymin = richness-se_richness, ymax = richness + se_richness), col = cbPalette[2], width = 1000) +
+        geom_point(col = cbPalette[2]) +
+        geom_line(col = cbPalette[2]) +
+        # geom_errorbarh(aes(xmin = total - se_total, xmax = total + se_total), height = 5) +
+        scale_color_manual("", values = cbPalette[2:4]) +
+        xlab("total_amplicons") +
+        theme_bw() +
+        theme(legend.title = element_blank(),
+              legend.position = "top")
+
+
+DF_final_youngOld <- DF_final[DF_final$Group %in% c("Young", "Old"), ]
+Tr4 <- ggplot(DF_final_youngOld, aes(x = total, y = richness, col = Group, shape = Type))
+Tr4 <- Tr4 +
+        geom_errorbar(aes(ymin = richness-se_richness, ymax = richness + se_richness), width = 1000) +
+        geom_point() +
+        geom_line() +
+        facet_grid(~ Group) +
+        # geom_errorbarh(aes(xmin = total - se_total, xmax = total + se_total), height = 5) +
+        scale_color_manual("", values = cbPalette[2:4], guide = FALSE) +
+        xlab("total_amplicons") +
+        theme_bw() +
+        theme(legend.title = element_blank(),
+              legend.position = "top")
+
+DF_final_2 <- DF_final_youngOld
+DF_final_2$Group <- as.character(DF_final_2$Group)
+DF_final_2$Group[DF_final_2$Group == "Young"] = "grp1"
+DF_final_2$Group[DF_final_2$Group == "Old"] = "grp2"
+DF_final_2$Group <- factor(DF_final_2$Group, levels = c("grp1", "grp2"), ordered = TRUE)
+Tr5 <- ggplot(DF_final_2, aes(x = total, y = richness, col = Group, shape = Type))
+Tr5 <- Tr5 +
+        geom_errorbar(aes(ymin = richness-se_richness, ymax = richness + se_richness), width = 1000) +
+        geom_point(size = 2.5) +
+        geom_line() +
+        facet_grid(~ Group) +
+        # geom_errorbarh(aes(xmin = total - se_total, xmax = total + se_total), height = 5) +
+        scale_color_manual("", values = cbPalette[2:4], guide = FALSE) +
+        xlab("total_amplicons") +
+        theme_bw() +
+        theme(legend.title = element_blank(),
+              legend.position = "top")
+
+
+
+
+```
+
+```{r, fig.width = 7, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# png(file = "rare_filt_reads_vs_rare_total_amplicons.png", width = 500, height = 400)
+# Tr5
+# dev.off()
+
+```
+
+
+
+```{r, fig.width = 7, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "alpha_div_rare_p.pdf", width = 10, height = 10)
+# Tr1
+# dev.off()
+
+```
+
+
+
+```{r, fig.width = 7, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "alpha_div_rare_p.pdf", width = 10, height = 10)
+# Tr2
+# dev.off()
+```
+
+- comparison filtered_reads vs total_amplicons 
+
+```{r, fig.width = 9, fig.height = 5, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "alpha_div_rare_p.pdf", width = 10, height = 10)
+Tr2f
+# dev.off()
+```
+
+
+
+```{r, fig.width = 7, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "alpha_div_rare_p.pdf", width = 10, height = 10)
+#Tr3
+# dev.off()
+```
+
+- comparison filtered_reads vs total_amplicons 2
+
+```{r, fig.width = 7, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "alpha_div_rare_p.pdf", width = 10, height = 10)
+Tr4
+# dev.off()
+```
+
+

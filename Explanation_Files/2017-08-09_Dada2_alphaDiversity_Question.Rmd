@@ -1,0 +1,45 @@
+---
+title: "In dada2 default data (i.e. pooled = FALSE) richness correlates with total amplicons but rarefaction curves plateau early because the data usually contains almost no singletons. How to correctly correct for this effect?"
+author: "Thorsten Brach"
+date: "10/8/2017"
+output: html_document
+---
+
+We would like to discuss how best to correct richness/alpha diversity for differences in sequencing depth (total amplicons) when using the default dada2 pipeline, i.e. when using dada(, pooled = FALSE) (<https://benjjneb.github.io/dada2/pool.html>).
+
+We generally observe in our dada2 generated count tables (seqtab) a clear trend of increasing richness with increasing number of total amplicons per sample. 
+This is not surprising or unexpected in itself.
+However, the dada2-generated count tables usually contain virtually no singletons. In consequence rarefaction curves plateau at a low sequencing depth that is usually well below the lowest number of total amplicons of any sample in the dataset. This would indicate that there should be no correlation between richness and total amplicons within the range of sequencing depths we are working with. Yet the trend is clearly present. In other words, there is a correlation between richness and total amplicons, but rarefaction on total amplicons does not correct for it.
+
+To illustrate, here are plots from a study that compared the gut microbiome of two groups of mice. The groups are not necessary to illustrate the general point we would like to discuss, but they hopefully help illustrating differences between the discussed methods.
+
+With dada(, pooled = FALSE) we have a clear trend of increasing richness with increasing number of total amplicons. Group 2 (grp2) samples have higher richness, but have also been sequenced deeper. 
+
+![](/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/alpha_div_no_pool.png)
+
+Rarefaction curves plateau very early indicating little or no increase in richness above 10,000 total amplicons (NB: the sample with lowest sequencing depth had 27648 total amplicons).
+
+
+![](/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/rarecurves_no_pool.png)
+
+
+As a comparison, the same samples were run with dada(, pooled = TRUE). Here are singletons in the count table and rarefaction curves do not saturate quickly.
+
+![](/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/alpha_div_pool.png)
+
+![](/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/rarecurves_pool.png)
+
+Since rarefaction on total amplicons does not seem to correct for the possible confounding of sequencing depth when working with dada(,pooled = FASLE) data, we would like to discuss options to do so.
+Three suggestions we have come up with:
+
+- running dada( pooled = TRUE) and check if richness trends (e.g. comparison between groups) hold also for pooled data. 
+    - This is computationally challenging and not really feasible for larger datasets.
+- Do rarefaction already on the filtered reads and then run dada( ,pooled = FALSE) (so one extra run for richness/alpha diversity analyses only)
+- run dada(, pooled = FALSE) and test for richness trends with correction for total amplicons, e.g. lm(richness ~ group + total_amplicons)
+
+To exemplify the second suggestion, rarefaction on filtered reads and then running dada(, pooled = FALSE) resulted in rarefaction curves that saturated much slower than those from running dada(, pooled = FALSE) on all filtered reads and subsequent rarefaction on total amplicons.
+
+![](/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/rare_filt_reads_vs_rare_total_amplicons.png)
+
+Thanks in advance for any thoughts and/or explanations.
+

@@ -959,8 +959,10 @@ calc_ordination_from_distances <- function(physeq, dist_list, ordination_type = 
         
         ordination_list <- vector("list", length(dist_list))
         DFList <- vector("list", length(dist_list))
-        TrList <- vector("list", length(dist_list))
+        DF_taxa_List <- vector("list", length(dist_list))
+        # TrList <- vector("list", length(dist_list))
         TrList_own <- vector("list", length(dist_list))
+        TrList_taxa <- vector("list", length(dist_list))
         
         axes <- 1:2 # currently only allowed to plot first and second
         
@@ -1005,11 +1007,48 @@ calc_ordination_from_distances <- function(physeq, dist_list, ordination_type = 
                 rm(Tr)
                         
                 
-                TrList[[i]] <- phyloseq::plot_ordination(physeq, ordination_list[[i]], color = group_var) + ggtitle(names(dist_list)[i])
+                # TrList[[i]] <- phyloseq::plot_ordination(physeq, ordination_list[[i]], color = group_var) + ggtitle(names(dist_list)[i])
+                
+                DF_taxa <- phyloseq::plot_ordination(physeq, ordination_list[[i]], type = "taxa", color = "Phylum", justDF = TRUE)
+                DF_taxa_List[[i]] <- DF_taxa
+                
+                x = colnames(DF_taxa)[1]
+                y = colnames(DF_taxa)[2]
+                Tr <- ggplot(DF_taxa, aes_string(x = x, y = y, col = "Phylum")) 
+                Tr <- Tr + geom_point() +
+                        # scale_color_manual("", values = cbPalette[2:8]) +
+                        theme_bw(12) +
+                        ggtitle(names(dist_list)[i])
+                
+                # for labelling axes
+                if (ordination_type == "PCoA" || ordination_type == "NMDS") {
+                        if (ordination_type == "PCoA") {
+                                eigvec <- phyloseq:::extract_eigenvalue.pcoa(ordination)
+                        } else {
+                                eigvec <- phyloseq:::extract_eigenvalue.default(ordination)
+                        }
+                        
+                        if (length(eigvec[axes]) > 0){
+                                fracvar = eigvec[axes]/sum(eigvec)
+                                percvar = round(100 * fracvar, 1)
+                                strivar = as(c(Tr$label$x, Tr$label$y), "character")
+                                strivar = paste0(strivar, " (", percvar, " %)")
+                                Tr <- Tr + xlab(strivar[1]) + ylab(strivar[2]) 
+                        }
+                        
+                        if (!is.null(eigvec) && coord_cor) {
+                                Tr <- Tr + coord_fixed(sqrt(eigvec[2] / eigvec[1]))
+                        }
+                        
+                }
+                
+                TrList_taxa[[i]] <- Tr
+                rm(Tr)
+                
         }
         
-        names(ordination_list) <- names(TrList) <- names(DFList) <- names(TrList_own) <- names(dist_list)
-        out <- list(ordination_list = ordination_list, DFList = DFList, ordination_Tr_own = TrList_own, ordination_Tr = TrList)
+        names(ordination_list) <- names(TrList_taxa) <- names(DFList) <- names(DF_taxa_List) <- names(TrList_own) <- names(dist_list)
+        out <- list(ordination_list = ordination_list, DFList = DFList, DF_taxa_List = DF_taxa_List, ordination_Tr_samples = TrList_own, ordination_Tr_taxa = TrList_taxa)
 }
 
 

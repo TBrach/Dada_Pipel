@@ -195,7 +195,7 @@ out.bc.log <- ordinate(pslog, method = "MDS", distance = "bray")
 evals <-  out.bc.log$values$Eigenvalues
 plot_ordination(pslog, out.bc.log, shape = "Group", color = "sample_sums") +
         coord_fixed(sqrt(evals[2] / evals[1])) +
-        labs(col = "Binned Age")
+        labs(col = "sample_sumns")
 # so note: this is including all taxa, just log transformed
 
 

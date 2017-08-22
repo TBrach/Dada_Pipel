@@ -680,9 +680,60 @@ dist_list2 <- calc_distances(ps_taa_filt, dist_methods)
 # this is the ordination, just like in ordination_list in calc_ordination_from_distances that can be used for the plot
 # ====
 
+# ========= compare different ways to get the same plot ==========
+# bray_dist <- phyloseq::distance(ps_filt_ra, "bray")
+# 
+# bray_ordi <-  phyloseq::ordinate(ps_filt_ra, method = "PCoA", distance = bray_dist)
+# bray_ordi_direc <- ordinate(ps_filt_ra, method = "PCoA", distance = "bray") # and note MDS = PCoA
+# identical(bray_ordi, bray_ordi_direc) # TRUE
+# bray_dist_list <- calc_distances(ps_filt_ra, "bray")
+# identical(bray_dist_list[[1]], bray_dist) # TRUE
+# pcoa_bray <- calc_ordination_from_distances(ps_filt_ra, dist_list = bray_dist_list, ordination_type = "PCoA", group_var = group_var, coord_cor = TRUE)
+# identical(pcoa_bray[["ordination_list"]][[1]], bray_ordi_direc) # TRUE
+# 
+# # - their plot (Callahan) - 
+# evals <- bray_ordi$value$Eigenvalues
+# Tr <- plot_ordination(ps_filt_ra, bray_ordi, color = "Group") +
+#         coord_fixed(sqrt(evals[2] / evals[1]))
+# # --
+# # compare to 
+# pcoa_bray[["ordination_Tr_own"]]
+# # clearly same plot
+# 
+# # -- generate biplots to see where the species (Phyla) locate in the ordination plot
+# plot_ordination(ps_filt_ra, bray_ordi,  type = "split", color = c("Group", "Phylum"))
+# --
+
+# # - cehck double principal coordinates analysis --
+# DPCoA_ordi_direc <- ordinate(ps_taa_filt, method = "DPCoA")
+# Tr <- plot_ordination(ps_taa_filt, DPCoA_ordi_direc, color = "Group")
+# Tr <- plot_ordination(ps_taa_filt, DPCoA_ordi_direc, type = "taxa", color = "Phylum")
+# # --
+# ====
+
+
+
 pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "PCoA", group_var = group_var, coord_cor = TRUE) 
 
+TrList_ra <- vector(mode = "list", length = 2*length(pcoas[["ordination_Tr_samples"]])) 
+counter <- 0
+for (i in 1:length(pcoas[["ordination_Tr_samples"]])) {
+        counter <- counter + 1
+        TrList_ra[[counter]] <- pcoas[["ordination_Tr_samples"]][[i]]
+        counter <- counter + 1
+        TrList_ra[[counter]] <- pcoas[["ordination_Tr_taxa"]][[i]]
+}
+
 pcoas2 <- calc_ordination_from_distances(ps_taa_filt, dist_list = dist_list2, ordination_type = "PCoA", group_var = group_var) 
+
+TrList_counts <- vector(mode = "list", length = 2*length(pcoas2[["ordination_Tr_samples"]])) 
+counter <- 0
+for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
+        counter <- counter + 1
+        TrList_counts[[counter]] <- pcoas2[["ordination_Tr_samples"]][[i]]
+        counter <- counter + 1
+        TrList_counts[[counter]] <- pcoas2[["ordination_Tr_taxa"]][[i]]
+}
 
 # nmdss <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "NMDS", group_var = group_var) 
 
@@ -696,14 +747,14 @@ pcoas2 <- calc_ordination_from_distances(ps_taa_filt, dist_list = dist_list2, or
 
 ```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
 # pdf(file = "beta_p.pdf", width = 10, height = 8)
-do.call("grid.arrange", c(pcoas[["ordination_Tr_own"]], ncol = 2))
+do.call("grid.arrange", c(TrList_ra, ncol = 2))
 # dev.off()
 ```
 
 - counts:
 
 ```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
-do.call("grid.arrange", c(pcoas2[["ordination_Tr_own"]], ncol = 2))
+do.call("grid.arrange", c(TrList_counts, ncol = 2))
 ```
     
 - **NMDS (non-metric multidimensional scaling)**
