@@ -1453,7 +1453,7 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
         # phylum_df_summary <- mutate(phylum_df_summary, SV_r_PC = round(100*SVs_after/SVs_before, 1), abundance_r_PC = round(100*abundance_after/abundance_before, 1),
         #                             SV_PC = round(100*SVs_after/sum(SVs_after), 1), abundance_PC = round(100*abundance_after/sum(abundance_after), 1))
         
-        Before <- summarise(group_by(df_ab_prev, Phylum), SVs_bef = n(), PC_SV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
+        Before <- dplyr::summarise(group_by(df_ab_prev, Phylum), SVs_bef = n(), PC_SV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
                            PC_total_ab_bef = round(100*sum(total_abundance)/sum(df_ab_prev$total_abundance), 1), 
                            mean_pre_bef = round(100*mean(prevalence)/no_samples, 1),
                            mean_tot_ab_bef = round(mean(total_abundance)), 
@@ -1461,7 +1461,7 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
                            med_med_ab_nonzero_bef = round(median(median_abundance_nonzero)),
                            total_ab_bef = sum(total_abundance))
         
-        After <- summarise(group_by(df_ab_prev_filt, Phylum), SVs_aft = n(), PC_SV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
+        After <- dplyr::summarise(group_by(df_ab_prev_filt, Phylum), SVs_aft = n(), PC_SV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
                            PC_total_ab_aft = round(100*sum(total_abundance)/sum(df_ab_prev_filt$total_abundance), 1), 
                            mean_pre_aft = round(100*mean(prevalence)/no_samples, 1),
                            mean_tot_ab_aft = round(mean(total_abundance)),
@@ -1469,7 +1469,7 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
                            med_med_ab_nonzero_aft = round(median(median_abundance_nonzero)),
                            total_ab_aft = sum(total_abundance))
         
-        Before_total <- summarise(df_ab_prev, SVs_bef = n(), PC_SV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
+        Before_total <- dplyr::summarise(df_ab_prev, SVs_bef = n(), PC_SV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
                             PC_total_ab_bef = round(100*sum(total_abundance)/sum(df_ab_prev$total_abundance), 1), 
                             mean_pre_bef = round(100*mean(prevalence)/no_samples, 1),
                             mean_tot_ab_bef = round(mean(total_abundance)), 
@@ -1479,7 +1479,7 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
         
         Before_total <- data.frame(Phylum = "Total", Before_total)
         
-        After_total <- summarise(df_ab_prev_filt, SVs_aft = n(), PC_SV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
+        After_total <- dplyr::summarise(df_ab_prev_filt, SVs_aft = n(), PC_SV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
                            PC_total_ab_aft = round(100*sum(total_abundance)/sum(df_ab_prev_filt$total_abundance), 1), 
                            mean_pre_aft = round(100*mean(prevalence)/no_samples, 1),
                            mean_tot_ab_aft = round(mean(total_abundance)),
@@ -1496,9 +1496,9 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
         
         Merged <- merge(Before, After, by = "Phylum", all = TRUE, sort = FALSE)
         
-        Merged <- mutate(Merged, PC_SV_rem = round(100*SVs_aft/SVs_bef, 1), PC_ab_rem = round(100*total_ab_aft/total_ab_bef, 1))
+        Merged <- dplyr::mutate(Merged, PC_SV_rem = round(100*SVs_aft/SVs_bef, 1), PC_ab_rem = round(100*total_ab_aft/total_ab_bef, 1))
         
-        Merged <- select(Merged, 1, 20, 21, 2, 11, 3, 12, 4, 13, 5, 14, 6, 15, 7, 16, 8, 17, 9, 18)
+        Merged <- dplyr::select(Merged, 1, 20, 21, 2, 11, 3, 12, 4, 13, 5, 14, 6, 15, 7, 16, 8, 17, 9, 18)
         
         Merged$tot_ab_bef <- round(Before$total_ab_bef)
         Merged$tot_ab_aft <- round(After$total_ab_aft)
@@ -1509,6 +1509,76 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
         
 }
 
+
+#######################################
+#### plot_canonical_correspondance
+#######################################
+
+plot_canonical_correspondance <- function(ps_ccpna, physeq, the_formula, group_var = group_var, second_ccp_variable = second_ccp_variable) {
+        
+        
+        ps_scores <- vegan::scores(ps_ccpna)
+        sites <- data.frame(ps_scores$sites)
+        sites$Sample <- rownames(sites)
+        sampleDF <- sample_data(physeq)
+        sampleDF$Sample <- rownames(sampleDF)
+        sites <- dplyr::left_join(sites, sampleDF, by = "Sample")
+        
+        SVs <- data.frame(ps_scores$species)
+        SVs$SV_id <- rownames(SVs)
+        
+        # tax <- tax_table(ps)@.Data %>%
+        #         data.frame(stringsAsFactors = FALSE)
+        tax <- as.data.frame(tax_table(physeq), stringsAsFactors = FALSE)
+        tax$SV_id <- rownames(tax)
+        main_orders <- c("Clostridiales", "Bacteroidales", "Lactobacillales",
+                         "Coriobacteriales", "Verrucomicrobiales")
+        tax$Order[!(tax$Order %in% main_orders)] <- "Other"
+        tax$Order <- factor(tax$Order, levels = c(main_orders, "Other"))
+        tax$SV_id <- rownames(tax)
+        # tax$SV_id <- seq_len(ncol(otu_table(ps)))
+        
+        SVs <- dplyr::left_join(SVs, tax, by = "SV_id")
+        
+        evals_prop <- 100 * ps_ccpna$CCA$eig[1:2] / sum(ps_ccpna$CA$eig)
+        Tr1 <- ggplot() +
+                geom_point(data = SVs, aes(x = CCA1, y = CCA2, col = Order), size = 1.5) +
+                geom_point(data = sites, aes_string(x = "CCA1", y = "CCA2", shape = group_var), size = 2, alpha = 0.8) +
+                # geom_text_repel(data = species %>% filter(CCA2 < -0.80106),
+                #                 aes(x = CCA1, y = CCA2, label = otu_id),
+                #                 size = 1.5, segment.size = 0.1) +
+                # facet_grid(. ~ Group) +
+                guides(col = guide_legend(override.aes = list(size = 3))) +
+                labs(x = sprintf("Axis1 [%s%% variance]", round(evals_prop[1], 2)),
+                     y = sprintf("Axis2 [%s%% variance]", round(evals_prop[2], 2))) +
+                scale_color_brewer(palette = "Set2") +
+                # coord_fixed(sqrt(ps_ccpna$CCA$eig[2] / ps_ccpna$CCA$eig[1])*0.33) + # why actually the 0.33?
+                theme(panel.border = element_rect(color = "#787878", fill = alpha("white", 0))) +
+                theme_bw()
+        
+        if (!is.null(second_ccp_variable)){
+                Tr2 <- ggplot() +
+                        geom_point(data = SVs, aes(x = CCA1, y = CCA2, col = Order), size = 1.5) +
+                        geom_point(data = sites, aes_string(x = "CCA1", y = "CCA2", shape = second_ccp_variable), size = 2, alpha = 0.8) +
+                        # geom_text_repel(data = species %>% filter(CCA2 < -0.80106),
+                        #                 aes(x = CCA1, y = CCA2, label = otu_id),
+                        #                 size = 1.5, segment.size = 0.1) +
+                        # facet_grid(. ~ Group) +
+                        guides(col = guide_legend(override.aes = list(size = 3))) +
+                        labs(x = sprintf("Axis1 [%s%% variance]", round(evals_prop[1], 2)),
+                             y = sprintf("Axis2 [%s%% variance]", round(evals_prop[2], 2))) +
+                        scale_color_brewer(palette = "Set2") +
+                        # coord_fixed(sqrt(ps_ccpna$CCA$eig[2] / ps_ccpna$CCA$eig[1])*0.33) + # why actually the 0.33?
+                        theme(panel.border = element_rect(color = "#787878", fill = alpha("white", 0))) +
+                        theme_bw()
+        } else {
+                Tr2 <- NULL
+        }
+        
+        list(Tr1 = Tr1, Tr2 = Tr2)
+
+        
+}
 
 ###################### OLD FUNCTIONS #############################
 

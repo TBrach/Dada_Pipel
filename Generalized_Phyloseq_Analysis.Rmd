@@ -57,6 +57,8 @@ rare_max_total <- NULL # maximal total amplicons value to which rarefaction curv
 taxa_are_rows = FALSE 
 group_var <- "Group" # tha variable based on which samples will be grouped 
 group_var_levels <- c("Young", "MiddleAged", "Old") # the factor levels of the group_var in the order you want them in your plots (set to NULL if you do not care)
+second_ccp_variable <- "Sample.Integrity"
+# second_ccp_variable <- NULL # for canonical correspondance analysis (see <https://f1000research.com/articles/5-1492/v1>); NB: if of interest you could add more,
 # --
 
 # - alpha diversity -
@@ -186,6 +188,7 @@ Inputs_phyloseqAnalysis <- list(prevalence = prevalence,
                taxa_are_rows = taxa_are_rows,
                group_var = group_var,
                group_var_levels = group_var_levels,
+               second_ccp_variable = second_ccp_variable,
                alpha_div_measures = alpha_div_measures,
                alpha_at_genus = alpha_at_genus,
                dist_methods = dist_methods,
@@ -328,7 +331,7 @@ grid.arrange(TrList[[1]], TrList[[2]], TrList[[3]] + scale_y_log10(), TrList[[4]
 ## Removal of SVs with Phylum = NA
 
 ```{r, echo = FALSE, message=FALSE}
-Phyla <- summarise(group_by(df_ab_prev, Phylum), SVs = n(), PC_SV = round(100*n()/ntaxa(ps),1), PC_total_pre = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
+Phyla <- dplyr::summarise(group_by(df_ab_prev, Phylum), SVs = n(), PC_SV = round(100*n()/ntaxa(ps),1), PC_total_pre = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
                    PC_total_ab = round(100*sum(total_abundance)/sum(df_ab_prev$total_abundance), 1), 
                    mean_pre = round(100*mean(prevalence)/nsamples(ps), 1),
                    mean_tot_ab = round(100*mean(total_abundance)))
@@ -741,6 +744,8 @@ for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
 
 ```
 
+## ordinations
+
 - **PCoA**:
 
 - relative abundance
@@ -770,4 +775,48 @@ do.call("grid.arrange", c(TrList_counts, ncol = 2))
 ```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
 # do.call("grid.arrange", c(nmdss2[["ordination_Tr_own"]], ncol = 2))
 ```
+
+### Canonical correspondance analysis
+
+- NB: <https://f1000research.com/articles/5-1492/v1> did it just with log transformed counts, here with relative abundances
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, include = FALSE}
+
+# canonical correspondance from relative abundance:
+if (is.null(second_ccp_variable)){
+        the_formula <- formula(paste("ps_filt_ra ~ ", group_var, sep = ""))       
+} else {
+        the_formula <- formula(paste("ps_filt_ra ~ ", group_var, " + ", second_ccp_variable, sep = ""))    
+}
+
+ps_ccpna <- ordinate(ps_filt_ra, "CCA", formula = the_formula)
+
+TrList <- plot_canonical_correspondance(ps_ccpna, physeq = ps_filt_ra, the_formula = the_formula, group_var = group_var, second_ccp_variable = second_ccp_variable)
+
+# canonical corresponance for log trnasformed counts
+ps_taa_filt_log <- transform_sample_counts(ps_taa_filt, function(x) log(1 + x))
+
+if (is.null(second_ccp_variable)){
+        the_formula <- formula(paste("ps_taa_filt_log ~ ", group_var, sep = ""))       
+} else {
+        the_formula <- formula(paste("ps_taa_filt_log ~ ", group_var, " + ", second_ccp_variable, sep = ""))    
+}
+
+ps_ccpna <- ordinate(ps_taa_filt_log, "CCA", formula = the_formula)
+
+TrList2 <- plot_canonical_correspondance(ps_ccpna, physeq = ps_taa_filt_log, the_formula = the_formula, group_var = group_var, second_ccp_variable = second_ccp_variable)
+
+```
+
+- canonical correspondance analysis, on ps_filt_ra (relative abundance) on top (or left), and on ps_taa_filt_log (log transformed adjusted counts) in the bottom (or right)
+
+```{r, fig.width = 14, fig.height = 10, warning = FALSE, message = FALSE, echo = FALSE}
+if (is.null(second_ccp_variable)){
+        grid.arrange(TrList[[1]], TrList2[[1]], ncol = 2)
+} else {
+        do.call("grid.arrange", c(TrList, TrList2, ncol = 2))
+}
+```
+
+
 
