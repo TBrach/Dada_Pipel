@@ -210,7 +210,7 @@ check_assignment_vs_prevalence <- function(taxa, seqtab, prevalences = seq(0, 90
         remaining_SVs <- lapply(prevalences, function(preva) {
                 prev > (preva/100)*nrow(seqtab)
         })
-        No_SVs <- sapply(remaining_SVs, sum)
+        No_ASVs <- sapply(remaining_SVs, sum)
         filtered.taxas <- lapply(remaining_SVs, function(indexes){
                 taxa[indexes,]
         })
@@ -220,12 +220,12 @@ check_assignment_vs_prevalence <- function(taxa, seqtab, prevalences = seq(0, 90
         PC_assigned <- sapply(assignment_distributions, function(distri){distri[["PC_assigned"]]})
         
         rownames(PC_assigned) <- colnames(taxa)
-        colnames(PC_assigned) <- paste("Prev_", prevalences, "_", No_SVs, sep = "")
+        colnames(PC_assigned) <- paste("Prev_", prevalences, "_", No_ASVs, sep = "")
         
         PC_assigned <- as.data.frame(PC_assigned)
         PC_assigned$Level <- rownames(PC_assigned)
         df_long <- gather(PC_assigned, key = Prev, value = PC, -Level)
-        df_long <- separate(df_long, col = Prev, into = c("Type", "Prevalence", "No_SVs"), sep = "_")
+        df_long <- separate(df_long, col = Prev, into = c("Type", "Prevalence", "No_ASVs"), sep = "_")
         df_long$Level <- factor(df_long$Level, levels = colnames(taxa), ordered = TRUE)
         df_long$Prevalence <- factor(df_long$Prevalence, levels = as.character(prevalences), ordered = TRUE)
         
@@ -234,9 +234,9 @@ check_assignment_vs_prevalence <- function(taxa, seqtab, prevalences = seq(0, 90
         tr <- tr + 
                 geom_point(size = 2) +
                 scale_colour_manual("", values = cbPalette[2:8]) +
-                scale_x_discrete(breaks = prevalences, labels = paste(prevalences, " (", No_SVs, ")", sep = "")) +
-                ylab("percentage assigned") +
-                xlab("prevalence (No SVs)") +
+                scale_x_discrete(breaks = prevalences, labels = paste(prevalences, " (", No_ASVs, ")", sep = "")) +
+                ylab("percentage of ASVs assigned") +
+                xlab("prevalence (No ASVs remaining)") +
                 theme_bw(12) +
                 theme(axis.text.x = element_text(angle=90, vjust=0.5))
         
@@ -252,12 +252,12 @@ check_assignment_vs_prevalence <- function(taxa, seqtab, prevalences = seq(0, 90
 
 check_assignment_vs_abundance <- function(taxa, seqtab, abundanceQuantiles = seq(0, 90, by = 10)){
         
-        abundances <- colSums(seqtab)
-        abQuantiles <- quantile(abundances, probs = abundanceQuantiles/100)
+        total_counts <- colSums(seqtab)
+        abQuantiles <- quantile(total_counts, probs = abundanceQuantiles/100)
         remaining_SVs <- lapply(abQuantiles, function(quant) {
-                abundances >= quant
+                total_counts >= quant
         })
-        No_SVs <- sapply(remaining_SVs, sum)
+        No_ASVs <- sapply(remaining_SVs, sum)
         filtered.taxas <- lapply(remaining_SVs, function(indexes){
                 taxa[indexes,]
         })
@@ -267,12 +267,12 @@ check_assignment_vs_abundance <- function(taxa, seqtab, abundanceQuantiles = seq
         PC_assigned <- sapply(assignment_distributions, function(distri){distri[["PC_assigned"]]})
         
         rownames(PC_assigned) <- colnames(taxa)
-        colnames(PC_assigned) <- paste("Ab_", abundanceQuantiles, "_", round(abQuantiles), "_", No_SVs, sep = "")
+        colnames(PC_assigned) <- paste("Ab_", abundanceQuantiles, "_", round(abQuantiles), "_", No_ASVs, sep = "")
         
         PC_assigned <- as.data.frame(PC_assigned)
         PC_assigned$Level <- rownames(PC_assigned)
         df_long <- gather(PC_assigned, key = Ab, value = PC, -Level)
-        df_long <- separate(df_long, col = Ab, into = c("Type", "Quant", "abQuant", "No_SVs"), sep = "_")
+        df_long <- separate(df_long, col = Ab, into = c("Type", "Quant", "abQuant", "No_ASVs"), sep = "_")
         df_long$Level <- factor(df_long$Level, levels = colnames(taxa), ordered = TRUE)
         df_long$Quant <- factor(df_long$Quant, levels = as.character(abundanceQuantiles), ordered = TRUE)
         
@@ -280,9 +280,9 @@ check_assignment_vs_abundance <- function(taxa, seqtab, abundanceQuantiles = seq
         tr <- tr + 
                 geom_point(size = 2) +
                 scale_colour_manual("", values = cbPalette[2:8]) +
-                scale_x_discrete(breaks = abundanceQuantiles, labels = paste(abundanceQuantiles, " (", round(abQuantiles), ", ", No_SVs, ")", sep = "")) +
-                ylab("percentage assigned") +
-                xlab("abundance quantile (abundance, No SVs)") +
+                scale_x_discrete(breaks = abundanceQuantiles, labels = paste(abundanceQuantiles, " (", round(abQuantiles), ", ", No_ASVs, ")", sep = "")) +
+                ylab("percentage of ASVs assigned") +
+                xlab("total counts quantile (total counts filter, No ASVs remaining)") +
                 theme_bw(12) +
                 theme(axis.text.x = element_text(angle=90, vjust=0.5))
         
@@ -573,7 +573,7 @@ rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NUL
                 Tr <- ggplot(div_df, aes(x = step, y = div, group = Sample))
                 Tr <- Tr +
                         geom_line() +
-                        xlab("total amplicons") +
+                        xlab("total counts in sample") +
                         ylab(type) +
                         theme_bw(12)
         }
@@ -591,9 +591,9 @@ rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NUL
                 Tr <- ggplot(div_df, aes(x = step, y = div, group = Sample, col = Total))
                 Tr <- Tr +
                         geom_line() +
-                        scale_color_gradient2("total amp.", low = cbPalette[6], mid = cbPalette[1], high = cbPalette[2], midpoint = 
+                        scale_color_gradient2("total counts bef.", low = cbPalette[6], mid = cbPalette[1], high = cbPalette[2], midpoint = 
                                                       median(div_df$Total)) +
-                        xlab("total amplicons") +
+                        xlab("total counts in sample") +
                         ylab(type) +
                         theme_bw(12)
         }
@@ -620,7 +620,7 @@ rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NUL
                         Tr <- ggplot(div_df, aes(x = step, y = div, group = Sample, col = Group))
                         Tr <- Tr +
                                 geom_line() +
-                                xlab("total amplicons") +
+                                xlab("total counts in sample") +
                                 scale_color_manual("", values = cbPalette[2:8]) +
                                 ylab(type) +
                                 theme_bw(12)
@@ -639,7 +639,7 @@ rarefaction_curve_own_fast <- function(physeq, group_var = NULL, max_total = NUL
                                 geom_point(size = 1) +
                                 geom_errorbar(aes(ymin = Mean_div-SE_div, ymax = Mean_div+SE_div)) +
                                 scale_color_manual("", values = cbPalette[2:8]) +
-                                xlab("total amplicons") +
+                                xlab("total counts in sample") +
                                 ylab(paste(type, "(group mean +- SE)")) +
                                 theme_bw(12)
                 }
@@ -870,9 +870,9 @@ alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "
         pairwise.tt_shannon <- pairwise.t.test(x = DF_alpha$Shannon, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
         
         if(var(DF_alpha$Total) > 0) {
-                pairwise.tt_total <- pairwise.t.test(x = DF_alpha$Total, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+                pairwise.tt_totalcounts <- pairwise.t.test(x = DF_alpha$Total, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
         } else {
-                pairwise.tt_total <- NA
+                pairwise.tt_totalcounts <- NA
         }
         
         pairwise.tt_rich_resids <- pairwise.t.test(x = DF_alpha$Richness_resids, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
@@ -890,23 +890,23 @@ alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "
         pairwise.tt_shannon_resids_filt <- pairwise.t.test(x = DF_alpha$Shannon_resids_FilteredReads, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
         
         # add the linear models correcting for total or filtered amplicons
-        fitter_rich_total <- lm(DF_alpha[["Richness"]] ~ DF_alpha[["Total"]] + DF_alpha[[group_var]])
-        fitter_shannon_total <- lm(DF_alpha[["Shannon"]] ~ DF_alpha[["Total"]] + DF_alpha[[group_var]])
-        fitter_rich_filtered_amplicons <- lm(DF_alpha[["Richness"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
-        fitter_shannon_filtered_amplicons <- lm(DF_alpha[["Shannon"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
-        fitter.list <- list(fitter_rich_total = fitter_rich_total, fitter_shannon_total = fitter_shannon_total,
-                            fitter_shannon_filtered_amplicons = fitter_shannon_filtered_amplicons, 
-                            fitter_shannon_filtered_amplicons = fitter_shannon_filtered_amplicons)
+        fitter_rich_totalcounts <- lm(DF_alpha[["Richness"]] ~ DF_alpha[["Total"]] + DF_alpha[[group_var]])
+        fitter_shannon_totalcounts <- lm(DF_alpha[["Shannon"]] ~ DF_alpha[["Total"]] + DF_alpha[[group_var]])
+        fitter_rich_filteredreads <- lm(DF_alpha[["Richness"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
+        fitter_shannon_filteredreads <- lm(DF_alpha[["Shannon"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
+        fitter.list <- list(fitter_rich_totalcounts = fitter_rich_totalcounts, fitter_shannon_totalcounts = fitter_shannon_totalcounts,
+                            fitter_shannon_filteredreads = fitter_shannon_filteredreads, 
+                            fitter_shannon_filteredreads = fitter_shannon_filteredreads)
         
         
         TrListBP <- boxplot_alphaDiv_fromDF(DF = DF_alpha, color = group_var, group = group_var, measures = c(alpha_div_measures2, paste(alpha_div_measures2, "resids", sep = "_"), paste(alpha_div_measures2, "resids", "FilteredReads", sep = "_")))
         
-        TrList_lm <- plot_alphaDivVstotalAmplicons_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var)
+        TrList_lm <- plot_alphaDivVstotalCounts_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var)
         
         TrList_lm_filteredReads <- plot_alphaDivVsfilteredReads_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var)
         
         out <- list(DF_alpha_list = DF_alpha_list, TrListBP = TrListBP, TrList_lm = TrList_lm, TrList_lm_filteredReads = TrList_lm_filteredReads, pairwise.tt_rich = pairwise.tt_rich,
-                    fitter_list = fitter.list, pairwise.tt_shannon = pairwise.tt_shannon, pairwise.tt_total = pairwise.tt_total, pairwise.tt_rich_resids = pairwise.tt_rich_resids,
+                    fitter_list = fitter.list, pairwise.tt_shannon = pairwise.tt_shannon, pairwise.tt_totalcounts = pairwise.tt_totalcounts, pairwise.tt_rich_resids = pairwise.tt_rich_resids,
                     pairwise.tt_shannon_resids = pairwise.tt_shannon_resids, pairwise.tt_filtered_reads = pairwise.tt_filtered_reads,
                     pairwise.tt_rich_resids_filt = pairwise.tt_rich_resids_filt, pairwise.tt_shannon_resids_filt = pairwise.tt_shannon_resids_filt)
         
@@ -1344,6 +1344,183 @@ simulate_totalabVSrichness_rarefaction <- function(physeq, size1 = 50000, size2 
 }
 
 
+
+#######################################
+### FUNCTION: distance_t_analyse
+#######################################
+# INPUT:
+# dist_list: named list of dist objects (so for each distance one object)
+# physeq: phyloseq object used to make the dist objects
+# group_var: character identifying the grouping variable in the sample_data of the phyloseq
+# OUTPUT:
+# list of two named lists, one with the plots and one with the data_frames of the p_values from pairwise t.tests
+
+distance_t_analyse <- function(dist_list, physeq, group_var) {
+        
+        TrList <- vector(mode = "list", length = length(dist_list))
+        pValList <- vector(mode = "list", length = length(dist_list))
+        
+        for (i in 1:length(dist_list)){
+                DistMat <- as(dist_list[[i]], "matrix")
+                rowCol <- expand.grid(rownames(DistMat), colnames(DistMat))
+                labs <- rowCol[as.vector(lower.tri(DistMat, diag=F)),]
+                df <- cbind(labs, DistMat[lower.tri(DistMat, diag=F)])
+                colnames(df) <- c("Row","Col","Distance")
+                samdf <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
+                df$Row_Group <- samdf$Group[match(df$Row, samdf$Sample)]
+                df$Col_Group <- samdf$Group[match(df$Col, samdf$Sample)]
+                
+                # add GroupvsGroup using sort (order + match) to make sure that Old vs Young and Young vs Old both become Young vs Old
+                df$GroupvsGroup <- apply(df[, c("Row_Group", "Col_Group")], 1, function(x){
+                        paste(x[order(match(x, levels(samdf$Group)))], collapse = " vs ")
+                })
+                
+                # to make sure group comparisons are in the "order" of levels "group_var"
+                df$GroupvsGroupOrder <- apply(df[, c("Row_Group", "Col_Group")], 1, function(x){
+                        x1 <- match(x[1], levels(samdf$Group))
+                        x2 <- match(x[2], levels(samdf$Group))
+                        if (x1 <= x2) {
+                                as.numeric(paste(x1, x2, sep = ""))
+                        } else {
+                                as.numeric(paste(x2, x1, sep = ""))
+                        }
+                })
+                
+                df$Type <- "between"
+                df$Type[df$Row_Group == df$Col_Group] <- "within"
+                # NB: for within group distances, you have samples*(samples-1)/2 distances, for between group distances
+                # you have samplesgrp1 * samplesgrp2 distances.
+                
+                GvsGLeveldf <- unique(df[, c("GroupvsGroup", "GroupvsGroupOrder", "Type")])
+                GroupvsGroupLevels <- GvsGLeveldf[order(GvsGLeveldf$GroupvsGroupOrder), ]$GroupvsGroup
+                GvsGLeveldfBetween <- GvsGLeveldf[GvsGLeveldf$Type == "between", ]
+                GroupvsGroupLevelsBetween <- GvsGLeveldfBetween[order(GvsGLeveldfBetween$GroupvsGroupOrder), ]$GroupvsGroup
+                df$GroupvsGroup <- factor(df$GroupvsGroup, levels = GroupvsGroupLevels, ordered = TRUE)
+                
+                pairwise_dist_ttest <- pairwise.t.test(x = df$Distance, g = df$GroupvsGroup, alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+                pairwise_dist_ttest <- pairwise_dist_ttest$p.value
+                rowCol <- expand.grid(rownames(pairwise_dist_ttest), colnames(pairwise_dist_ttest))
+                labs <- rowCol[as.vector(lower.tri(pairwise_dist_ttest,diag=T)),]
+                df_p <- cbind(labs, pairwise_dist_ttest[lower.tri(pairwise_dist_ttest,diag=T)])
+                colnames(df_p) <- c("Distances_2","Distances_1","p_value")
+                df_p <- df_p[, c("Distances_1", "Distances_2", "p_value")]
+                
+                pValList[[i]] <- df_p
+                
+                
+                # in case there are more than two groups in group_var I want a faceted plot, i.e. one facet for each GroupvsGroupLevelsBetween, for this I need to duplicate some data
+                
+                if (length(GroupvsGroupLevels) > 1) {
+                        df_list <- lapply(GroupvsGroupLevelsBetween, function(level){
+                                grps <- unlist(strsplit(level, " vs "))
+                                df_current <- df[df$Row_Group %in% grps & df$Col_Group %in% grps, ]
+                                df_current$Level <- level
+                                df_current
+                        })
+                        df_plot <- do.call(rbind, df_list)
+                        df_plot$Level <- factor(df_plot$Level, levels = GroupvsGroupLevelsBetween, ordered = TRUE)
+                        
+                        Tr <- ggplot(df_plot, aes(x = GroupvsGroup, y = Distance, col = GroupvsGroup))
+                        Tr <- Tr + geom_boxplot(outlier.color = NA) + 
+                                geom_jitter(position = position_jitter(width = 0.3, height = 0), alpha = 0.65) +
+                                facet_wrap(~ Level, ncol = 2, scales = "free_x") +
+                                theme_bw() +
+                                xlab("") +
+                                ylab(paste(names(dist_list)[i], "distance", sep = " ")) +
+                        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+                              legend.title = element_blank())
+                        if (length(GroupvsGroupLevels) <= 7) {
+                                Tr <- Tr +
+                                        scale_color_manual(values = cbPalette[2:8])
+                        }
+                        
+                } else {
+                        Tr <- ggplot(df, aes(x = GroupvsGroup, y = Distance, col = GroupvsGroup))
+                        Tr <- Tr + geom_boxplot(outlier.color = NA) + 
+                                geom_jitter(position = position_jitter(width = 0.3, height = 0), alpha = 0.65) +
+                                theme_bw() +
+                                xlab("") +
+                                ylab(paste(names(dist_list)[i], "distance", sep = " ")) + 
+                                theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+                                      legend.title = element_blank())
+                        if (length(GroupvsGroupLevels) <= 7) {
+                                Tr <- Tr +
+                                        scale_color_manual(values = cbPalette[2:8])
+                        }
+                        
+                }
+                
+                TrList[[i]] <- Tr
+        }
+        
+        names(TrList) <- names(dist_list)
+        names(pValList) <- names(dist_list)
+        out <- list(DistanceBoxplots = TrList, DistancePValues = pValList)
+        
+}
+
+
+#######################################
+### FUNCTION: pairwise.perm.manova.own
+#######################################
+# Function is very much based on pairwise.perm.manova {RVAideMemoire}
+# but it also records R2 while looping through vegan::adonis, and generates a
+# result data frame in which the results are shown in the order of the group_fac levels
+# INPUT:
+# dist_obj: dist object
+# group_fac: the factor that groups the samples
+# nperm: permutations in adonis
+# p.adj.method: method to adjust p.values
+# OUTPUT:
+# data.frame showing p.values and R2 and adjusted p.values for the different between group comparisons
+
+
+pairwise.perm.manova.own <- function(dist_obj, group_fac, nperm = 999, 
+                                     p.adj.method = "none") {
+        
+        if (!("dist" %in% class(dist_obj))){
+                stop("dist_obj must be of class dist")
+        }
+        
+        group_fac <- factor(group_fac)
+        
+        fac_levels <- levels(group_fac)
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) # see pairwise.table
+        
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        i <- ivec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- jvec[x]
+                })
+        })
+        i_s <- i_s[upper.tri(i_s)]
+        j_s <- j_s[upper.tri(j_s)]
+        
+        p_vals <- vector(mode = "numeric", length = length(i_s))
+        r2s <- vector(mode = "numeric", length = length(i_s))
+        
+        for (k in seq_along(i_s)){
+                i <- i_s[k]
+                j <- j_s[k]
+                group_fac2 <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)])
+                dist_obj_mat <- as.matrix(dist_obj)
+                rows <- which(group_fac %in% levels(group_fac2))
+                dist_obj2 <- as.dist(dist_obj_mat[rows, rows])
+                fit <- vegan::adonis(dist_obj2 ~ group_fac2, permutations = nperm)
+                p_vals[k] <- fit$aov.tab[1, "Pr(>F)"]
+                r2s[k] <- fit$aov.tab[1, "R2"]
+        }
+        
+        
+        
+        result_df <- data.frame(Comparison = paste0(names(fac_levels_num[i_s]), "_vs_", names(fac_levels_num[j_s]), sep = ""),
+                                addonis_p_value = p_vals, adonis_R2 = r2s, p_val_adj = p.adjust(p_vals, p.adj.method))
+        
+}
 
 
 

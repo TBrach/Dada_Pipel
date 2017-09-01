@@ -47,7 +47,7 @@ colnames(AlphaDiv)[colnames(AlphaDiv) == "Observed"] <- "Richness"
     - NB: dada2 seqtabs tend to be without singletons, most likely because low abundance SVs are considered errors from more abundant SVs
 
 
-### NB: estimate_richness uses a functions from the vegan package
+### NB: estimate_richness uses functions from the vegan package
 
 - specifically vegan::estimateR (e.g. for Chao1)
 - and vegan::diversity (for Shannon and simpson)

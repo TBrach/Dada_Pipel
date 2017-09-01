@@ -962,10 +962,56 @@ plot(hfdr_res_log, height = 12000)
 # according to p-values, from blue to orange, representing the strongest to weakest associations. Grey nodes were
 # never tested, to focus power on more promising subtrees. Scanning the full tree, it becomes clear that the association
 # between age group and bacterial abundance is present in only a few isolated taxonomic groups, but that it is quite strong
-# in those groups. To give context to these results, we can retrieve the taxonomic identity of the rejected hypotheses.
+# in those groups. 
+# To give context to these results, we can retrieve the taxonomic identity of the rejected hypotheses.
+
+
+options(width=100)
+tax <- tax_table(pslog)[, c("Family", "Genus")] %>%
+        data.frame()
+tax$seq <- short_names
+hfdr_res@p.vals$seq <- rownames(hfdr_res@p.vals)
+tax %>%
+        left_join(hfdr_res@p.vals) %>%
+        arrange(adjp) %>% head(10)
+
+# So this was basically giving taxonomic names to 
+summary(hfdr_res)
+# but unfortunately leaving the higher taxonomic orders out
+
+# in any case it is surprising how similar my data is to their age data, which I think is probably good. 
+
 
 OTU <- t(counts(ps_dds, normalized = TRUE))
 
+# ====
+
+# ++++
+
+
+# ++ Multitable techniques ++
+
+# Question: what features - bacteria, genes, metabolites - are associated with different sample conditions
+
+# Since the mouse data used above included only a single table, we use a new data set, collected by another study ref 35. There are
+# two tables here, one for bacteria and another with metabolites. 12 samples were obtained, each with measurements at
+# 637 m/z values and 20,609 OTUs; however, about 96% of the entries of the microbial abundance table are exactly zero.
+# The code below retrieves this data.
+
+# So I did not recapitulate the code here, but in short the key points on their Canonical Correlation Analysis (sparse CCA)
+# that results in a triplod (PCoA plot with OTUs and metabolites):
+
+# - they use sparse CCA basically to reduce the number of features, in the end CCA results in 20 features: 5 microbes and 15 metabolites
+# that still explain most of the (co)variance.
+# - so sparse CCA can deal with more features than samples
+# - so here CCA is used a screening method not as an ordination method
+# - NB: other subsets of the features (OTUs and metabolites ) could explain the datajust as well, CCA jsut minimizes redundancy across features.
+# - so the 20 features are then used as input to an ordinary PCA
+# this results in the triplot shown 
+
+# == Fig 29 ==
+
+# ++++
 
 
 

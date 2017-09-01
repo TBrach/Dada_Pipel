@@ -16,6 +16,7 @@ library(dplyr); packageVersion("dplyr")
 library(tidyr); packageVersion("tidyr")
 library(gridExtra); packageVersion("gridExtra")
 library(xtable); packageVersion("xtable")
+library(RVAideMemoire); packageVersion("RVAideMemoire")
 
 PackageVersions <- data.frame(R = version$version.string,
                               dada2 = packageVersion("dada2"),
@@ -288,7 +289,7 @@ Tr
 # dev.off()
 ```
 
-# abundances and prevalences of the `r ntaxa(ps)` sequence variants (SVs) found in `r nsamples(ps)` samples
+# abundances and prevalences of the `r ntaxa(ps)` (amplicon) sequence variants ((A)SVs) found in `r nsamples(ps)` samples
 
 ```{r, echo = FALSE, message=FALSE}
 # phyloseq analysis starts here: so clear workspace:
@@ -297,12 +298,12 @@ rm(list = setdiff(ls(), c("cbPalette", "ps", as.character(Inputs_phyloseqAnalysi
 ```
 
 ```{r, echo = FALSE, message=FALSE}
-df_ab_prev <- data.frame(SV_ID = 1:ntaxa(ps), 
-                         total_abundance = taxa_sums(ps),
+df_ab_prev <- data.frame(ASV_ID = 1:ntaxa(ps), 
+                         total_counts_of_ASV = taxa_sums(ps),
                          prevalence = colSums(as(otu_table(ps), "matrix") != 0),
                          sparsity = colSums(as(otu_table(ps), "matrix") == 0), 
-                         mean_abundance_nonzero = apply(as(otu_table(ps), "matrix"), 2, function(x){mean(x[x > 0])}),
-                         median_abundance_nonzero = apply(as(otu_table(ps), "matrix"), 2, function(x){median(x[x > 0])}))
+                         mean_count_nonzero = apply(as(otu_table(ps), "matrix"), 2, function(x){mean(x[x > 0])}),
+                         median_count_nonzero = apply(as(otu_table(ps), "matrix"), 2, function(x){median(x[x > 0])}))
 df_ab_prev <- cbind(df_ab_prev, tax_table(ps))
 
 TrrList <- plot_correlations_abundance_prev_sparsity(df_ab_prev, col = "Phylum")
@@ -328,29 +329,30 @@ grid.arrange(TrList[[1]], TrList[[2]], TrList[[3]] + scale_y_log10(), TrList[[4]
 
 # Explore taxonomic assignment
 
-## Removal of SVs with Phylum = NA
+## Removal of ASVs with Phylum = NA
 
 ```{r, echo = FALSE, message=FALSE}
-Phyla <- dplyr::summarise(group_by(df_ab_prev, Phylum), SVs = n(), PC_SV = round(100*n()/ntaxa(ps),1), PC_total_pre = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
-                   PC_total_ab = round(100*sum(total_abundance)/sum(df_ab_prev$total_abundance), 1), 
-                   mean_pre = round(100*mean(prevalence)/nsamples(ps), 1),
-                   mean_tot_ab = round(100*mean(total_abundance)))
+Phyla <- dplyr::summarise(group_by(df_ab_prev, Phylum), ASVs = n(), PC_ASV = round(100*ASVs/ntaxa(ps),1), PC_total_prev = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
+                   PC_total_counts = round(100*sum(total_counts_of_ASV)/sum(df_ab_prev$total_counts_of_ASV), 1), 
+                   mean_prev_in_PC = round(100*mean(prevalence)/nsamples(ps), 1),
+                   mean_total_counts = round(mean(total_counts_of_ASV)),
+                   median_total_counts = round(median(total_counts_of_ASV)))
 
 knitr::kable(Phyla)
 # print(xtable(Phyla, align = "|c|c|c|c|", digits = 1), include.rownames = FALSE)
 ps <- subset_taxa(ps, !is.na(Phylum))
 ```
 
-- `r Phyla$assigned_SVs[is.na(Phyla$Phylum)]` SVs were removed, leaving `r ntaxa(ps)` SVs
+- `r Phyla$assigned_SVs[is.na(Phyla$Phylum)]` ASVs were removed, leaving `r ntaxa(ps)` SVs
 
-## Assignment distribution
+## Assignment distribution of ASVs
 
 ```{r, echo = FALSE, message=FALSE}
 assignment_distribution <- get_assignemnt_distribution(tax_table(ps))
 knitr::kable(assignment_distribution)
 ```
 
-- the Species that were assigned unambiguously:
+- the Species that were assigned ambiguously:
 
 ```{r, echo = FALSE, message=FALSE}
 # look at the species that have been assigned ambiguously
@@ -359,9 +361,9 @@ colnames(the_ambiguous_species) <- c("Genus", "Species")
 knitr::kable(as.data.frame(the_ambiguous_species))
 ```
 
-## Is the taxonomic assignment better for more abundant/pevalent SVs?
+## Is the taxonomic assignment better for more abundant/pevalent ASVs?
 
-- NB: abundance filters of taxa are based on total abundance over all samples (taxa_sums) without the abundances in the different samples being corrected for sequencing depth (library size)
+- NB: abundance filters of taxa (total counts filter (taxa_sums()) of ASVs) are here based on total counts over all samples (taxa_sums) without the abundances in the different samples being corrected for sequencing depth (library size)
 
 ```{r, echo = FALSE, message=FALSE}
 assign_vs_ab <- check_assignment_vs_abundance(taxa = tax_table(ps), seqtab = as(otu_table(ps), "matrix"), abundanceQuantiles = seq(0, 95, by = 5))
@@ -388,8 +390,9 @@ grid.arrange(assign_vs_prev[[2]], assign_vs_ab[[2]], nrow = 2)
 ```
 
 
-# raw **alpha-diversity**, i.e. without correction for total amplicons (i.e. no rarefying)
+# raw **alpha-diversity**, i.e. without correction for total counts in the samples (i.e. no rarefying)
 
+- see <https://github.com/benjjneb/dada2/issues/317> 
 - NB: estimate_richness warns if no singletons are in the data, i.e. if !any(otu_table(ps) == 1) = TRUE (= !any(seqtab.nochim == 1))
     - dada2 seqtabs when obtained with dada( , pooled = FALSE) tend to be without singletons, most likely because low abundance SVs are considered errors from more abundant SVs
 
@@ -474,9 +477,9 @@ fitter_coef_list <- lapply(alpha_div_wrap[["fitter_list"]], function(fit) {as.da
 p_values_adjustedLM <- do.call(rbind, fitter_coef_list)
 
 # add in addition lm plots to the old sample_sums
-TrList_lm_PreRareTotal <- plot_alphaDivVSoriginalTotalAmplicons(DF_alpha_rare, DF_alpha_no_rare, measures = alpha_div_measures,
+TrList_lm_PreRareTotal <- plot_alphaDivVSoriginalTotalSampleCounts(DF_alpha_rare, DF_alpha_no_rare, measures = alpha_div_measures,
                                                                 color = group_var)
-TrrList <- plot_alphaDivVSoriginalTotalAmplicons2(DF_alpha_rare, DF_alpha_no_rare, measures = alpha_div_measures,
+TrrList <- plot_alphaDivVSoriginalTotalSampleCounts2(DF_alpha_rare, DF_alpha_no_rare, measures = alpha_div_measures,
                                                                 color = group_var)
 
 # png(file = "alpha_div_no_pool.png", width = 500, height = 250)
@@ -626,11 +629,11 @@ if (alpha_at_genus){
 
 ## Preprocessing (filtering)
 
-- filtering thoughts:
-    - I filter on prevalence (keeping taxa with prevalence > `r prevalence`) and taxa_sums() (keeping taxa whose taxa sums are above the `r taxa_sums_quantile` quantile)
+- filtering strategy:
+    - I filter on prevalence (keeping taxa with prevalence > `r prevalence`) and taxa_sums() (keeping taxa whose taxa sums/ total counts over all samples are above the `r taxa_sums_quantile` quantile)
         - prevalence filter so that SVs that are very rare and only in few samples have no effect on the distance measures
-        - taxa_sums_quantile filter, so that very abundant SVs (clearly real species you would think) stay, even if they are only in a few samples. These might well separate these samples
-    - because of the taxa_sums_quantile filter, I first do a DeSEQ total amplicons adjustment on the samples. NB: this only affects the taxa_sums_quantile filter, it does not affect prevalence nor the subsequent relative abundances that are used for distance calculations.
+        - taxa_sums_quantile filter, so that very abundant ASVs (clearly real species you would think) stay, even if they are only in a few samples. These might well separate these samples
+    - because of the taxa_sums_quantile filter, I first do a DeSEQ total counts adjustment on the samples. NB: this only affects the taxa_sums_quantile filter, it does not affect prevalence nor the subsequent relative abundances that are used for distance calculations.
     - another "filter" that could be interesting, is to do the distance analysis on genus level (tax_glom) and potentially exclude NAs (I.e. doing distance analysis only on the genera we actually know)
 
 
@@ -664,11 +667,11 @@ knitr::kable(filterList[[3]])
 ```
 
 
-## calculate distances
+## calculate distances, test for significance, construct ordination plots
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, include = FALSE}
 
-dist_list <- calc_distances(ps_filt_ra, dist_methods)
+dist_list <- calc_distances(ps_filt_ra, dist_methods) # produces objects of class "dist"
 
 dist_list2 <- calc_distances(ps_taa_filt, dist_methods)
 
@@ -715,6 +718,95 @@ dist_list2 <- calc_distances(ps_taa_filt, dist_methods)
 # ====
 
 
+# == Add boxplot of the distance comparisons of the groups plus pairwise t tests ==
+
+dist_analysis_list <- distance_t_analyse(dist_list = dist_list, physeq = ps_filt_ra, group_var = group_var)
+
+dist_analysis_list2 <- distance_t_analyse(dist_list = dist_list2, physeq = ps_taa_filt, group_var = group_var)
+
+# ====
+
+
+# == add Permutational Multivariate Analysis of Variance Using Distance Matrix: vegan::adonis ==
+
+group_fac <- sample_data(ps_filt_ra)[[group_var]]
+d_list <- dist_list
+
+if (length(levels(group_fac)) > 2){
+        Overalls <- lapply(d_list, function(dist_obj){
+                fit <- vegan::adonis(dist_obj ~ group_fac, permutations = 999)
+                data.frame(Comparison = "Overall_group_var",
+                           addonis_p_value = fit$aov.tab[1, "Pr(>F)"], 
+                           adonis_R2 = fit$aov.tab[1, "R2"], 
+                           p_val_adj = fit$aov.tab[1, "Pr(>F)"])
+        })
+        
+        Groupwise <- lapply(d_list, function(dist_obj){
+                pairwise.perm.manova.own(dist_obj = dist_obj,
+                                         group_fac = group_fac,
+                                         nperm = 999,
+                                         p.adj.method = "fdr")
+        })
+        
+        adonis_list <- lapply(1:length(Groupwise), function(i){
+                rbind(Overalls[[i]], Groupwise[[i]])
+        })
+        
+        names(adonis_list) <- names(Overalls)
+        
+} else {
+        
+        adonis_list <- lapply(d_list, function(dist_obj){
+                fit <- vegan::adonis(dist_obj ~ group_fac, permutations = 999)
+                data.frame(Comparison = "Overall_group_var",
+                           addonis_p_value = fit$aov.tab[1, "Pr(>F)"], 
+                           adonis_R2 = fit$aov.tab[1, "R2"], 
+                           p_val_adj = fit$aov.tab[1, "Pr(>F)"])
+        })
+        
+}
+
+group_fac <- sample_data(ps_taa_filt)[[group_var]]
+d_list <- dist_list2
+
+if (length(levels(group_fac)) > 2){
+        Overalls <- lapply(d_list, function(dist_obj){
+                fit <- vegan::adonis(dist_obj ~ group_fac, permutations = 999)
+                data.frame(Comparison = "Overall_group_var",
+                           addonis_p_value = fit$aov.tab[1, "Pr(>F)"], 
+                           adonis_R2 = fit$aov.tab[1, "R2"], 
+                           p_val_adj = fit$aov.tab[1, "Pr(>F)"])
+        })
+        
+        Groupwise <- lapply(d_list, function(dist_obj){
+                pairwise.perm.manova.own(dist_obj = dist_obj,
+                                         group_fac = group_fac,
+                                         nperm = 999,
+                                         p.adj.method = "fdr")
+        })
+        
+        adonis_list2 <- lapply(1:length(Groupwise), function(i){
+                rbind(Overalls[[i]], Groupwise[[i]])
+        })
+        
+        names(adonis_list2) <- names(Overalls)
+        
+} else {
+        
+        adonis_list2 <- lapply(d_list, function(dist_obj){
+                fit <- vegan::adonis(dist_obj ~ group_fac, permutations = 999)
+                data.frame(Comparison = "Overall_group_var",
+                           addonis_p_value = fit$aov.tab[1, "Pr(>F)"], 
+                           adonis_R2 = fit$aov.tab[1, "R2"], 
+                           p_val_adj = fit$aov.tab[1, "Pr(>F)"])
+        })
+        
+}
+
+
+# ====
+
+# == construct ordination plots ==
 
 pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "PCoA", group_var = group_var, coord_cor = TRUE) 
 
@@ -742,43 +834,83 @@ for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
 
 # nmdss2 <- calc_ordination_from_distances(ps_taa_filt, dist_list = dist_list2, ordination_type = "NMDS", group_var = group_var) 
 
+# ====
+
 ```
 
-## ordinations
+### beta diversity results relative abundance
 
-- **PCoA**:
+- **Distance boxplots**
 
-- relative abundance
+```{r, fig.width = 14, fig.height = 10*length(dist_analysis_list[["DistanceBoxplots"]]), warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "beta_p.pdf", width = 10, height = 8)
+do.call("grid.arrange", c(dist_analysis_list[["DistanceBoxplots"]], nrow = length(dist_analysis_list[["DistanceBoxplots"]])))
+# dev.off()
+```
 
-```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "beta_p.pdf", width = 10, height = 8)
+# kable(dist_analysis_list[["DistancePValues"]][[1]])
+dist_analysis_list[["DistancePValues"]]
+# dev.off()
+```
+
+- **adonis, Permutational Multivariate Analysis of Variance Using Distance Matrix**:
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+adonis_list
+```
+
+- **Ordination Plots**
+
+```{r, fig.width = 10, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
 # pdf(file = "beta_p.pdf", width = 10, height = 8)
 do.call("grid.arrange", c(TrList_ra, ncol = 2))
 # dev.off()
 ```
 
-- counts:
-
-```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
-do.call("grid.arrange", c(TrList_counts, ncol = 2))
-```
-    
-- **NMDS (non-metric multidimensional scaling)**
-
-- relative abundance
-
-```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 10, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
 # do.call("grid.arrange", c(nmdss[["ordination_Tr_own"]], ncol = 2))
 ```
 
-- counts:
+### beta diversity results size adjusted counts
 
-```{r, fig.width = 10, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+- **Distance boxplots**
+
+```{r, fig.width = 14, fig.height = 10*length(dist_analysis_list2[["DistanceBoxplots"]]), warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "beta_p.pdf", width = 10, height = 8)
+do.call("grid.arrange", c(dist_analysis_list2[["DistanceBoxplots"]], nrow = length(dist_analysis_list2[["DistanceBoxplots"]])))
+# dev.off()
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "beta_p.pdf", width = 10, height = 8)
+# kable(dist_analysis_list[["DistancePValues"]][[1]])
+dist_analysis_list2[["DistancePValues"]]
+# dev.off()
+```
+
+- **adonis, Permutational Multivariate Analysis of Variance Using Distance Matrix**:
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+adonis_list2
+```
+
+- **Ordination Plots**
+
+```{r, fig.width = 10, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(TrList_counts, ncol = 2))
+```
+    
+```{r, fig.width = 10, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
 # do.call("grid.arrange", c(nmdss2[["ordination_Tr_own"]], ncol = 2))
 ```
 
+
+
 ### Canonical correspondance analysis
 
-- NB: <https://f1000research.com/articles/5-1492/v1> did it just with log transformed counts, here with relative abundances
+- NB: <https://f1000research.com/articles/5-1492/v1> did it just with log transformed counts, here with relative abundances and library size adjusted log transformed counts
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, include = FALSE}
 

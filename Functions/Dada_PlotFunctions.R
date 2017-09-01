@@ -428,6 +428,7 @@ TotalandUniqueAmplicons <- function(FinalNumbers, seqtab, sort =TRUE) {
 #######################################
 #### plotSVdistributions
 #######################################
+## SORRY FOR THE TERMINOLOGY CONFUSION< from now on counts is used instead of amplicons in the plots
 ## REQUIRES dplyr
 ## Input:
 # Seqtab: seqtab from dada2 wrapper
@@ -438,45 +439,45 @@ TotalandUniqueAmplicons <- function(FinalNumbers, seqtab, sort =TRUE) {
 
 plotSVdistributions <- function(seqtab, prevalence = 10) {
         
-        FinalNumbersSeq <- data.frame(Sequence = colnames(seqtab), InNumberSamples = colSums(seqtab != 0), TotalAmplicons = colSums(seqtab))
+        FinalNumbersSeq <- data.frame(Sequence = colnames(seqtab), InNumberSamples = colSums(seqtab != 0), TotalCounts = colSums(seqtab))
         # a look at it shows you that seqtab is ordered after total counts
         FinalNumbersSeq <- group_by(FinalNumbersSeq, InNumberSamples)
-        AmpliconDistribution <- dplyr::summarise(FinalNumbersSeq, UniqueAmplicons = n(), TotalAmplicons = sum(TotalAmplicons))
-        AmpliconDistribution$CumSumUnique <- rev(cumsum(rev(AmpliconDistribution$UniqueAmplicons)))
-        AmpliconDistribution$CumPerCUnique <- rev(cumsum(rev(AmpliconDistribution$UniqueAmplicons/ncol(seqtab))))
-        AmpliconDistribution$CumSumTotal <- rev(cumsum(rev(AmpliconDistribution$TotalAmplicons)))
-        AmpliconDistribution$CumPerCTotal <- rev(cumsum(rev(AmpliconDistribution$TotalAmplicons/sum(colSums(seqtab)))))
+        CountDistribution <- dplyr::summarise(FinalNumbersSeq, No_ASVs = n(), TotalCounts = sum(TotalCounts))
+        CountDistribution$CumSumUnique <- rev(cumsum(rev(CountDistribution$No_ASVs)))
+        CountDistribution$CumPerCUnique <- rev(cumsum(rev(CountDistribution$No_ASVs/ncol(seqtab))))
+        CountDistribution$CumSumTotal <- rev(cumsum(rev(CountDistribution$TotalCounts)))
+        CountDistribution$CumPerCTotal <- rev(cumsum(rev(CountDistribution$TotalCounts/sum(colSums(seqtab)))))
         
         PCValue <- ceiling((prevalence/100)*dim(seqtab)[1]) # tells you in how many samples a SV must be present to meet the prevalence 
         
-        # Diff <- AmpliconDistribution$InNumberSamples - PCValue
+        # Diff <- CountDistribution$InNumberSamples - PCValue
         # index <- which.max(Diff[Diff<0]) + which.min(Diff[Diff>=0])
-        index <- which(AmpliconDistribution$InNumberSamples >= PCValue)[1]
-        PCKeptAtPCValue <- AmpliconDistribution$CumPerCTotal[index]
-        SVskeptAtPCValue <- AmpliconDistribution$CumPerCUnique[index]
+        index <- which(CountDistribution$InNumberSamples >= PCValue)[1]
+        PCKeptAtPCValue <- CountDistribution$CumPerCTotal[index]
+        SVskeptAtPCValue <- CountDistribution$CumPerCUnique[index]
         
         # The number of samples the SVs are present in
-        Tr <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = UniqueAmplicons))
+        Tr <- ggplot(CountDistribution, aes(x = InNumberSamples, y = No_ASVs))
         Tr <- Tr + geom_point(col = "#E69F00", size = 3) +
                 xlab("prevalence") +
-                ylab("number of SVs") +
+                ylab("number of ASVs") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
                       panel.grid.major.x = element_line(color = "#999999", size = .15))
         
         
-        In1Index <- which(AmpliconDistribution$InNumberSamples == 1)
+        In1Index <- which(CountDistribution$InNumberSamples == 1)
         if (length(In1Index) != 0) {
-                Tr <- Tr + ggtitle(paste(AmpliconDistribution$UniqueAmplicons[In1Index], " of ", AmpliconDistribution$CumSumUnique[1], " SVs (", round(100*AmpliconDistribution$UniqueAmplicons[In1Index]/AmpliconDistribution$CumSumUnique[1], 1), " %)", " were only found in 1 sample", sep = ""))
+                Tr <- Tr + ggtitle(paste(CountDistribution$No_ASVs[In1Index], " of ", CountDistribution$CumSumUnique[1], " ASVs (", round(100*CountDistribution$No_ASVs[In1Index]/CountDistribution$CumSumUnique[1], 1), " %)", " were only found in 1 sample", sep = ""))
         } 
         
         
         # Cumulative Percentage of SVs
-        Tr1 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCUnique))
+        Tr1 <- ggplot(CountDistribution, aes(x = InNumberSamples, y = CumPerCUnique))
         Tr1 <- Tr1 + geom_point(col = "#E69F00", size = 3) +
                 xlab("prevalence") +
-                ylab("cumulative percentage of SVs") +
+                ylab("cumulative percentage of ASVs") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
@@ -485,28 +486,27 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
         Tr1 <- Tr1 + 
                 geom_hline(yintercept = SVskeptAtPCValue, lty =  "dashed") +
                 geom_vline(xintercept = (prevalence/100)*dim(seqtab)[1], lty = 'dashed') +
-                ggtitle(paste("prevalence ", prevalence, " % = ", round((prevalence/100)*dim(seqtab)[1],1), "; ", AmpliconDistribution$CumSumUnique[index], " of ", AmpliconDistribution$CumSumUnique[1], 
-                              " SVs (", round(100*AmpliconDistribution$CumSumUnique[index]/AmpliconDistribution$CumSumUnique[1], 1), " %) have higher prevalence", sep = ""))
+                ggtitle(paste("prevalence ", prevalence, " % = ", round((prevalence/100)*dim(seqtab)[1],1), "; ", CountDistribution$CumSumUnique[index], " of ", CountDistribution$CumSumUnique[1], 
+                              " ASVs (", round(100*CountDistribution$CumSumUnique[index]/CountDistribution$CumSumUnique[1], 1), " %) have higher prevalence", sep = ""))
         
         
-        # The number of samples the total amplicons are present in
-        Tr2 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = TotalAmplicons))
+        Tr2 <- ggplot(CountDistribution, aes(x = InNumberSamples, y = TotalCounts))
         Tr2 <- Tr2 + geom_point(col = "#E69F00", size = 3) +
                 xlab("prevalence") +
-                ylab("amplicons") +
+                ylab("total counts of ASVs with given prevalence") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
                       panel.grid.major.x = element_line(color = "#999999", size = .15))
         
-        Tr2 <- Tr2 + ggtitle(paste(AmpliconDistribution$CumSumTotal[1] - AmpliconDistribution$CumSumTotal[index], " of ",
-                                   AmpliconDistribution$CumSumTotal[1], " (", round(100*(AmpliconDistribution$CumSumTotal[1] - AmpliconDistribution$CumSumTotal[index])/AmpliconDistribution$CumSumTotal[1], 2),
-                                    " %) amplicons are from SVs present in less than ", round((prevalence/100)*dim(seqtab)[1],1), " samples.", sep = ""))
+        Tr2 <- Tr2 + ggtitle(paste(CountDistribution$CumSumTotal[1] - CountDistribution$CumSumTotal[index], " of ",
+                                   CountDistribution$CumSumTotal[1], " (", round(100*(CountDistribution$CumSumTotal[1] - CountDistribution$CumSumTotal[index])/CountDistribution$CumSumTotal[1], 2),
+                                    " %) counts are from ASVs present in less than ", round((prevalence/100)*dim(seqtab)[1],1), " samples.", sep = ""))
         
-        Tr3 <- ggplot(AmpliconDistribution, aes(x = InNumberSamples, y = CumPerCTotal))
+        Tr3 <- ggplot(CountDistribution, aes(x = InNumberSamples, y = CumPerCTotal))
         Tr3 <- Tr3 + geom_point(col = "#E69F00", size = 3) +
                 xlab("prevalence") +
-                ylab("cumulative percentage of amplicons") +
+                ylab("cumulative percentage of counts") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_line(color = "#999999", size = .15),
@@ -515,11 +515,11 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
         Tr3 <- Tr3 + 
                 geom_hline(yintercept = PCKeptAtPCValue, lty =  "dashed") +
                 geom_vline(xintercept = (prevalence/100)*dim(seqtab)[1], lty = 'dashed') +
-                ggtitle(paste("prevalence ", prevalence, " % = ", round((prevalence/100)*dim(seqtab)[1],1), "; ", AmpliconDistribution$CumSumTotal[index], " of ", AmpliconDistribution$CumSumTotal[1], 
-                              " amplicons (", round(100*AmpliconDistribution$CumSumTotal[index]/AmpliconDistribution$CumSumTotal[1], 1), " %) would remain", sep = ""))
+                ggtitle(paste("prevalence ", prevalence, " % = ", round((prevalence/100)*dim(seqtab)[1],1), "; ", CountDistribution$CumSumTotal[index], " of ", CountDistribution$CumSumTotal[1], 
+                              " counts (", round(100*CountDistribution$CumSumTotal[index]/CountDistribution$CumSumTotal[1], 1), " %) would remain", sep = ""))
                 
         
-        TrList <- list(Tr, Tr1, Tr2, Tr3, AmpliconDistribution)
+        TrList <- list(Tr, Tr1, Tr2, Tr3, CountDistribution)
         
         return(TrList)
         
@@ -688,13 +688,13 @@ boxplot_alphaDiv_fromDF <- function(DF, measures, color = NULL, shape = NULL,
 
 
 #######################################
-#### plot_alphaDivVstotalAmplicons
+#### plot_alphaDivVstotalCounts
 #######################################
 # Function plots the alpha diversity measures from estimate_richness against the total number of reads/amplicons per sample
 # and adds a linear fit.
 # if color is given the fit is individual on the different colors, but the p-value in the title is still to an overall fit!!
 
-plot_alphaDivVstotalAmplicons <- function(physeq, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
+plot_alphaDivVstotalCounts <- function(physeq, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
         
         # needed to get the p-value from-linear fit objects (from stackoverflow)
         lmp <- function (modelobject) {
@@ -766,7 +766,7 @@ plot_alphaDivVstotalAmplicons <- function(physeq, measures = NULL, color = NULL,
                 
                 Tr <- Tr + ggtitle(paste("lm fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
                 
-                Tr <- Tr + theme_bw() + xlab("total amplicons (taxa_sums())")
+                Tr <- Tr + theme_bw() + xlab("total counts in sample (sample_sums())")
                 
                 Tr = Tr + theme(panel.grid.minor = element_blank())
                 
@@ -781,13 +781,13 @@ plot_alphaDivVstotalAmplicons <- function(physeq, measures = NULL, color = NULL,
 
 
 #######################################
-#### plot_alphaDivVstotalAmplicons
+#### plot_alphaDivVstotalCounts
 #######################################
 # Function plots the alpha diversity measures from estimate_richness against the total number of reads/amplicons per sample
 # and adds a linear fit.
 # if color is given the fit is individual on the different colors, but the p-value in the title is still to an overall fit!!
 
-plot_alphaDivVstotalAmplicons_fromList <- function(DF_List, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
+plot_alphaDivVstotalCounts_fromList <- function(DF_List, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
         
         TrList <- list()
         
@@ -830,7 +830,7 @@ plot_alphaDivVstotalAmplicons_fromList <- function(DF_List, measures = NULL, col
                 
                 Tr <- Tr + ggtitle(paste("lm fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
                 
-                Tr <- Tr + theme_bw() + xlab("total amplicons (sample_sums())")
+                Tr <- Tr + theme_bw() + xlab("total counts in sample (sample_sums())")
                 
                 Tr = Tr + theme(panel.grid.minor = element_blank())
                 
@@ -907,11 +907,11 @@ plot_alphaDivVsfilteredReads_fromList <- function(DF_List, measures = NULL, colo
 }
 
 #######################################
-#### plot_alphaDivVSoriginalTotalAmplicons
+#### plot_alphaDivVSoriginalTotalSampleCounts
 #######################################
 # wanted to add this plot after rarefaction
 
-plot_alphaDivVSoriginalTotalAmplicons <- function(DF_alpha_rare, DF_alpha_no_rare, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
+plot_alphaDivVSoriginalTotalSampleCounts <- function(DF_alpha_rare, DF_alpha_no_rare, measures = NULL, color = NULL, shape = NULL, defCol = "#E69F00"){
         
         measures2 <- measures
         if ("Observed" %in% measures2) {
@@ -959,7 +959,7 @@ plot_alphaDivVSoriginalTotalAmplicons <- function(DF_alpha_rare, DF_alpha_no_rar
                 
                 Tr <- Tr + ggtitle(paste("lm fit: p-value: ", format(pfit, digits = 4), ", adj.r.squared: ", adjR2, sep = ""))
                 
-                Tr <- Tr + theme_bw() + xlab("total amplicons before rarefying")
+                Tr <- Tr + theme_bw() + xlab("total counts in sample (sample_sums()) before rarefying")
                 
                 Tr = Tr + theme(panel.grid.minor = element_blank())
                 
@@ -975,11 +975,11 @@ plot_alphaDivVSoriginalTotalAmplicons <- function(DF_alpha_rare, DF_alpha_no_rar
 
 
 #######################################
-#### plot_alphaDivVSoriginalTotalAmplicons2
+#### plot_alphaDivVSoriginalTotalSampleCounts2
 #######################################
 # wanted to add this plot after rarefaction
 
-plot_alphaDivVSoriginalTotalAmplicons2 <- function(DF_alpha_rare, DF_alpha_no_rare, measures = NULL, color = NULL, defCol = "#E69F00"){
+plot_alphaDivVSoriginalTotalSampleCounts2 <- function(DF_alpha_rare, DF_alpha_no_rare, measures = NULL, color = NULL, defCol = "#E69F00"){
         
         measures2 <- measures
         if ("Observed" %in% measures2) {
@@ -990,11 +990,11 @@ plot_alphaDivVSoriginalTotalAmplicons2 <- function(DF_alpha_rare, DF_alpha_no_ra
         DF_alpha_no_rare$Type <- "Before rarefaction"
         DF_alpha_rare <- DF_alpha_rare[, c("Sample", measures2, "Total", "filtered_reads", color)]
         to_level <- DF_alpha_rare$Total[1]
-        DF_alpha_rare$Type <- paste("After rarefaction to ", to_level, " amplicons", sep = "")
+        DF_alpha_rare$Type <- paste("After rarefaction to ", to_level, " counts", sep = "")
         DF_alpha_rare$Total <- DF_alpha_no_rare$Total
         
         DF <- rbind(DF_alpha_no_rare, DF_alpha_rare)
-        DF$Type <- factor(DF$Type, levels = c("Before rarefaction", paste("After rarefaction to ", to_level, " amplicons", sep = "")),
+        DF$Type <- factor(DF$Type, levels = c("Before rarefaction", paste("After rarefaction to ", to_level, " counts", sep = "")),
                           ordered = TRUE)
         
         TrList <- list()
@@ -1039,7 +1039,7 @@ plot_alphaDivVSoriginalTotalAmplicons2 <- function(DF_alpha_rare, DF_alpha_no_ra
                 Tr <- Tr + ggtitle(paste("fit before: p: ", format(pfit, digits = 4), ", R^2: ", adjR2, "; after: p: ",
                                          format(pfit_rare, digits = 4), ", R^2: ", adjR2_rare, sep = ""))
                 
-                Tr <- Tr + theme_bw() + xlab("total amplicons before rarefaction")
+                Tr <- Tr + theme_bw() + xlab("total counts in sample (sample_sums()) before rarefying")
                 
                 Tr = Tr + theme(panel.grid.minor = element_blank())
                 
@@ -1091,7 +1091,7 @@ plot_alphaDivVSoriginalTotalAmplicons2 <- function(DF_alpha_rare, DF_alpha_no_ra
                 Tr <- Tr + ggtitle(paste("fit before: p: ", format(pfit, digits = 4), ", R^2: ", adjR2, "; after: p: ",
                                          format(pfit_rare, digits = 4), ", R^2: ", adjR2_rare, sep = ""))
                 
-                Tr <- Tr + theme_bw() + xlab("No of filtered reads (that entered dada algorithm)")
+                Tr <- Tr + theme_bw() + xlab("No of filtered reads (that entered dada() command)")
                 
                 Tr = Tr + theme(panel.grid.minor = element_blank())
                 
@@ -1143,7 +1143,7 @@ plot_alphaDivVSoriginalTotalAmplicons2 <- function(DF_alpha_rare, DF_alpha_no_ra
                 Tr <- Tr + ggtitle(paste("fit before: p: ", format(pfit, digits = 4), ", R^2: ", adjR2, "; after: p: ",
                                          format(pfit_rare, digits = 4), ", R^2: ", adjR2_rare, sep = ""))
                 
-                Tr <- Tr + theme_bw() + xlab("total amplicons before rarefaction")
+                Tr <- Tr + theme_bw() + xlab("total counts in sample (sample_sums()) before rarefying")
                 
                 Tr = Tr + theme(panel.grid.minor = element_blank(),
                                 legend.title = element_blank(),
@@ -1197,7 +1197,7 @@ plot_alphaDivVSoriginalTotalAmplicons2 <- function(DF_alpha_rare, DF_alpha_no_ra
                 Tr <- Tr + ggtitle(paste("fit before: p: ", format(pfit, digits = 4), ", R^2: ", adjR2, "; after: p: ",
                                          format(pfit_rare, digits = 4), ", R^2: ", adjR2_rare, sep = ""))
                 
-                Tr <- Tr + theme_bw() + xlab("No of filtered reads (that entered dada algorithm)")
+                Tr <- Tr + theme_bw() + xlab("No of filtered reads (that entered dada() command)")
                 
                 Tr = Tr + theme(panel.grid.minor = element_blank(),
                                 legend.title = element_blank(),
@@ -1217,26 +1217,26 @@ plot_alphaDivVSoriginalTotalAmplicons2 <- function(DF_alpha_rare, DF_alpha_no_ra
 #######################################
 #### plot_correlations_abundance_prev_sparsity
 #######################################
-# df_ab_prev: data frame with "SV_ID", "total_abundance", "prevalence", "sparsity", "mean_abundance_nonzero",
-# "median_abundance_nonzero"
+# df_ab_prev: data frame with "ASV_ID", "total_counts_of_ASV", "prevalence", "sparsity", "mean_count_nonzero",
+# "median_count_nonzero"
 # outputs a list with different plots and fits
 
 plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ # NB: you could color by Phylum for example
         
         nsamples <- df_ab_prev$prevalence[1] + df_ab_prev$sparsity[1]
         
-        Tr_ab <- ggplot(df_ab_prev, aes(x = SV_ID, y = total_abundance))
+        Tr_ab <- ggplot(df_ab_prev, aes(x = ASV_ID, y = total_counts_of_ASV))
         if (is.null(col)) {
                 Tr_ab <- Tr_ab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
         } else {
                 Tr_ab <- Tr_ab + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
         }
         Tr_ab <- Tr_ab +
-                ylab("total abundance (taxa_sums())") +
+                ylab("total counts of ASV (= taxa_sums())") +
                 theme_bw(12)
         
         
-        Tr_prev <- ggplot(df_ab_prev, aes(x = SV_ID, y = prevalence))
+        Tr_prev <- ggplot(df_ab_prev, aes(x = ASV_ID, y = prevalence))
         if (is.null(col)) {
                 Tr_prev <- Tr_prev + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
         } else {
@@ -1246,18 +1246,18 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
                 theme_bw(12)
         
         
-        # - associations of total abundance and log10(total_abundance) to sparsity/prevalence -
-        # NB: turned out: log10(total_abundance) is far better correlated with prevalence/sparsity, so I stick with the log fits
+        # - associations of total abundance and log10(total_counts_of_ASV) to sparsity/prevalence -
+        # NB: turned out: log10(total_counts_of_ASV) is far better correlated with prevalence/sparsity, so I stick with the log fits
         # Also NB: since prevalence = constant - sparsity, a fit prevalence ~ abundance is equal to fit sparsity ~ abundance just with
         # opposite coefficient signs
         
-        # fit_spar <- lm(formula = sparsity ~ total_abundance, data = df_ab_prev)
+        # fit_spar <- lm(formula = sparsity ~ total_counts_of_ASV, data = df_ab_prev)
         # pval_spar <- lmp(fit_spar)
-        # fit_prev <- lm(formula = prevalence ~ total_abundance, data = df_ab_prev)
+        # fit_prev <- lm(formula = prevalence ~ total_counts_of_ASV, data = df_ab_prev)
         # pval_prev <- lmp(fit_prev)
-        fit_prev_log10 <- lm(formula = prevalence ~ log10(total_abundance), data = df_ab_prev)
+        fit_prev_log10 <- lm(formula = prevalence ~ log10(total_counts_of_ASV), data = df_ab_prev)
         pval_prev_log10 <- lmp(fit_prev_log10)
-        # fit_spar_log10 <- lm(formula = sparsity ~ log10(total_abundance), data = df_ab_prev)
+        # fit_spar_log10 <- lm(formula = sparsity ~ log10(total_counts_of_ASV), data = df_ab_prev)
         # pval_spar_log10 <- lmp(fit_spar_log10)
         # identical(pval_prev_log10, pval_spar_log10) # TRUE
         
@@ -1265,26 +1265,26 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
         # here I prepare all combinations, but stick to prevalence for now (comment sparsity out) since correlations are the same
         
         
-        # fit_spar_mean <- lm(formula = sparsity ~ mean_abundance_nonzero, data = df_ab_prev)
+        # fit_spar_mean <- lm(formula = sparsity ~ mean_count_nonzero, data = df_ab_prev)
         # pval_spar_mean <- lmp(fit_spar_mean)
-        # fit_spar_mean_log10 <- lm(formula = sparsity ~ log10(mean_abundance_nonzero), data = df_ab_prev)
+        # fit_spar_mean_log10 <- lm(formula = sparsity ~ log10(mean_count_nonzero), data = df_ab_prev)
         # pval_spar_mean_log10 <- lmp(fit_spar_mean_log10)
-        # fit_spar_median <- lm(formula = sparsity ~ median_abundance_nonzero, data = df_ab_prev)
+        # fit_spar_median <- lm(formula = sparsity ~ median_count_nonzero, data = df_ab_prev)
         # pval_spar_median <- lmp(fit_spar_median)
-        # fit_spar_median_log10 <- lm(formula = sparsity ~ log10(median_abundance_nonzero), data = df_ab_prev)
+        # fit_spar_median_log10 <- lm(formula = sparsity ~ log10(median_count_nonzero), data = df_ab_prev)
         # pval_spar_median_log10 <- lmp(fit_spar_median_log10)
         
-        fit_prev_mean <- lm(formula = prevalence ~ mean_abundance_nonzero, data = df_ab_prev)
+        fit_prev_mean <- lm(formula = prevalence ~ mean_count_nonzero, data = df_ab_prev)
         pval_prev_mean <- lmp(fit_prev_mean)
-        fit_prev_mean_log10 <- lm(formula = prevalence ~ log10(mean_abundance_nonzero), data = df_ab_prev)
+        fit_prev_mean_log10 <- lm(formula = prevalence ~ log10(mean_count_nonzero), data = df_ab_prev)
         pval_prev_mean_log10 <- lmp(fit_prev_mean_log10)
-        fit_prev_median <- lm(formula = prevalence ~ median_abundance_nonzero, data = df_ab_prev)
+        fit_prev_median <- lm(formula = prevalence ~ median_count_nonzero, data = df_ab_prev)
         pval_prev_median <- lmp(fit_prev_median)
-        fit_prev_median_log10 <- lm(formula = prevalence ~ log10(median_abundance_nonzero), data = df_ab_prev)
+        fit_prev_median_log10 <- lm(formula = prevalence ~ log10(median_count_nonzero), data = df_ab_prev)
         pval_prev_median_log10 <- lmp(fit_prev_median_log10)
         
         
-        # Tr_ab_vs_prev <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        # Tr_ab_vs_prev <- ggplot(df_ab_prev, aes(x = total_counts_of_ASV, y = prevalence))
         # Tr_ab_vs_prev <- Tr_ab_vs_prev +
         #         geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
         #         geom_smooth(method = "lm") +
@@ -1295,7 +1295,7 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
         # theme_bw(12)
         # Tr_ab_vs_prev_75Q <- Tr_ab_vs_prev + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$abundance, .75)))
         
-        Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_counts_of_ASV, y = prevalence))
         if (is.null(col)) {
                 Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
         } else {
@@ -1306,13 +1306,13 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
                 scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
                 geom_smooth(method = "lm") +
                 # annotate("text", x = max(df_ab_prev$abundance)/5, y = 5, label = paste("R.square of lm: ", as.character(round(summary(fit_prev)$r.squared,4), sep = ""))) +
-                xlab("total abundance (taxa_sums())") +
+                xlab("total counts of ASV (= taxa_sums())") +
                 ggtitle(paste("lm fit: p.val: ", format(pval_prev_log10, digits = 4), "R.square: ", as.character(round(summary(fit_prev_log10)$r.squared,4), sep = ""))) +
                 theme_bw(12)
         
         # NB: you could color or facet by phylum
         
-        # Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        # Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_counts_of_ASV, y = prevalence))
         # Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab +
         #         geom_point(aes(col = Phylum), size = 2, alpha = 0.7) +
         #         scale_x_log10() +
@@ -1323,7 +1323,7 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
         #         theme_bw(12)
         
         
-        # Tr_spar_vs_meanab <- ggplot(df_ab_prev, aes(x = mean_abundance_nonzero, y = sparsity))
+        # Tr_spar_vs_meanab <- ggplot(df_ab_prev, aes(x = mean_count_nonzero, y = sparsity))
         # Tr_spar_vs_meanab <- Tr_spar_vs_meanab +
         #         geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
         #         geom_smooth(method = "lm") +
@@ -1331,10 +1331,10 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
         #         xlab("SVs mean abundance in non-zero samples") +
         #         ggtitle(paste("lm fit: p.val: ", format(pval_spar_mean, digits = 4), "R.square: ", as.character(round(summary(fit_spar_mean)$r.squared,4), sep = ""))) +
         #         theme_bw(12)
-        # Tr_spar_vs_meanab_75Q <- Tr_spar_vs_meanab + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$mean_abundance_nonzero, .75)))
+        # Tr_spar_vs_meanab_75Q <- Tr_spar_vs_meanab + coord_cartesian(xlim = c(-5, quantile(df_ab_prev$mean_count_nonzero, .75)))
         # 
         
-        # Tr_spar_vs_log10_meanab <- ggplot(df_ab_prev, aes(x = mean_abundance_nonzero, y = sparsity))
+        # Tr_spar_vs_log10_meanab <- ggplot(df_ab_prev, aes(x = mean_count_nonzero, y = sparsity))
         # Tr_spar_vs_log10_meanab <- Tr_spar_vs_log10_meanab +
         #         geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
         #         scale_x_log10() +
@@ -1343,7 +1343,7 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
         #         ggtitle(paste("lm fit: p.val: ", format(pval_spar_mean_log10, digits = 4), "R.square: ", as.character(round(summary(fit_spar_mean_log10)$r.squared,4), sep = ""))) +
         #         theme_bw(12)
         
-        Tr_prev_vs_log10_meanab <- ggplot(df_ab_prev, aes(x = mean_abundance_nonzero, y = prevalence))
+        Tr_prev_vs_log10_meanab <- ggplot(df_ab_prev, aes(x = mean_count_nonzero, y = prevalence))
         if (is.null(col)) {
                 Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
         } else {
@@ -1353,11 +1353,11 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
                 scale_x_log10() +
                 geom_smooth(method = "lm") +
                 scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
-                xlab("mean abundance of SV in non-zero samples") +
+                xlab("mean count of ASV in non-zero samples") +
                 ggtitle(paste("lm fit: p.val: ", format(pval_prev_mean_log10, digits = 4), "R.square: ", as.character(round(summary(fit_prev_mean_log10)$r.squared,4), sep = ""))) +
                 theme_bw(12)
         
-        Tr_prev_vs_log10_medianab <- ggplot(df_ab_prev, aes(x = median_abundance_nonzero, y = prevalence))
+        Tr_prev_vs_log10_medianab <- ggplot(df_ab_prev, aes(x = median_count_nonzero, y = prevalence))
         if (is.null(col)) {
                 Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
         } else {
@@ -1367,7 +1367,7 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
                 scale_x_log10() +
                 geom_smooth(method = "lm") +
                 scale_y_continuous(limits = c(-1, max(df_ab_prev$prevalence) + 5)) +
-                xlab("median abundance of SV in non-zero samples") +
+                xlab("median count of ASV in non-zero samples") +
                 ggtitle(paste("lm fit: p.val: ", format(pval_prev_median_log10, digits = 4), "R.square: ", as.character(round(summary(fit_prev_median_log10)$r.squared,4), sep = ""))) +
                 theme_bw(12)
         
@@ -1392,100 +1392,100 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
 #######################################
 #### plot_abundance_prev_filter
 #######################################
-# df_ab_prev: data frame with "SV_ID", "total_abundance", "prevalence", "sparsity", "mean_abundance_nonzero",
-# "median_abundance_nonzero" plus tax_table
+# df_ab_prev: data frame with "SV_ID", "total_counts_of_ASV", "prevalence", "sparsity", "mean_count_nonzero",
+# "median_count_nonzero" plus tax_table
 
 plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){ 
         
         df_ab_prev <- data.frame(SV_ID = 1:ntaxa(physeq), 
-                                 total_abundance = taxa_sums(physeq),
+                                 total_counts_of_ASV = taxa_sums(physeq),
                                  prevalence = colSums(as(otu_table(physeq), "matrix") != 0),
                                  sparsity = colSums(as(otu_table(physeq), "matrix") == 0), 
-                                 mean_abundance_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){mean(x[x > 0])}),
-                                 median_abundance_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){median(x[x > 0])}))
+                                 mean_count_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){mean(x[x > 0])}),
+                                 median_count_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){median(x[x > 0])}))
         
         df_ab_prev <- cbind(df_ab_prev, tax_table(physeq))
         
         prev_thresh <- (prevalence/100)*nsamples(physeq)
         abund_thresh <- quantile(taxa_sums(physeq), probs = taxa_sums_quantile/100)
         
-        df_ab_prev_filt <- dplyr::filter(df_ab_prev, prevalence > prev_thresh | total_abundance > abund_thresh)
+        df_ab_prev_filt <- dplyr::filter(df_ab_prev, prevalence > prev_thresh | total_counts_of_ASV > abund_thresh)
         
         no_samples <- df_ab_prev$prevalence[1] + df_ab_prev$sparsity[1]
-        shade_df <- data.frame(total_abundance = 0, prevalence = 0)
+        shade_df <- data.frame(total_counts_of_ASV = 0, prevalence = 0)
         
         
-        Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_counts_of_ASV, y = prevalence))
         Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab +
                 geom_point(col = cbPalette[2], size = 2, alpha = 0.7) +
                 scale_x_log10() +
                 geom_rect(data = shade_df, xmin = -Inf, xmax = log10(abund_thresh), ymin = -Inf, ymax = prev_thresh, fill = "#660033", alpha = 0.4) +
                 geom_hline(yintercept = (prevalence/100)*nsamples(physeq), col = cbPalette[1], lty = "dashed") +
                 geom_vline(xintercept = quantile(taxa_sums(physeq), probs = taxa_sums_quantile/100), col = cbPalette[1], lty = "dashed") +
-                xlab("total abundance (taxa_sums())") + 
+                xlab("total counts of ASVs (taxa_sums())") + 
                 theme_bw(12) +
-                ggtitle(paste(nrow(df_ab_prev_filt), " of ", nrow(df_ab_prev), " SVs (", round(100*nrow(df_ab_prev_filt)/nrow(df_ab_prev), 1),
-                              " %) and ", round(sum(df_ab_prev_filt$total_abundance)), " of ", round(sum(df_ab_prev$total_abundance)), " amplicons (",
-                              round((sum(df_ab_prev_filt$total_abundance)/sum(df_ab_prev$total_abundance))*100, 1), " %) remain", sep = ""))
+                ggtitle(paste(nrow(df_ab_prev_filt), " of ", nrow(df_ab_prev), " ASVs (", round(100*nrow(df_ab_prev_filt)/nrow(df_ab_prev), 1),
+                              " %) and ", round(sum(df_ab_prev_filt$total_counts_of_ASV)), " of ", round(sum(df_ab_prev$total_counts_of_ASV)), " counts (",
+                              round((sum(df_ab_prev_filt$total_counts_of_ASV)/sum(df_ab_prev$total_counts_of_ASV))*100, 1), " %) remain", sep = ""))
         
         
-        Tr_prev_vs_log10_ab_col <- ggplot(df_ab_prev, aes(x = total_abundance, y = prevalence))
+        Tr_prev_vs_log10_ab_col <- ggplot(df_ab_prev, aes(x = total_counts_of_ASV, y = prevalence))
         Tr_prev_vs_log10_ab_col <- Tr_prev_vs_log10_ab_col +
                 geom_point(aes(col = Phylum), size = 2, alpha = 0.7) +
                 scale_x_log10() +
                 geom_rect(data = shade_df, xmin = -Inf, xmax = log10(abund_thresh), ymin = -Inf, ymax = prev_thresh, fill = "#660033", alpha = 0.4) +
                 geom_hline(yintercept = (prevalence/100)*nsamples(physeq), col = cbPalette[1], lty = "dashed") +
                 geom_vline(xintercept = quantile(taxa_sums(physeq), probs = taxa_sums_quantile/100), col = cbPalette[1], lty = "dashed") +
-                xlab("total abundance (taxa_sums())") +
+                xlab("total counts of ASVs (taxa_sums())") +
                 facet_wrap(~Phylum) +
                 theme_bw(12) +
                 theme(legend.position = "none")
         
         
-        # phylum_df <- df_ab_prev[, c("Phylum", "total_abundance", "prevalence")]
+        # phylum_df <- df_ab_prev[, c("Phylum", "total_counts_of_ASV", "prevalence")]
         # phylum_df <- group_by(phylum_df, Phylum)
-        # phylum_df <- dplyr::summarise(phylum_df, SVs = n(), abundance = round(sum(total_abundance)))
-        # phylum_df_filt <- df_ab_prev_filt[, c("Phylum", "total_abundance", "prevalence")]
+        # phylum_df <- dplyr::summarise(phylum_df, SVs = n(), abundance = round(sum(total_counts_of_ASV)))
+        # phylum_df_filt <- df_ab_prev_filt[, c("Phylum", "total_counts_of_ASV", "prevalence")]
         # phylum_df_filt <- group_by(phylum_df_filt, Phylum)
-        # phylum_df_filt <- dplyr::summarise(phylum_df_filt, SVs = n(), abundance = round(sum(total_abundance)))
+        # phylum_df_filt <- dplyr::summarise(phylum_df_filt, SVs = n(), abundance = round(sum(total_counts_of_ASV)))
         # phylum_df_summary <- merge(phylum_df, phylum_df_filt, by = "Phylum")
         # colnames(phylum_df_summary) <- c("Phylum", "SVs_before", "abundance_before", "SVs_after", 'abundance_after')
         # phylum_df_summary <- mutate(phylum_df_summary, SV_r_PC = round(100*SVs_after/SVs_before, 1), abundance_r_PC = round(100*abundance_after/abundance_before, 1),
         #                             SV_PC = round(100*SVs_after/sum(SVs_after), 1), abundance_PC = round(100*abundance_after/sum(abundance_after), 1))
         
-        Before <- dplyr::summarise(group_by(df_ab_prev, Phylum), SVs_bef = n(), PC_SV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
-                           PC_total_ab_bef = round(100*sum(total_abundance)/sum(df_ab_prev$total_abundance), 1), 
-                           mean_pre_bef = round(100*mean(prevalence)/no_samples, 1),
-                           mean_tot_ab_bef = round(mean(total_abundance)), 
-                           mean_mean_ab_nonzero_bef = round(mean(mean_abundance_nonzero)),
-                           med_med_ab_nonzero_bef = round(median(median_abundance_nonzero)),
-                           total_ab_bef = sum(total_abundance))
+        Before <- dplyr::summarise(group_by(df_ab_prev, Phylum), ASVs_bef = n(), PC_ASV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
+                           PC_total_ab_bef = round(100*sum(total_counts_of_ASV)/sum(df_ab_prev$total_counts_of_ASV), 1), 
+                           mean_pre_bef_inPC = round(100*mean(prevalence)/no_samples, 1),
+                           mean_tot_ab_bef = round(mean(total_counts_of_ASV)), 
+                           mean_mean_ab_nonzero_bef = round(mean(mean_count_nonzero)),
+                           med_med_ab_nonzero_bef = round(median(median_count_nonzero)),
+                           total_ab_bef = sum(total_counts_of_ASV))
         
-        After <- dplyr::summarise(group_by(df_ab_prev_filt, Phylum), SVs_aft = n(), PC_SV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
-                           PC_total_ab_aft = round(100*sum(total_abundance)/sum(df_ab_prev_filt$total_abundance), 1), 
-                           mean_pre_aft = round(100*mean(prevalence)/no_samples, 1),
-                           mean_tot_ab_aft = round(mean(total_abundance)),
-                           mean_mean_ab_nonzero_aft = round(mean(mean_abundance_nonzero)),
-                           med_med_ab_nonzero_aft = round(median(median_abundance_nonzero)),
-                           total_ab_aft = sum(total_abundance))
+        After <- dplyr::summarise(group_by(df_ab_prev_filt, Phylum), ASVs_aft = n(), PC_ASV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
+                           PC_total_ab_aft = round(100*sum(total_counts_of_ASV)/sum(df_ab_prev_filt$total_counts_of_ASV), 1), 
+                           mean_pre_aft_inPC = round(100*mean(prevalence)/no_samples, 1),
+                           mean_tot_ab_aft = round(mean(total_counts_of_ASV)),
+                           mean_mean_ab_nonzero_aft = round(mean(mean_count_nonzero)),
+                           med_med_ab_nonzero_aft = round(median(median_count_nonzero)),
+                           total_ab_aft = sum(total_counts_of_ASV))
         
-        Before_total <- dplyr::summarise(df_ab_prev, SVs_bef = n(), PC_SV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
-                            PC_total_ab_bef = round(100*sum(total_abundance)/sum(df_ab_prev$total_abundance), 1), 
-                            mean_pre_bef = round(100*mean(prevalence)/no_samples, 1),
-                            mean_tot_ab_bef = round(mean(total_abundance)), 
-                            mean_mean_ab_nonzero_bef = round(mean(mean_abundance_nonzero)),
-                            med_med_ab_nonzero_bef = round(median(median_abundance_nonzero)),
-                            total_ab_bef = sum(total_abundance))
+        Before_total <- dplyr::summarise(df_ab_prev, ASVs_bef = n(), PC_ASV_bef = round(100*n()/nrow(df_ab_prev),1), PC_total_pre_bef = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
+                            PC_total_ab_bef = round(100*sum(total_counts_of_ASV)/sum(df_ab_prev$total_counts_of_ASV), 1), 
+                            mean_pre_bef_inPC = round(100*mean(prevalence)/no_samples, 1),
+                            mean_tot_ab_bef = round(mean(total_counts_of_ASV)), 
+                            mean_mean_ab_nonzero_bef = round(mean(mean_count_nonzero)),
+                            med_med_ab_nonzero_bef = round(median(median_count_nonzero)),
+                            total_ab_bef = sum(total_counts_of_ASV))
         
         Before_total <- data.frame(Phylum = "Total", Before_total)
         
-        After_total <- dplyr::summarise(df_ab_prev_filt, SVs_aft = n(), PC_SV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
-                           PC_total_ab_aft = round(100*sum(total_abundance)/sum(df_ab_prev_filt$total_abundance), 1), 
-                           mean_pre_aft = round(100*mean(prevalence)/no_samples, 1),
-                           mean_tot_ab_aft = round(mean(total_abundance)),
-                           mean_mean_ab_nonzero_aft = round(mean(mean_abundance_nonzero)),
-                           med_med_ab_nonzero_aft = round(median(median_abundance_nonzero)),
-                           total_ab_aft = sum(total_abundance))
+        After_total <- dplyr::summarise(df_ab_prev_filt, ASVs_aft = n(), PC_ASV_aft = round(100*n()/nrow(df_ab_prev_filt),1), PC_total_pre_aft = round(100*sum(prevalence)/sum(df_ab_prev_filt$prevalence), 1),
+                           PC_total_ab_aft = round(100*sum(total_counts_of_ASV)/sum(df_ab_prev_filt$total_counts_of_ASV), 1), 
+                           mean_pre_aft_inPC = round(100*mean(prevalence)/no_samples, 1),
+                           mean_tot_ab_aft = round(mean(total_counts_of_ASV)),
+                           mean_mean_ab_nonzero_aft = round(mean(mean_count_nonzero)),
+                           med_med_ab_nonzero_aft = round(median(median_count_nonzero)),
+                           total_ab_aft = sum(total_counts_of_ASV))
         
         After_total <- data.frame(Phylum = "Total", After_total)
         
@@ -1496,7 +1496,7 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
         
         Merged <- merge(Before, After, by = "Phylum", all = TRUE, sort = FALSE)
         
-        Merged <- dplyr::mutate(Merged, PC_SV_rem = round(100*SVs_aft/SVs_bef, 1), PC_ab_rem = round(100*total_ab_aft/total_ab_bef, 1))
+        Merged <- dplyr::mutate(Merged, PC_ASV_rem = round(100*ASVs_aft/ASVs_bef, 1), PC_ab_rem = round(100*total_ab_aft/total_ab_bef, 1))
         
         Merged <- dplyr::select(Merged, 1, 20, 21, 2, 11, 3, 12, 4, 13, 5, 14, 6, 15, 7, 16, 8, 17, 9, 18)
         
