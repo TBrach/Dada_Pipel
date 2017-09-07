@@ -17,6 +17,9 @@ library(tidyr); packageVersion("tidyr")
 library(gridExtra); packageVersion("gridExtra")
 library(xtable); packageVersion("xtable")
 library(RVAideMemoire); packageVersion("RVAideMemoire")
+library(viridis); packageVersion("viridis")
+library(scales); packageVersion("scales") # for the oob = squish option in gradient plots
+library(ggthemes); packageVersion("ggthemes")
 
 PackageVersions <- data.frame(R = version$version.string,
                               dada2 = packageVersion("dada2"),
@@ -25,7 +28,10 @@ PackageVersions <- data.frame(R = version$version.string,
                               dplyr = packageVersion("dplyr"),
                               tidyr = packageVersion("tidyr"),
                               gridExtra = packageVersion("gridExtra"),
-                              xtable = packageVersion("xtable"))
+                              xtable = packageVersion("xtable"),
+                              viridis = packageVersion("viridis"),
+                              scales = packageVersion("scales"),
+                              ggthemes = packageVersion("ggthemes"))
 for (i in 1:ncol(PackageVersions)){PackageVersions[,i] <- as.character(PackageVersions[,i])}
 PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version)
 ```
@@ -68,7 +74,7 @@ alpha_at_genus <- FALSE
 # --
 
 # - beta diversity -
-dist_methods <- c("jsd", "unifrac", "wunifrac") # otions: see unlist(distanceMethodList)
+dist_methods <- c("jsd", "bray", "unifrac") # otions: see unlist(distanceMethodList)
 # --
 
 # - file/path inputs -
@@ -289,7 +295,7 @@ Tr
 # dev.off()
 ```
 
-# abundances and prevalences of the `r ntaxa(ps)` (amplicon) sequence variants ((A)SVs) found in `r nsamples(ps)` samples
+# abundances and prevalences of the `r ntaxa(ps)` amplicon sequence variants (ASVs) found in `r nsamples(ps)` samples
 
 ```{r, echo = FALSE, message=FALSE}
 # phyloseq analysis starts here: so clear workspace:
@@ -343,7 +349,7 @@ knitr::kable(Phyla)
 ps <- subset_taxa(ps, !is.na(Phylum))
 ```
 
-- `r Phyla$assigned_SVs[is.na(Phyla$Phylum)]` ASVs were removed, leaving `r ntaxa(ps)` SVs
+- `r Phyla$ASVs[is.na(Phyla$Phylum)]` ASVs were removed, leaving `r ntaxa(ps)` ASVs
 
 ## Assignment distribution of ASVs
 
@@ -361,9 +367,9 @@ colnames(the_ambiguous_species) <- c("Genus", "Species")
 knitr::kable(as.data.frame(the_ambiguous_species))
 ```
 
-## Is the taxonomic assignment better for more abundant/pevalent ASVs?
+### Is the taxonomic assignment better for more abundant/pevalent ASVs?
 
-- NB: abundance filters of taxa (total counts filter (taxa_sums()) of ASVs) are here based on total counts over all samples (taxa_sums) without the abundances in the different samples being corrected for sequencing depth (library size)
+- NB: abundance filters ASVs are here based on total counts over all samples (taxa_sums) without the abundances in the different samples being corrected for sequencing depth (library size)
 
 ```{r, echo = FALSE, message=FALSE}
 assign_vs_ab <- check_assignment_vs_abundance(taxa = tax_table(ps), seqtab = as(otu_table(ps), "matrix"), abundanceQuantiles = seq(0, 95, by = 5))
@@ -390,11 +396,12 @@ grid.arrange(assign_vs_prev[[2]], assign_vs_ab[[2]], nrow = 2)
 ```
 
 
+
 # raw **alpha-diversity**, i.e. without correction for total counts in the samples (i.e. no rarefying)
 
 - see <https://github.com/benjjneb/dada2/issues/317> 
 - NB: estimate_richness warns if no singletons are in the data, i.e. if !any(otu_table(ps) == 1) = TRUE (= !any(seqtab.nochim == 1))
-    - dada2 seqtabs when obtained with dada( , pooled = FALSE) tend to be without singletons, most likely because low abundance SVs are considered errors from more abundant SVs
+    - dada2 seqtabs when obtained with dada( , pooled = FALSE) tend to be without singletons, most likely because low abundance ASVs are considered errors from more abundant ASVs
 
 ```{r, message = FALSE, warning = FALSE, echo = FALSE}
 alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps, alpha_div_measures = alpha_div_measures)
@@ -429,7 +436,7 @@ knitr::kable(p_values_wide)
 # print(xtable(p_values_wide, align = "|c|c|c|c|c|c|c|c|", digits = 5), include.rownames = FALSE)
 ```
 
-- coefficients and p.values of linear models using total amplicons or filtered reads as one of the predictors, i.e. lm(richness/shannon ~ group_var + total_amplicons) or lm(richness/shannon ~ group_var + filtered_reads)
+- coefficients and p.values of linear models using total counts or filtered reads as one of the predictors, i.e. lm(richness/shannon ~ group_var + total_counts) or lm(richness/shannon ~ group_var + filtered_reads)
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 knitr::kable(p_values_adjustedLM)
@@ -509,15 +516,15 @@ knitr::kable(p_values_wide)
 # print(xtable(p_values_wide, align = "|c|c|c|c|c|c|c|", digits = 5), include.rownames = FALSE)
 ```
 
-- coefficients and p.values of linear models using total amplicons or filtered reads as one of the predictors, i.e. lm(richness/shannon ~ group_var + total_amplicons) or lm(richness/shannon ~ group_var + filtered_reads)
-- NB: R is smart enough to not give coefficients for total_amplicons when total_amplicons is constant as it is after rarefying.
+- coefficients and p.values of linear models using total counts or filtered reads as one of the predictors, i.e. lm(richness/shannon ~ group_var + total_counts) or lm(richness/shannon ~ group_var + filtered_reads)
+- NB: R is smart enough to not give coefficients for total_counts when it is constant (which it is after rarefying).
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 knitr::kable(p_values_adjustedLM)
 ```
 
 
-- comparison: did rarefying change fits to total amplicons and filtered_reads
+- comparison: did rarefying change fits to total counts and filtered_reads
 
 ```{r, fig.width = 14, fig.height = 24, warning = FALSE, message = FALSE, echo = FALSE}
 # pdf(file = "alpha_div_rare_p.pdf", width = 10, height = 10)
@@ -546,13 +553,14 @@ Comp_DF <- data.frame(Sample = rownames(DF_alpha), Diff_richness = DF_alpha_no_r
 head(arrange(Comp_DF, desc(Diff_richness)))
 ```
 
-- **NB: since in dada2 data (from dada( , pooled = FALSE)) there are often no singletons, the alpha diversity measures will be less dependent on total amplicons (since it is usually the singletons that get lost by rarefying to lower total amplicons amount)**
+- **NB: since in dada2 data (from dada( , pooled = FALSE)) there are often no singletons, the alpha diversity measures will be less dependent on total counts (since it is usually the singletons that get lost by rarefying to lower total counts)**
+- **If you see alpha diversity differences between your groups, I would recommend to rarefy on filtered_reads and check if the difference holds**
 
 
 ## Rarefaction curves
 
-- rarefaction curves calculate alpha diversity (richness) for each sample for different No of total amplicons in steps from 0 up to maximum total (chosen max_total) amplicons value.
-    - samples with total number of reads < max_total have consequently shorter rarefaction curves
+- rarefaction curves calculate alpha diversity (richness) for each sample for different total counts in steps from 0 up to maximum total (chosen max_total).
+    - samples with total counts < max_total have consequently shorter rarefaction curves, i.e. curves that stop before max_total
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 # rare_curves <- rarefaction_curve_own(physeq = ps, group_var = group_var, step_size = step_size, seed = seed, type = "vegan")
@@ -572,7 +580,7 @@ grid.arrange(rarefaction_curves[["Tr_richness_col"]], rarefaction_curves[["Tr_ri
 ```
 
 
-## alpha diversity at genus level (if opted for, only known genera, from raryfied counts)
+## alpha diversity at genus level (if opted for, only known genera, from rarefied counts)
 
 ```{r, message = FALSE, warning = FALSE, echo = FALSE}
 if (alpha_at_genus){
@@ -614,7 +622,7 @@ if (alpha_at_genus){
 }
 ```
 
-- coefficients and p.values of linear models using total amplicons or filtered reads as one of the predictors, i.e. lm(richness/shannon ~ group_var + total_amplicons) or lm(richness/shannon ~ group_var + filtered_reads)
+- coefficients and p.values of linear models using total counts or filtered reads as one of the predictors, i.e. lm(richness/shannon ~ group_var + total_counts) or lm(richness/shannon ~ group_var + filtered_reads)
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 if (alpha_at_genus){
@@ -631,7 +639,7 @@ if (alpha_at_genus){
 
 - filtering strategy:
     - I filter on prevalence (keeping taxa with prevalence > `r prevalence`) and taxa_sums() (keeping taxa whose taxa sums/ total counts over all samples are above the `r taxa_sums_quantile` quantile)
-        - prevalence filter so that SVs that are very rare and only in few samples have no effect on the distance measures
+        - prevalence filter so that ASVs that are very rare and only in few samples have no effect on the distance measures
         - taxa_sums_quantile filter, so that very abundant ASVs (clearly real species you would think) stay, even if they are only in a few samples. These might well separate these samples
     - because of the taxa_sums_quantile filter, I first do a DeSEQ total counts adjustment on the samples. NB: this only affects the taxa_sums_quantile filter, it does not affect prevalence nor the subsequent relative abundances that are used for distance calculations.
     - another "filter" that could be interesting, is to do the distance analysis on genus level (tax_glom) and potentially exclude NAs (I.e. doing distance analysis only on the genera we actually know)
@@ -647,13 +655,15 @@ ps_taa_filt <- filter_taxa(ps_taa, function(x){(sum(x > min_obs) > (prevalence/1
 ps_filt_ra <- transform_sample_counts(ps_taa_filt, function(x){x/sum(x)})
 ```
 
-- `r ntaxa(ps_taa_filt)` out of `r ntaxa(ps)` survived the filter
+- `r ntaxa(ps_taa_filt)` out of `r ntaxa(ps)` ASVs survived the filter
 
 ```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
 # pdf(file = "filter_p.pdf", width = 7, height = 6)
 filterList[[1]]
 #dev.off()
 ```
+
+- NB: the red shaded area marks the filter area, i.e. ASVs in this area are filtered out because their prevalence is below the prevalence threshold (= `r prevalence` %) and their total counts is not above the taxa_sums_quantile (= `r taxa_sums_quantile` %)
 
 ```{r, fig.width = 10, fig.height = 8, warning = FALSE, message = FALSE, echo = FALSE}
 # pdf(file = "filter2_p.pdf", width = 8, height = 8)
@@ -728,14 +738,13 @@ dist_analysis_list2 <- distance_t_analyse(dist_list = dist_list2, physeq = ps_ta
 
 
 # == add Permutational Multivariate Analysis of Variance Using Distance Matrix: vegan::adonis ==
-
 group_fac <- sample_data(ps_filt_ra)[[group_var]]
 d_list <- dist_list
 
 if (length(levels(group_fac)) > 2){
         Overalls <- lapply(d_list, function(dist_obj){
                 fit <- vegan::adonis(dist_obj ~ group_fac, permutations = 999)
-                data.frame(Comparison = "Overall_group_var",
+                df <- data.frame(Comparison = "Overall_group_var",
                            addonis_p_value = fit$aov.tab[1, "Pr(>F)"], 
                            adonis_R2 = fit$aov.tab[1, "R2"], 
                            p_val_adj = fit$aov.tab[1, "Pr(>F)"])
@@ -746,10 +755,16 @@ if (length(levels(group_fac)) > 2){
                                          group_fac = group_fac,
                                          nperm = 999,
                                          p.adj.method = "fdr")
+                
         })
         
         adonis_list <- lapply(1:length(Groupwise), function(i){
-                rbind(Overalls[[i]], Groupwise[[i]])
+                df <- rbind(Overalls[[i]], Groupwise[[i]])
+                df$Significance <- ""
+                df$Significance[df$p_val_adj <= .05] <- "*"
+                df$Significance[df$p_val_adj <= .01] <- "**"
+                df$Significance[df$p_val_adj <= .001] <- "***"
+                df
         })
         
         names(adonis_list) <- names(Overalls)
@@ -758,10 +773,15 @@ if (length(levels(group_fac)) > 2){
         
         adonis_list <- lapply(d_list, function(dist_obj){
                 fit <- vegan::adonis(dist_obj ~ group_fac, permutations = 999)
-                data.frame(Comparison = "Overall_group_var",
+                df <- data.frame(Comparison = "Overall_group_var",
                            addonis_p_value = fit$aov.tab[1, "Pr(>F)"], 
                            adonis_R2 = fit$aov.tab[1, "R2"], 
                            p_val_adj = fit$aov.tab[1, "Pr(>F)"])
+                df$Significance <- ""
+                df$Significance[df$p_val_adj <= .05] <- "*"
+                df$Significance[df$p_val_adj <= .01] <- "**"
+                df$Significance[df$p_val_adj <= .001] <- "***"
+                df
         })
         
 }
@@ -786,7 +806,12 @@ if (length(levels(group_fac)) > 2){
         })
         
         adonis_list2 <- lapply(1:length(Groupwise), function(i){
-                rbind(Overalls[[i]], Groupwise[[i]])
+                df <- rbind(Overalls[[i]], Groupwise[[i]])
+                df$Significance <- ""
+                df$Significance[df$p_val_adj <= .05] <- "*"
+                df$Significance[df$p_val_adj <= .01] <- "**"
+                df$Significance[df$p_val_adj <= .001] <- "***"
+                df
         })
         
         names(adonis_list2) <- names(Overalls)
@@ -795,15 +820,18 @@ if (length(levels(group_fac)) > 2){
         
         adonis_list2 <- lapply(d_list, function(dist_obj){
                 fit <- vegan::adonis(dist_obj ~ group_fac, permutations = 999)
-                data.frame(Comparison = "Overall_group_var",
+                df <- data.frame(Comparison = "Overall_group_var",
                            addonis_p_value = fit$aov.tab[1, "Pr(>F)"], 
                            adonis_R2 = fit$aov.tab[1, "R2"], 
                            p_val_adj = fit$aov.tab[1, "Pr(>F)"])
+                df$Significance <- ""
+                df$Significance[df$p_val_adj <= .05] <- "*"
+                df$Significance[df$p_val_adj <= .01] <- "**"
+                df$Significance[df$p_val_adj <= .001] <- "***"
+                df
         })
         
 }
-
-
 # ====
 
 # == construct ordination plots ==
@@ -835,7 +863,6 @@ for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
 # nmdss2 <- calc_ordination_from_distances(ps_taa_filt, dist_list = dist_list2, ordination_type = "NMDS", group_var = group_var) 
 
 # ====
-
 ```
 
 ### beta diversity results relative abundance
@@ -950,5 +977,26 @@ if (is.null(second_ccp_variable)){
 }
 ```
 
+# Differential Abundance analysis
 
+- start with a heat map plot of relative abundances to visualise sparsity and abundance differences
+    - NB: 0 counts are shown in red, hopefully really only zeros
+
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, include = FALSE}
+overview_list <- overviewPhyseq(ps_taa_filt, group_var = group_var, max_rel_ab_for_color = NULL)
+overview_list1 <- overviewPhyseq(ps_taa_filt, group_var = group_var, max_rel_ab_for_color = .1)
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+knitr::kable(overview_list[[1]])
+```
+
+```{r, fig.width = 14, fig.height = 25, warning = FALSE, message = FALSE, echo = FALSE}
+overview_list[[2]]
+```
+
+```{r, fig.width = 14, fig.height = 25, warning = FALSE, message = FALSE, echo = FALSE}
+overview_list1[[2]]
+```
 

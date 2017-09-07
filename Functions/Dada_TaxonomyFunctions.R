@@ -1404,6 +1404,10 @@ distance_t_analyse <- function(dist_list, physeq, group_var) {
                 df_p <- cbind(labs, pairwise_dist_ttest[lower.tri(pairwise_dist_ttest,diag=T)])
                 colnames(df_p) <- c("Distances_2","Distances_1","p_value")
                 df_p <- df_p[, c("Distances_1", "Distances_2", "p_value")]
+                df_p$Significance <- ""
+                df_p$Significance[df_p$p_value <= 0.05] <- "*"
+                df_p$Significance[df_p$p_value <= 0.01] <- "**"
+                df_p$Significance[df_p$p_value <= 0.001] <- "***"
                 
                 pValList[[i]] <- df_p
                 
@@ -1521,6 +1525,127 @@ pairwise.perm.manova.own <- function(dist_obj, group_fac, nperm = 999,
                                 addonis_p_value = p_vals, adonis_R2 = r2s, p_val_adj = p.adjust(p_vals, p.adj.method))
         
 }
+
+
+#######################################
+### overviewPhyseq##
+#################
+
+
+overviewPhyseq <- function(physeq, group_var, max_rel_ab_for_color = NULL){
+        
+        if(taxa_are_rows(physeq)) { physeq <- t(physeq) }
+        # I prefer taxa_are_rows = FALSE so rows (= observations = samples), and colums = variables = taxa
+        
+        CT <- as(otu_table(physeq), "matrix") # taxa are columns
+        CT_NA <- CT
+        CT_NA[CT_NA == 0] <- NA
+        # also get a relative abundance Table
+        CT_RA <- CT/rowSums(CT)
+        CT_RA_NA <- CT_RA
+        CT_RA_NA[CT_RA_NA == 0] <- NA
+        
+        
+        Overview <- data.frame(NoSamples = nsamples(physeq),
+                               NoTaxa = ntaxa(physeq),
+                               MedianSampleSum = round(median(sample_sums(physeq))),
+                               MedianTaxaSum = round(median(taxa_sums(physeq))),
+                               Sparsity = round(100*(sum(otu_table(physeq) == 0)/(ntaxa(physeq)*nsamples(physeq))), 3),
+                               MaxCount = max(CT),
+                               MedianTaxaSD = round(median(apply(CT, 2, sd), na.rm = TRUE), 3),
+                               MedTaxaSDNoZ = round(median(apply(CT_NA, 2, sd, na.rm = TRUE), na.rm = TRUE), 3),
+                               
+                               # NB: SD correlates with taxa_sums (= colSums(CT))
+                               # plot(colSums(CT), apply(CT, 2, sd))
+                               # plot(colSums(CT_NA, na.rm = TRUE), apply(CT_NA, 2, sd, na.rm = TRUE))
+                               # in principle you could correct by taxa_sums
+                               # MedianTaxaSD_Cor = round(median(apply(CT*(max(colSums(CT))/colSums(CT)), 2, sd), na.rm = TRUE), 3),
+                               # just keep in mind it is confounded
+                               
+                               # get same taxa variation for relative abundance table
+                               MedianTaxaSD_RA = round(median(apply(CT_RA, 2, sd), na.rm = TRUE), 6),
+                               MedTaxaSDNoZ_RA = round(median(apply(CT_RA_NA, 2, sd, na.rm = TRUE), na.rm = TRUE), 6),
+                               
+                               MedianSampleSD = round(median(apply(CT, 1, sd), na.rm = TRUE), 3),
+                               MedianSampleSDNoZ = round(median(apply(CT_NA, 1, sd, na.rm = TRUE), na.rm = TRUE), 3),
+                               # makes in principle only sense on relative abundance
+                               MedianSampleSD_RA = round(median(apply(CT_RA, 1, sd), na.rm = TRUE), 6),
+                               MedianSampleSDNoZ_RA = round(median(apply(CT_RA_NA, 1, sd, na.rm = TRUE), na.rm = TRUE), 3)
+        )
+        
+        
+        # # == Tr3: Histogram of template sample SD on relative abundances excluding zeros == 
+        # Temp <- data.frame(Sample = sample_names(template), Sample_SD_RA_NZ = 100*apply(OTUTTNA_RA, 1, sd, na.rm = TRUE))
+        # Tr3 <- ggplot(Temp, aes(x = Sample_SD_RA_NZ))
+        # Tr3 <- Tr3 + geom_histogram(binwidth = diff(range(Temp$Sample_SD_RA_NZ))/30, fill = cbPalette[2]) +
+        #         geom_rug() +
+        #         geom_vline(xintercept = median(Temp$Sample_SD_RA_NZ), col = "#009E73", lty = "dashed") +
+        #         ggtitle(paste("Sample SD (RA, NZ), distribution of ", nsamples(template), " template samples (median green line)", sep = "")) +
+        #         theme_bw() +
+        #         xlab("Sample_SD_RA_NZ")
+        
+        
+        
+        # == Heatmap plot ==
+        
+        # here Samples should be columns and taxa rows
+        # zeros should be of special color to see sparsity
+        # then to have the option to give Count limits, so that every count above that value gets the max colour
+        # The latter point can be done with the scale package and the option: oob = swish
+        # please read here: <https://github.com/tidyverse/ggplot2/issues/866>
+        # see also the na.value option not used
+        
+        DF_CT <- as.data.frame(t(CT))
+        rownames(DF_CT) <- paste("Taxon_", 1:nrow(DF_CT), sep = "")
+        DF_CT$Taxa <- rownames(DF_CT)
+        DF_CT <- tidyr::gather(DF_CT, key = Sample , value = Count, -Taxa)
+        DF_CT$Taxa <- factor(DF_CT$Taxa, levels = rev(unique(DF_CT$Taxa)), ordered = TRUE)
+        LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
+        # I later want the samples coloured by group_var
+        LookUpDF <- LookUpDF[order(match(LookUpDF$Group, levels(LookUpDF$Group))), ]
+        DF_CT$Sample <- factor(DF_CT$Sample, levels = LookUpDF$Sample, ordered = TRUE)
+        
+        # add color to the taxa so you see up and down
+        if (length(levels(LookUpDF$Group)) <= 7){
+                color_lookup <- data.frame(level = levels(LookUpDF$Group), color = cbPalette[2:(length(levels(LookUpDF$Group)) + 1)])
+                colxaxis <- as.character(color_lookup$color[match(LookUpDF$Group, color_lookup$level)])
+        } else {
+                colxaxis <- rep("black", nrow(LookUpDF))
+        }
+        
+        
+        DF_CT_RA <- dplyr::group_by(DF_CT, Sample) %>% dplyr::mutate(rel_ab = Count/sum(Count))
+        
+        if (is.null(max_rel_ab_for_color) || max_rel_ab_for_color < 0 || max_rel_ab_for_color > 1) {
+                max_rel_ab_for_color <- max(DF_CT_RA$rel_ab)
+        }
+        
+        # Test that really only 0 entries are shown in red:
+        # DF_CT_RA$rel_ab[DF_CT_RA$Taxa %in% c("Taxon_1", "Taxon_2", "Taxon_3")] <- 1e-12 # will show you it only gets red as soon as it is <- 1e-14
+        # Test that values above max_rel_ab_for_color are yellow
+        # DF_CT_RA$rel_ab[DF_CT_RA$Taxa %in% c("Taxon_1", "Taxon_2", "Taxon_3")] <- .9
+        
+        
+        hmtRA <- ggplot(DF_CT_RA, aes(x = Sample, y = Taxa, fill = rel_ab))
+        hmtRA <- hmtRA + 
+                geom_raster() + 
+                scale_fill_gradientn(limits = c(0, max_rel_ab_for_color), colors = c("red", viridis(5)), values = c(0, 1e-14, 0.15, 0.3, 0.45, 1), oob = squish) +
+                scale_x_discrete(position = "top") +
+                #coord_equal() +
+                labs(x=NULL, y=NULL) +
+                theme_tufte(base_family = "Helvetica") +
+                theme(axis.ticks=element_blank(),
+                      axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0,
+                                                 colour = colxaxis))
+        
+        list(OverviewDF = Overview, heatmap_ra = hmtRA)
+        
+}
+
+
+
+
+
 
 
 
