@@ -979,11 +979,13 @@ if (is.null(second_ccp_variable)){
 
 # Differential Abundance analysis
 
+## Heat map
+
 - start with a heat map plot of relative abundances to visualise sparsity and abundance differences
     - NB: 0 counts are shown in red, hopefully really only zeros
 
 
-```{r, warning = FALSE, message = FALSE, echo = FALSE, include = FALSE}
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
 overview_list <- overviewPhyseq(ps_taa_filt, group_var = group_var, max_rel_ab_for_color = NULL)
 overview_list1 <- overviewPhyseq(ps_taa_filt, group_var = group_var, max_rel_ab_for_color = .1)
 ```
@@ -1000,3 +1002,17 @@ overview_list[[2]]
 overview_list1[[2]]
 ```
 
+## differential prevalence analysis with fisher.test
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+diff_prevalence <- test_differential_prevalence(physeq = ps_taa_filt, group_var = group_var, p.adj.method = "fdr", minCount = 0L)
+diff_prevalence_show <- lapply(diff_prevalence, function(df) {
+        select(df, Family, Genus, Species, 2:7)
+})
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+for (i in 1:length(diff_prevalence_show)){
+        print(knitr::kable(head(diff_prevalence_show[[i]], 10), caption = names(diff_prevalence_show)[i]))
+}
+```
