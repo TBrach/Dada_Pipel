@@ -20,6 +20,7 @@ library(RVAideMemoire); packageVersion("RVAideMemoire")
 library(viridis); packageVersion("viridis")
 library(scales); packageVersion("scales") # for the oob = squish option in gradient plots
 library(ggthemes); packageVersion("ggthemes")
+library(DESeq2); packageVersion("DESeq2")
 
 PackageVersions <- data.frame(R = version$version.string,
                               dada2 = packageVersion("dada2"),
@@ -31,7 +32,8 @@ PackageVersions <- data.frame(R = version$version.string,
                               xtable = packageVersion("xtable"),
                               viridis = packageVersion("viridis"),
                               scales = packageVersion("scales"),
-                              ggthemes = packageVersion("ggthemes"))
+                              ggthemes = packageVersion("ggthemes"),
+                              DESeq2 = packageVersion("DESeq2"))
 for (i in 1:ncol(PackageVersions)){PackageVersions[,i] <- as.character(PackageVersions[,i])}
 PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version)
 ```
@@ -646,16 +648,20 @@ if (alpha_at_genus){
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-ps_taa <- adj_LS(ps) # taa for total amplicons adjusted
+library_size_adjust_list <- adj_LS(ps) 
+ps_tca <- library_size_adjust_list[[1]]
+SFs <- library_size_adjust_list[[2]]
 
-filterList <- plot_abundance_prev_filter(physeq = ps_taa, prevalence = prevalence, taxa_sums_quantile = taxa_sums_quantile)
+filterList <- plot_abundance_prev_filter(physeq = ps_tca, prevalence = prevalence, taxa_sums_quantile = taxa_sums_quantile)
 
-ps_taa_filt <- filter_taxa(ps_taa, function(x){(sum(x > min_obs) > (prevalence/100)*length(x)) || (sum(x) > quantile(taxa_sums(ps_taa), probs = taxa_sums_quantile/100))}, prune = TRUE)
+ps_tca_filt <- filter_taxa(ps_tca, function(x){(sum(x > min_obs) > (prevalence/100)*length(x)) || (sum(x) > quantile(taxa_sums(ps_tca), probs = taxa_sums_quantile/100))}, prune = TRUE)
 
-ps_filt_ra <- transform_sample_counts(ps_taa_filt, function(x){x/sum(x)})
+ps_filt <- prune_taxa(taxa_names(ps_tca_filt), ps) # needed for DESeq2Apply_physeq
+
+ps_filt_ra <- transform_sample_counts(ps_filt, function(x){x/sum(x)}) # same for ps_tca_filt
 ```
 
-- `r ntaxa(ps_taa_filt)` out of `r ntaxa(ps)` ASVs survived the filter
+- `r ntaxa(ps_tca_filt)` out of `r ntaxa(ps)` ASVs survived the filter
 
 ```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
 # pdf(file = "filter_p.pdf", width = 7, height = 6)
@@ -683,7 +689,7 @@ knitr::kable(filterList[[3]])
 
 dist_list <- calc_distances(ps_filt_ra, dist_methods) # produces objects of class "dist"
 
-dist_list2 <- calc_distances(ps_taa_filt, dist_methods)
+dist_list2 <- calc_distances(ps_tca_filt, dist_methods)
 
 # ========= recapitulate Bray Crutis Distance ==========
 # mat <- as(t(otu_table(ps_filt_ra)), "matrix")
@@ -721,9 +727,9 @@ dist_list2 <- calc_distances(ps_taa_filt, dist_methods)
 # --
 
 # # - cehck double principal coordinates analysis --
-# DPCoA_ordi_direc <- ordinate(ps_taa_filt, method = "DPCoA")
-# Tr <- plot_ordination(ps_taa_filt, DPCoA_ordi_direc, color = "Group")
-# Tr <- plot_ordination(ps_taa_filt, DPCoA_ordi_direc, type = "taxa", color = "Phylum")
+# DPCoA_ordi_direc <- ordinate(ps_tca_filt, method = "DPCoA")
+# Tr <- plot_ordination(ps_tca_filt, DPCoA_ordi_direc, color = "Group")
+# Tr <- plot_ordination(ps_tca_filt, DPCoA_ordi_direc, type = "taxa", color = "Phylum")
 # # --
 # ====
 
@@ -732,7 +738,7 @@ dist_list2 <- calc_distances(ps_taa_filt, dist_methods)
 
 dist_analysis_list <- distance_t_analyse(dist_list = dist_list, physeq = ps_filt_ra, group_var = group_var)
 
-dist_analysis_list2 <- distance_t_analyse(dist_list = dist_list2, physeq = ps_taa_filt, group_var = group_var)
+dist_analysis_list2 <- distance_t_analyse(dist_list = dist_list2, physeq = ps_tca_filt, group_var = group_var)
 
 # ====
 
@@ -786,7 +792,7 @@ if (length(levels(group_fac)) > 2){
         
 }
 
-group_fac <- sample_data(ps_taa_filt)[[group_var]]
+group_fac <- sample_data(ps_tca_filt)[[group_var]]
 d_list <- dist_list2
 
 if (length(levels(group_fac)) > 2){
@@ -847,7 +853,7 @@ for (i in 1:length(pcoas[["ordination_Tr_samples"]])) {
         TrList_ra[[counter]] <- pcoas[["ordination_Tr_taxa"]][[i]]
 }
 
-pcoas2 <- calc_ordination_from_distances(ps_taa_filt, dist_list = dist_list2, ordination_type = "PCoA", group_var = group_var) 
+pcoas2 <- calc_ordination_from_distances(ps_tca_filt, dist_list = dist_list2, ordination_type = "PCoA", group_var = group_var) 
 
 TrList_counts <- vector(mode = "list", length = 2*length(pcoas2[["ordination_Tr_samples"]])) 
 counter <- 0
@@ -860,7 +866,7 @@ for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
 
 # nmdss <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "NMDS", group_var = group_var) 
 
-# nmdss2 <- calc_ordination_from_distances(ps_taa_filt, dist_list = dist_list2, ordination_type = "NMDS", group_var = group_var) 
+# nmdss2 <- calc_ordination_from_distances(ps_tca_filt, dist_list = dist_list2, ordination_type = "NMDS", group_var = group_var) 
 
 # ====
 ```
@@ -953,21 +959,21 @@ ps_ccpna <- ordinate(ps_filt_ra, "CCA", formula = the_formula)
 TrList <- plot_canonical_correspondance(ps_ccpna, physeq = ps_filt_ra, the_formula = the_formula, group_var = group_var, second_ccp_variable = second_ccp_variable)
 
 # canonical corresponance for log trnasformed counts
-ps_taa_filt_log <- transform_sample_counts(ps_taa_filt, function(x) log(1 + x))
+ps_tca_filt_log <- transform_sample_counts(ps_tca_filt, function(x) log(1 + x))
 
 if (is.null(second_ccp_variable)){
-        the_formula <- formula(paste("ps_taa_filt_log ~ ", group_var, sep = ""))       
+        the_formula <- formula(paste("ps_tca_filt_log ~ ", group_var, sep = ""))       
 } else {
-        the_formula <- formula(paste("ps_taa_filt_log ~ ", group_var, " + ", second_ccp_variable, sep = ""))    
+        the_formula <- formula(paste("ps_tca_filt_log ~ ", group_var, " + ", second_ccp_variable, sep = ""))    
 }
 
-ps_ccpna <- ordinate(ps_taa_filt_log, "CCA", formula = the_formula)
+ps_ccpna <- ordinate(ps_tca_filt_log, "CCA", formula = the_formula)
 
-TrList2 <- plot_canonical_correspondance(ps_ccpna, physeq = ps_taa_filt_log, the_formula = the_formula, group_var = group_var, second_ccp_variable = second_ccp_variable)
+TrList2 <- plot_canonical_correspondance(ps_ccpna, physeq = ps_tca_filt_log, the_formula = the_formula, group_var = group_var, second_ccp_variable = second_ccp_variable)
 
 ```
 
-- canonical correspondance analysis, on ps_filt_ra (relative abundance) on top (or left), and on ps_taa_filt_log (log transformed adjusted counts) in the bottom (or right)
+- canonical correspondance analysis, on ps_filt_ra (relative abundance) on top (or left), and on ps_tca_filt_log (log transformed adjusted counts) in the bottom (or right)
 
 ```{r, fig.width = 14, fig.height = 10, warning = FALSE, message = FALSE, echo = FALSE}
 if (is.null(second_ccp_variable)){
@@ -986,8 +992,8 @@ if (is.null(second_ccp_variable)){
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-overview_list <- overviewPhyseq(ps_taa_filt, group_var = group_var, max_rel_ab_for_color = NULL)
-overview_list1 <- overviewPhyseq(ps_taa_filt, group_var = group_var, max_rel_ab_for_color = .1)
+overview_list <- overviewPhyseq(ps_tca_filt, group_var = group_var, max_rel_ab_for_color = NULL)
+overview_list1 <- overviewPhyseq(ps_tca_filt, group_var = group_var, max_rel_ab_for_color = .1)
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
@@ -1005,14 +1011,136 @@ overview_list1[[2]]
 ## differential prevalence analysis with fisher.test
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-diff_prevalence <- test_differential_prevalence(physeq = ps_taa_filt, group_var = group_var, p.adj.method = "fdr", minCount = 0L)
+diff_prevalence <- test_differential_prevalence(physeq = ps_tca_filt, group_var = group_var, p.adj.method = "fdr", minCount = 0L)
 diff_prevalence_show <- lapply(diff_prevalence, function(df) {
         select(df, Family, Genus, Species, 2:7)
 })
 ```
 
-```{r, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+head_values <- sapply(diff_prevalence, function(df){
+        max(which(df[, 3] < 0.05))
+})
+head_values <- head_values + 5
+head_values[head_values > 35] <- 35
 for (i in 1:length(diff_prevalence_show)){
-        print(knitr::kable(head(diff_prevalence_show[[i]], 10), caption = names(diff_prevalence_show)[i]))
+        print(knitr::kable(head(diff_prevalence_show[[i]], head_values[i]), caption = names(diff_prevalence_show)[i]))
 }
 ```
+
+## wilcoxon test on relative abundances
+
+### wilcoxon test including zeros (i.e. including sparsity again)
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+wilcox_ra_result_list <- wilcoxTestApply_physeq(physeq = ps_filt_ra, group_var = group_var, excludeZeros = FALSE, p.adjust.method = "fdr")
+wilcox_ra_result_list_show <- lapply(wilcox_ra_result_list, function(df) {
+        select(df, Family, Genus, Species, 2:18)
+})
+
+# # NB: I'm a bit surprised that the order based on standardized test statistic is not fully equal to the arranged order by wilcox.test p_value
+# Test <- wilcox_ra_result_list[[1]]
+# identical(order(Test$p_val), 1:nrow(Test)) # clear, since arranged on p_val
+# order(Test$p_val) == order(abs(Test$teststat), decreasing = TRUE) # often not equal
+# order(abs(Test$teststat), decreasing = TRUE) - order(Test$p_val) # sometimes quite a difference
+# # so here you could try to figure out why that is, NB: the same holds true for the W statistic given directly from wilcox.test, so wilcox.test provides a p_value that can differ from abs(W)
+# order(abs(Test$W), decreasing = TRUE) - order(Test$p_val)
+# order(abs(Test$W), decreasing = TRUE) - order(abs(Test$teststat), decreasing = TRUE)
+# # But go through the code, it clearly happens that pValue is smaller even though W is bigger or smaller, I also tried Wy
+
+
+# # NB: sparsity fisher test is the same as by diff_prevalence, if Testprev is result data.frame from diff_prevalence
+# # and Test is from wilcox_ra_result_list[[1]]
+# p_vals_diff <- Testprev[,2]
+# p_vals_diff2 <- Test$p_val_Fisher
+# all.equal(sort(p_vals_diff2), sort(p_vals_diff))
+# # also adjusted when done with same method
+# p_vals_diff <- Testprev[,3]
+# p_vals_diff2 <- Test$p_val_Fisher_adj
+# all.equal(sort(p_vals_diff2), sort(p_vals_diff))
+
+
+# # NB: I tested whether excludeZeros TRUE and FALSE give consistent results
+# # how? Test was excludeZeros = TRUE (a DF), Test2 was excludeZeros = FALSE
+# # in cases where all values were non zero, the median and mean values should be the same
+# Test <- arrange(Test, Taxon)
+# Test2 <- arrange(Test2, Taxon)
+# Test_grp1 <- filter(Test, Present_grp1 == 24)
+# Test2_grp1 <- filter(Test2, Taxon %in% Test_grp1$Taxon)
+# Test_grp1$Taxon == Test2_grp1$Taxon
+# Test_grp1$Median_grp1 == Test2_grp1$Median_grp1 # all equal
+# Test_grp1$Mean_grp1 == Test2_grp1$Mean_grp1 # all TRUE
+# Test_grp2 <- filter(Test, Present_grp2 == 12)
+# Test2_grp2 <- filter(Test2, Taxon %in% Test_grp2$Taxon)
+# Test_grp2$Taxon == Test2_grp2$Taxon
+# Test_grp2$Median_grp2 == Test2_grp2$Median_grp2 # all equal
+# Test_grp2$Mean_grp2 == Test2_grp2$Mean_grp2 # all equal
+# # in cases where both groups are full, everything should be equal
+# Test_both <- filter(Test, Present_grp1 == 24, Present_grp2 == 12)
+# Test2_both <- filter(Test2, Taxon %in% Test_both$Taxon)
+# # the adjusted p_vals are different I assume because of the NAs in the excludeZeros = TRUE version
+# # the rest should be the same
+# Test_both <- select(Test_both, -p_val_adj, -significance)
+# Test2_both <- select(Test2_both, -p_val_adj, -significance)
+# all.equal(Test_both, Test2_both) # True
+# # so I conclude in cases where all samples in a group have non zero counts, the mean and median values are equal for
+# # excludeZeros = FALSE and TRUE
+
+
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+head_values <- sapply(wilcox_ra_result_list, function(df){
+        max(which(df$p_val_adj < 0.05))
+})
+head_values <- head_values + 5
+head_values[head_values > 35] <- 35
+for (i in 1:length(wilcox_ra_result_list_show)){
+        print(knitr::kable(head(wilcox_ra_result_list_show[[i]], head_values[i]), caption = names(wilcox_ra_result_list_show)[i]))
+}
+
+```
+
+### wilcoxon test excluding zeros 
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+wilcox_ra_result_list <- wilcoxTestApply_physeq(physeq = ps_filt_ra, group_var = group_var, excludeZeros = TRUE, p.adjust.method = "fdr")
+wilcox_ra_result_list_show <- lapply(wilcox_ra_result_list, function(df) {
+        select(df, Family, Genus, Species, 2:18)
+})
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+head_values <- sapply(wilcox_ra_result_list, function(df){
+        max(which(df$p_val_adj < 0.05))
+})
+head_values <- head_values + 5
+head_values[head_values > 35] <- 35
+for (i in 1:length(wilcox_ra_result_list_show)){
+        print(knitr::kable(head(wilcox_ra_result_list_show[[i]], head_values[i]), caption = names(wilcox_ra_result_list_show)[i]))
+}
+```
+
+
+## DeSeq2 analysis
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+DESeq2_result_list <- DESeq2Apply_physeq(physeq = ps_filt, group_var = group_var, SFs = SFs, p.adjust.method = "fdr")
+
+DESeq2_result_list_show <- lapply(DESeq2_result_list, function(df) {
+        select(df, Family, Genus, Species, 2:24)
+})
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+head_values <- sapply(DESeq2_result_list, function(df){
+        max(which(df$p_val_adj < 0.05))
+})
+head_values <- head_values + 5
+head_values[head_values > 35] <- 35
+for (i in 1:length(DESeq2_result_list_show)){
+        print(knitr::kable(head(DESeq2_result_list_show[[i]], head_values[i]), caption = names(DESeq2_result_list_show)[i]))
+}
+```
+
+

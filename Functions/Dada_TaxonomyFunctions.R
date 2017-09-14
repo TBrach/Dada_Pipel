@@ -842,7 +842,7 @@ adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, plots = FALSE) 
                 
         } else {
                 
-                phynew
+                list(physeq = phynew, SFs = SFs)
                 
         }
 }
@@ -1736,6 +1736,305 @@ test_differential_prevalence <- function(physeq, group_var, p.adj.method = "fdr"
         
 }
 
+
+
+#######################################
+### wilcoxTestApply_physeq
+#######################################
+# Accepts several groups in group_var and results in a list of DF for the pairwise comparisons
+# directly related to wilcoxTestApply from SimulationFunctions.R just not looping through a list of phyloseq objects
+# but doing the job on a single phyloseq object
+# does wilcoxon test and adds further info
+# in addition it performs a fisher exact test on the sparsity proportions
+# NB: Tested: 
+# with excludeZeros you can decide on whether 0 counts should be excluded for the wilcox.test, the fisher sparsity test is
+# of course not affected. 
+# NB: in case in one of the two groups all counts are 0 and excludeZeros = T, then NA is given for all wilcoxon 
+# statistics!
+# The teststatistic is based on the standardized teststatistic, equation provided by multtest::mt.minP (compare with mtApply)
+# (see equation for standStat2 in the code, results in exactly the same as standStat when uncomment)
+## Input
+# physeq object
+# group_var: refers to a factor in sample_data(phyloseq) that defines the groups
+# excludeZeros: decides on whether 0s should be considered when comparing the groups in a wilcox.test
+# p.adjust.method, used as method in p.adjust
+## Output
+# list of dataframes with the results for each pairwise group comparison in group_var associated group_fac
+
+wilcoxTestApply_physeq <- function(physeq, group_var, excludeZeros = FALSE, p.adjust.method = "fdr") {
+        
+        
+        if (taxa_are_rows(physeq)) { physeq <- t(physeq)}
+        
+        CT <- as(otu_table(physeq), "matrix")
+        
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+        
+        fac_levels <- levels(group_fac)
+        
+        # -- get the level combis --
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        i <- ivec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- jvec[x]
+                })
+        })
+        i_s <- i_s[upper.tri(i_s)]
+        j_s <- j_s[upper.tri(j_s)]
+        # ----
+        
+        result_list <- vector("list", length = length(i_s))
+        
+        for (k in seq_along(i_s)){
+                i <- i_s[k]
+                j <- j_s[k]
+                
+                res_mat <- apply(CT, 2, function(taxon_counts){
+                        x <- taxon_counts[as.numeric(group_fac) == i]
+                        Zeros_grp1 <- sum(x == 0)
+                        Sparsity_grp1 <- 100*(Zeros_grp1/length(x))
+                        Present_grp1 <- length(x)-Zeros_grp1
+                        if(excludeZeros){
+                                x <- x[x != 0]
+                        }
+                        Median_grp1 <- median(x, na.rm = T) # NA in case all 0
+                        Mean_grp1 <- mean(x, na.rm = T) # NaN in case all 0
+                        if (is.na(Mean_grp1)){ Mean_grp1 = NA }
+                        y <- taxon_counts[as.numeric(group_fac) == j]
+                        Zeros_grp2 <- sum(y == 0)
+                        Present_grp2 <- length(y)-Zeros_grp2
+                        Sparsity_grp2 <- 100*(Zeros_grp2/length(y))
+                        if(excludeZeros){
+                                #if(all(y == 0)){y[1] <- ceiling(mean(taxon_counts))+1}
+                                y <- y[y != 0]
+                        }
+                        Median_grp2 <- median(y, na.rm = T)
+                        Mean_grp2 <- mean(y, na.rm = T)
+                        if (is.na(Mean_grp2)){ Mean_grp2 = NA }
+                        
+                        if (length(x) != 0 && length(y) != 0){
+                                wilcTest <- wilcox.test(x = x, y = y, alternative = "two", paired = F, exact = F)
+                                pValue <- wilcTest$p.value
+                                W <- wilcTest$statistic
+                                # calculate standardized rank sum Wilcoxon statistics as in multtest::mt.minP
+                                Ranks <- rank(c(x, y))
+                                n1 <- length(x)
+                                n2 <- length(y)
+                                # Wx <- sum(Ranks[1:n1])-(n1*(n1+1)/2) # would be the same as W
+                                # how about the other W?
+                                # Wy <- sum(Ranks[(n1+1):n2]) - (n2*(n2+1)/2)
+                                standStat <- -1*((sum(Ranks[1:n1]) - n1*(n1+n2+1)/2)/sqrt(n1*n2*(n1+n2+1)/12))
+                                
+                                # # if you want to check that multtest::mt.minP would give the same statistic
+                                # mati <- matrix(c(x,y), nrow = 1)
+                                # grFac <- c(rep(fac_levels[i], n1), rep(fac_levels[j], n2))
+                                # grFac <- factor(grFac, levels = c(fac_levels[i], fac_levels[j]))
+                                # standStat2 <- multtest::mt.minP(mati, grFac, test = "wilcoxon")$teststat
+                                # # identical(standStat, standStat2) # TRUE
+                                # uncomment all with standStat2 to test all the way
+                                
+                        } else {
+                                pValue = NA
+                                W <- NA
+                                standStat = NA
+                                n1 <- length(x)
+                                n2 <- length(y)
+                                # standStat2 = NA
+                        }
+                        
+                        
+                        # -- add fisher exact test of presence differences (should be none in simulation) --
+                        fisherMat <- matrix(c(Present_grp1, Zeros_grp1, Present_grp2, Zeros_grp2), 
+                                            ncol = 2, dimnames = list(c("Present", "Absent"), c("grp1", "grp2")) )
+                        Test <- fisher.test(fisherMat)
+                        
+                        c(teststat = standStat, p_val = pValue, Median_grp1 = Median_grp1, Median_grp2 = Median_grp2, 
+                          Mean_grp1 = Mean_grp1, Mean_grp2 = Mean_grp2, n1 = n1, n2 = n2, Present_grp1 = Present_grp1, 
+                          Present_grp2 = Present_grp2, Zeros_grp1 = Zeros_grp1, Zeros_grp2 = Zeros_grp2, 
+                          Sparsity_grp1 = Sparsity_grp1, Sparsity_grp2 = Sparsity_grp2, W, 
+                          p_val_Fisher = Test$p.value, Test$estimate) #, teststat2 = standStat2
+                })
+                
+                res_mat <- t(res_mat)
+                colnames(res_mat) <- c("teststat", "p_val", "Median_grp1", "Median_grp2", "Mean_grp1", "Mean_grp2", "n1",
+                                       "n2", "Present_grp1", "Present_grp2", "Zeros_grp1", "Zeros_grp2", "Sparsity_grp1", "Sparsity_grp2", "W",
+                                       "p_val_Fisher", "oddsRatioFisher") #, , "teststat2"
+                wilc.adjusted <- p.adjust(res_mat[,"p_val"], method = p.adjust.method)
+                fisher.adjusted <- p.adjust(res_mat[,"p_val_Fisher"], method = p.adjust.method)
+                significance <- rep("", length(wilc.adjusted))
+                significance[wilc.adjusted <= 0.05] <- "*"
+                significance[wilc.adjusted <= 0.01] <- "**"
+                significance[wilc.adjusted <= 0.001] <- "***"
+                direction <- rep("down", length(wilc.adjusted))
+                direction[res_mat[, "Median_grp1"] > res_mat[, "Median_grp2"]] <- "up"
+                significance_fisher <- rep("", length(fisher.adjusted))
+                significance_fisher[fisher.adjusted <= 0.05] <- "*"
+                significance_fisher[fisher.adjusted <= 0.01] <- "**"
+                significance_fisher[fisher.adjusted <= 0.001] <- "***"
+                direction_fisher <- rep("down", length(fisher.adjusted))
+                direction_fisher[res_mat[, "Present_grp1"] > res_mat[, "Present_grp2"]] <- "up"
+                
+                
+                DF <- data.frame(Taxon = rownames(res_mat), res_mat, p_val_adj = wilc.adjusted, significance = significance,
+                                 direction = direction, p_val_Fisher_adj = fisher.adjusted,
+                                 significance_fisher = significance_fisher,
+                                 direction_fisher = direction_fisher)
+                
+                
+                DF <- dplyr::select(DF, 1:3, 19:21, 17, 22:24, 4:7, 10:15, 8:9, 16, 18)
+                # teststat/standStat2 version:
+                # DF <- dplyr::select(DF, 1:2, 19, 3, 20:22, 17, 23:25, 4:7, 10:15, 8:9, 16, 18)
+
+                DF <- cbind(DF, tax_table(physeq))
+                # DF <- dplyr::arrange(DF, desc(abs(teststat)))
+                DF <- dplyr::arrange(DF, p_val)
+                
+                result_list[[k]] <- DF
+                names(result_list)[[k]] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
+        }
+        
+        result_list
+}
+
+
+
+#######################################
+### DESeq2Apply_physeq
+#######################################
+## Inputs
+# SFs: often you might want to give the SizeFactors already because you wanted to calculate them on non-filtered data,
+# when SFs are not NULL, type is ignored
+
+
+DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.adjust.method = "fdr"){
+        
+        if (taxa_are_rows(physeq)) {physeq <- t(physeq)}
+        
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+        fac_levels <- levels(group_fac)
+        
+        # NB: DESeq2 can not deal with ordered factors, sees them somehow as just one level, therefore
+        sample_data(physeq)[[group_var]] <- factor(sample_data(physeq)[[group_var]], levels = levels(sample_data(physeq)[[group_var]]), ordered = FALSE)
+        
+        DES = phyloseq_to_deseq2(physeq, formula(paste("~", group_var)))
+        
+        
+        if (is.null(SFs)){
+                if(type == "ratio"){
+                        GM <- apply(otu_table(physeq), 2, gm_own, zeros.count = FALSE)
+                }
+                
+                dds <- estimateSizeFactors(DES, type = type, geoMeans = GM)
+                # NB: geoMeans is ignored when type = "iterate"
+                # NB2: "iterate" takes much longer than "ratio", and when using GM via gm_own with "ratio" the size factors 
+                # correlate with above 99% with size factors from "iterate"
+                # SFs2 <- sizeFactors(dds)
+                
+        } else {
+                dds <- DES
+                sizeFactors(dds) = SFs
+                # identical(sizeFactors(dds), SFs) 
+        }
+       
+        
+        dds <- estimateDispersions(dds, quiet = TRUE) 
+        dds <- nbinomWaldTest(dds)
+        
+        # -- get the level combis, NB: dds contains result infos on all combinations! --
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        i <- ivec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- jvec[x]
+                })
+        })
+        i_s <- i_s[upper.tri(i_s)]
+        j_s <- j_s[upper.tri(j_s)]
+        # ----
+        
+        result_list <- vector("list", length = length(i_s))
+        
+        for (k in seq_along(i_s)) {
+                i <- i_s[k]
+                j <- j_s[k]
+        
+                res <- as.data.frame(results(dds, contrast = c(group_var, fac_levels[i], fac_levels[j])))
+        
+                res$p_val_adj <- p.adjust(res$pvalue, method = p.adjust.method) # NB: in case of "fdr" same as default DESeq2
+        
+                CT <- counts(dds, normalized = TRUE)
+                n1 <- sum(group_fac == fac_levels[i])
+                n2 <- sum(group_fac == fac_levels[j])
+                res$Median_grp1 <- apply(CT[, group_fac == fac_levels[i]], 1, median)
+                res$Median_grp2 <- apply(CT[, group_fac == fac_levels[j]], 1, median)
+                res$Mean_grp1 <- apply(CT[, group_fac == fac_levels[i]], 1, mean)
+                res$Mean_grp2 <- apply(CT[, group_fac == fac_levels[j]], 1, mean)
+                # res$baseMeanSelf <- apply(CT, 1, mean) # exactly the same as baseMean!
+                res$Zeros_grp1 <- apply(CT[, group_fac == fac_levels[i]], 1, function(cnts){sum(cnts == 0)})
+                res$Zeros_grp2 <- apply(CT[, group_fac == fac_levels[j]], 1, function(cnts){sum(cnts == 0)})
+                res$Present_grp1 <- apply(CT[, group_fac == fac_levels[i]], 1, function(cnts){sum(cnts != 0)})
+                res$Present_grp2 <- apply(CT[, group_fac == fac_levels[j]], 1, function(cnts){sum(cnts != 0)})
+                res$Sparsity_grp1 <- 100*(res$Zeros_grp1/n1)
+                res$Sparsity_grp2 <- 100*(res$Zeros_grp2/n2)
+                res$n1 <- n1
+                res$n2 <- n2
+        
+                # -- add fisher exact test of sparsity/prevalence again --
+                Fisher <- t(sapply(1:nrow(res), FUN = function(i){
+                        fisherMat <- matrix(c(res$Present_grp1[i], res$Zeros_grp1[i], res$Present_grp2[i],
+                                              res$Zeros_grp2[i]), ncol = 2, dimnames = list(c("Present", "Absent"), c("grp1", "grp2")))
+                        Test <- fisher.test(fisherMat)
+                        cbind(Test$p.value, Test$estimate)
+                }))
+        
+                p_val_adj_Fisher <- p.adjust(Fisher[,1], method = p.adjust.method)
+        
+                res$p_val_Fisher <- Fisher[,1]
+                res$p_val_Fisher_adj <- p_val_adj_Fisher
+                res$oddsRatioFisher <- Fisher[,2]
+                
+                significance <- rep("", nrow(res))
+                significance[res$padj <= 0.05] <- "*"
+                significance[res$padj <= 0.01] <- "**"
+                significance[res$padj <= 0.001] <- "***"
+                direction <- rep("down", nrow(res))
+                direction[res$Median_grp1 > res$Median_grp2] <- "up"
+                significance_fisher <- rep("", nrow(res))
+                significance_fisher[p_val_adj_Fisher <= 0.05] <- "*"
+                significance_fisher[p_val_adj_Fisher <= 0.01] <- "**"
+                significance_fisher[p_val_adj_Fisher <= 0.001] <- "***"
+                direction_fisher <- rep("down", nrow(res))
+                direction_fisher[res$Present_grp1 > res$Present_grp2] <- "up"
+                
+                res <- dplyr::mutate(res, Taxon = rownames(res), significance = significance, direction = direction,
+                                     significance_fisher = significance_fisher, direction_fisher = direction_fisher)
+                
+                res <- dplyr::select(res, Taxon, teststat = stat, p_val = pvalue, p_val_adj,
+                                     significance, direction, p_val_Fisher,
+                                     p_val_Fisher_adj, significance_fisher,
+                                     direction_fisher, Median_grp1, Median_grp2, Mean_grp1,
+                                     Mean_grp2, Present_grp1, Present_grp2, Zeros_grp1, Zeros_grp2, Sparsity_grp1, Sparsity_grp2, 
+                                     n1, n2, baseMean, log2FoldChange, lfcSE, oddsRatioFisher)
+                # NB: I dropped here padj from DESeq since same as p_val_adj in case of p.adjust.method = "fdr"
+                res <- cbind(res, tax_table(physeq))
+                res <- dplyr::arrange(res, desc(abs(teststat)))
+                # res <- res[order(res$p_val),]
+                result_list[[k]] <- res
+                names(result_list)[[k]] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
+        }
+        
+        result_list
+                
+}
 
 
 
