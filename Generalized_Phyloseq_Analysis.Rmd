@@ -1035,7 +1035,7 @@ for (i in 1:length(diff_prevalence_show)){
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 wilcox_ra_result_list <- wilcoxTestApply_physeq(physeq = ps_filt_ra, group_var = group_var, excludeZeros = FALSE, p.adjust.method = "fdr")
 wilcox_ra_result_list_show <- lapply(wilcox_ra_result_list, function(df) {
-        select(df, Family, Genus, Species, 2:18)
+        select(df, Family, Genus, Species, 2:22)
 })
 
 # # NB: I'm a bit surprised that the order based on standardized test statistic is not fully equal to the arranged order by wilcox.test p_value
@@ -1090,10 +1090,11 @@ wilcox_ra_result_list_show <- lapply(wilcox_ra_result_list, function(df) {
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-head_values <- sapply(wilcox_ra_result_list, function(df){
+suppressWarnings(head_values <- sapply(wilcox_ra_result_list, function(df){
         max(which(df$p_val_adj < 0.05))
-})
+}))
 head_values <- head_values + 5
+head_values[head_values == -Inf] <- 10
 head_values[head_values > 35] <- 35
 for (i in 1:length(wilcox_ra_result_list_show)){
         print(knitr::kable(head(wilcox_ra_result_list_show[[i]], head_values[i]), caption = names(wilcox_ra_result_list_show)[i]))
@@ -1106,15 +1107,16 @@ for (i in 1:length(wilcox_ra_result_list_show)){
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 wilcox_ra_result_list <- wilcoxTestApply_physeq(physeq = ps_filt_ra, group_var = group_var, excludeZeros = TRUE, p.adjust.method = "fdr")
 wilcox_ra_result_list_show <- lapply(wilcox_ra_result_list, function(df) {
-        select(df, Family, Genus, Species, 2:18)
+        select(df, Family, Genus, Species, 2:22)
 })
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-head_values <- sapply(wilcox_ra_result_list, function(df){
+suppressWarnings(head_values <- sapply(wilcox_ra_result_list, function(df){
         max(which(df$p_val_adj < 0.05))
-})
+}))
 head_values <- head_values + 5
+head_values[head_values == -Inf] <- 10
 head_values[head_values > 35] <- 35
 for (i in 1:length(wilcox_ra_result_list_show)){
         print(knitr::kable(head(wilcox_ra_result_list_show[[i]], head_values[i]), caption = names(wilcox_ra_result_list_show)[i]))
@@ -1133,14 +1135,76 @@ DESeq2_result_list_show <- lapply(DESeq2_result_list, function(df) {
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-head_values <- sapply(DESeq2_result_list, function(df){
+suppressWarnings(head_values <- sapply(DESeq2_result_list, function(df){
         max(which(df$p_val_adj < 0.05))
-})
+})) # in case of no significant you get a warning from max resulting in -Inf
 head_values <- head_values + 5
+head_values[head_values == -Inf] <- 10
 head_values[head_values > 35] <- 35
 for (i in 1:length(DESeq2_result_list_show)){
         print(knitr::kable(head(DESeq2_result_list_show[[i]], head_values[i]), caption = names(DESeq2_result_list_show)[i]))
 }
 ```
 
+## Taxon by Taxon Matrix analysis
 
+### groupSum ranking
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+TbTmatrixes_list <- calculate_TbTmatrixes(ps_filt, group_var = group_var)
+# NB: because ratios have been divided by geometric mean over all samples and then log transformed, each row (over all samples) sums to 0:
+# max(sapply(TbTmatrixes_list[[1]], function(x){max(apply(x, 1, sum, na.rm = T))}))
+TbTresult_list <- evaluate_TbTmatrixes(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr")
+TbTresult_list_show <- lapply(TbTresult_list, function(df) {
+        select(df, Family, Genus, Species, 2:19, 22)
+})
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+
+for (i in 1:length(TbTresult_list_show)){
+        print(knitr::kable(head(TbTresult_list_show[[i]], 20), caption = names(TbTresult_list_show)[i]))
+}
+```
+
+### wilcoxon version median
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+TbTresult_list_median <- evaluate_TbTmatrixes_wilcoxTest(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr", type = "median")
+TbTresult_list_median_show <- lapply(TbTresult_list_median, function(df) {
+        select(df, Family, Genus, Species, 2:19, 22)
+})
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+suppressWarnings(head_values <- sapply(TbTresult_list_median, function(df){
+        max(which(df$p_val_adj < 0.05))
+}))
+head_values <- head_values + 5
+head_values[head_values == -Inf] <- 10
+head_values[head_values > 35] <- 35
+for (i in 1:length(TbTresult_list_median_show)){
+        print(knitr::kable(head(TbTresult_list_median_show[[i]], head_values[i]), caption = names(TbTresult_list_median_show)[i]))
+}
+```
+
+### wilcoxon version sum
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+TbTresult_list_sum <- evaluate_TbTmatrixes_wilcoxTest(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr", type = "sum")
+TbTresult_list_sum_show <- lapply(TbTresult_list_sum, function(df) {
+        select(df, Family, Genus, Species, 2:19, 22)
+})
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+suppressWarnings(head_values <- sapply(TbTresult_list_sum, function(df){
+        max(which(df$p_val_adj < 0.05))
+}))
+head_values <- head_values + 5
+head_values[head_values == -Inf] <- 10
+head_values[head_values > 35] <- 35
+for (i in 1:length(TbTresult_list_sum_show)){
+        print(knitr::kable(head(TbTresult_list_sum_show[[i]], head_values[i]), caption = names(TbTresult_list_sum_show)[i]))
+}
+```

@@ -1877,7 +1877,7 @@ wilcoxTestApply_physeq <- function(physeq, group_var, excludeZeros = FALSE, p.ad
                 significance_fisher[fisher.adjusted <= 0.01] <- "**"
                 significance_fisher[fisher.adjusted <= 0.001] <- "***"
                 direction_fisher <- rep("down", length(fisher.adjusted))
-                direction_fisher[res_mat[, "Present_grp1"] > res_mat[, "Present_grp2"]] <- "up"
+                direction_fisher[res_mat[, "Sparsity_grp1"] < res_mat[, "Sparsity_grp2"]] <- "up"
                 
                 
                 DF <- data.frame(Taxon = rownames(res_mat), res_mat, p_val_adj = wilc.adjusted, significance = significance,
@@ -2013,7 +2013,7 @@ DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.
                 significance_fisher[p_val_adj_Fisher <= 0.01] <- "**"
                 significance_fisher[p_val_adj_Fisher <= 0.001] <- "***"
                 direction_fisher <- rep("down", nrow(res))
-                direction_fisher[res$Present_grp1 > res$Present_grp2] <- "up"
+                direction_fisher[res$Sparsity_grp1 < res$Sparsity_grp2] <- "up"
                 
                 res <- dplyr::mutate(res, Taxon = rownames(res), significance = significance, direction = direction,
                                      significance_fisher = significance_fisher, direction_fisher = direction_fisher)
@@ -2035,6 +2035,409 @@ DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.
         result_list
                 
 }
+
+
+####################################
+## calculate_TbTmatrixes:
+###################################
+
+# The method is based on direct comparisons between Taxa (one to one ratio comparisons), thus avoiding compositionality effects.
+# For each "host taxon" a matrix is created, where the host taxons counts are directly compared to the
+# counts of each other taxon.
+# Specifically, in steps, example for count table of 100 taxons and 20 samples
+# Step 1: calculate taxa by taxa ratios (one matrix per host taxon) to get rid of compositionality. 
+# The ratios show for example count taxon 1/ count taxon 2 over all samples, illustrating the non-compositionality affected
+# ratios of taxon 1 to taxon 2 in the different samples
+# Step 2: divide the ratios by geometric mean over all samples, to make ratios of taxon1/taxon2 comparable to taxon1/taxon3 ratios and so on
+# Step 3: log the ratios, so the sum of ratios/values over all samples = 0. 
+# (see also implementation steps below to understand the values in the final TbT matrixes even better)
+# NB: Zero Counts are fully ingored here: Reasoning on this treatment of zero counts: 
+# Values/Ratios where one of the two taxa is missing (count = 0) should not be used to determine
+# differential abundance (instead sparsity should be tested separately)
+# so if the host taxon is 0 in a sample, then the entire sample will basically be ignored for that taxon.
+# Values where the host taxon or the other taxon is 0 should be set to NA, so that all 0 values come
+# from cases log(x/y) where x = y but both x and y != 0
+# NB: further explanations within the code
+
+## Input: 
+# - physeq = a phyloseq object
+# - group_var, name of the group_fac in sample_data(physeq)
+## Output: 
+# - list of TbTmatrixes, one list for each combi of levels in group_fac, list items are named by level_vs_level
+
+# Calculation/implementation Steps (assume a count table of 100 taxons and 20 samples):
+# Step 1: For each host taxon (e.g. taxon 1) calculate the within-sample taxon 1/taxon ratios and log these ratios,
+# i.e. log(count taxon 1/count taxon 1:100) which is simplyd log(count taxon 1) - log(count taxon 1:100).
+# Step 2: ratios/values where on of the counts were 0 are set to NA, and the log(geometric mean) over all samples
+# is subtracted. Done
+
+calculate_TbTmatrixes = function(physeq, group_var){
+        
+        if (taxa_are_rows(physeq)) {physeq <- t(physeq)}
+        
+        
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+        
+        fac_levels <- levels(group_fac)
+        
+        # -- get the level combis --
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        i <- ivec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- jvec[x]
+                })
+        })
+        i_s <- i_s[upper.tri(i_s)]
+        j_s <- j_s[upper.tri(j_s)]
+        # ----
+        
+        TbTmatrixes_list <- vector("list", length = length(i_s))
+        
+        for (k in seq_along(i_s)) {
+                
+                i <- i_s[k]
+                j <- j_s[k]
+                
+                
+                CT <- t(as(otu_table(physeq), 'matrix')) # now taxa are rows and samples are columns
+                group_fac_current <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)])
+                CT <- CT[, group_fac %in% group_fac_current]
+                
+                
+                # == Take in-sample taxa by taxa ratios and take the log ==
+                # NB: log(x/y) = log(x) - log(y)
+                TbTmatrixes <- lapply(1:nrow(CT), function(i){apply(CT, 2, function(samp_cnts){log(samp_cnts[i]) - log(samp_cnts)})})
+                # produces for each taxon (= host taxon) a TbTMatrix
+                # NB: there are -Inf, Inf, and NaN values in the matrixes, specifically
+                # 0/x = log(0) - log(x) = -Inf, x/0 = log(x) - log(0) = Inf; 0/0 = log(0) - log(0) = NaN!
+                # Inf, -Inf, and NaN will be ignored for calculating the rowMeans (geometric means) in the
+                # next step
+                # ====
+                
+                # == dividing each row of a TbTMatrix by its geometric mean, and taking log ==
+                # NB: because the ratios are already "logged" it is just subtracting the rowMeans, see NB2
+                # NB2: remember (see keep Note: #statistics #work geometric mean): geometric_mean(x) with x = x1, ... xn = (x1*...*xn)^1/n = exp(mean(log(x))), i.e. exp((1/n)*(log(x1)+ ... + log(xn))). 
+                # Therefore, log(geometric_mean(x)) = (1/n)*(log(x1)+ ... + log(xn)) (= rowMeans when row = log(x1), ... log(xn))
+                # Therefore: the rowMeans of the "logged" ratios are log(geometric_mean), and thus:
+                # log(Ratio/geometric_mean) = log(Ratio) - rowMean! Remember log(Ratio) is currently in the TbTMatrixes
+                # NB3: all Inf, -Inf, and NaN are set to NA, thus all 0 in the matrixes are from ratios x/y where x = y and x AND y != 0.
+                TbTmatrixes <- lapply(TbTmatrixes, function(mat) {
+                        mat[!is.finite(mat)] <- NA # puts all Inf, -Inf, and also NaN to NA!
+                        mat-rowMeans(mat, na.rm = TRUE)
+                        #newM[is.na(newM)] <- 0
+                })
+                # ====
+                names(TbTmatrixes) <- rownames(TbTmatrixes[[1]])
+                TbTmatrixes_list[[k]] <- TbTmatrixes
+                names(TbTmatrixes_list)[[k]] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
+        }
+        
+        TbTmatrixes_list
+        
+}
+
+
+####################################
+## evaluate_TbTmatrixes: 
+###################################
+# NB: you need to give same physeq as in calculate_TbTmatrixes, of course two functions could be combined, would
+# save some double calculations
+# the function calculates the TbT_groupSums as "teststatistic" in the TbTmatrixes 
+# it adds count infos from physeq, NB: Median_grp1 and so on are calculated only from non-zero
+# values because TbT method ignores zeros
+## Input: 
+# - TbTmatrixes_list: The list with the list of TbTmatrixes for each level combination in group_var defined group factor
+# - physeq: same physeq object as used in calculate_TbTmatrixes
+# - group_var: defining the group factor in physeq, same again as in calculate_TbTmatrixes
+# - p.adjust.method: here only for p.adjust on fisher p_values
+## Output: 
+# - list of result DF for each combination of levels in group_var defined group fac
+
+evaluate_TbTmatrixes <- function(TbTmatrixes_list, physeq, group_var, p.adjust.method = "fdr") {
+
+        if(!identical(length(TbTmatrixes_list[[1]]), ntaxa(physeq))){stop("TbTmatrixes can not fit to physeq")}
+
+        CT <- t(as(otu_table(physeq), "matrix"))
+        CT[CT == 0] <- NA # because the method ignores 0 counts, I want to ignore them when calculating Mean_grp1 and so on
+        
+        
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+
+        fac_levels <- levels(group_fac)
+
+        # -- get the level combis --
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels)
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        i <- ivec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- jvec[x]
+                })
+        })
+        i_s <- i_s[upper.tri(i_s)]
+        j_s <- j_s[upper.tri(j_s)]
+        # ----
+
+        result_list <- vector("list", length = length(i_s))
+
+        for (k in seq_along(i_s)) {
+                
+                i <- i_s[k]
+                j <- j_s[k]
+
+                TbTmatrixes <- TbTmatrixes_list[[k]]
+                group_fac_current <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)])
+                
+                sumGrp1 <- sapply(TbTmatrixes, function(mat){sum(mat[, group_fac_current == fac_levels[i]], na.rm = T)})
+                sumGrp2 <- sapply(TbTmatrixes, function(mat){sum(mat[, group_fac_current == fac_levels[j]], na.rm = T)})
+                sumAll <- sapply(TbTmatrixes, function(mat){sum(mat, na.rm = T)})
+                DF <- data.frame(Taxon = names(sumAll), sumGrp1 = sumGrp1, sumGrp2 = sumGrp2, sumAll = sumAll, TbT_groupSum = pmax(sumGrp1, sumGrp2))
+                
+                CT_current <- CT[, group_fac %in% group_fac_current]
+                
+                DF$Median_grp1 <- apply(CT[, group_fac_current == fac_levels[i]], 1, median, na.rm = T)
+                DF$Median_grp2 <- apply(CT[, group_fac_current == fac_levels[j]], 1, median, na.rm = T)
+                DF$Mean_grp1 <- apply(CT[, group_fac_current == fac_levels[i]], 1, mean, na.rm = T)
+                DF$Mean_grp2 <- apply(CT[, group_fac_current == fac_levels[j]], 1, mean, na.rm = T)
+                DF$Present_grp1 <- apply(CT[, group_fac_current == fac_levels[i]], 1, function(cnts){sum(!is.na(cnts))})
+                DF$Present_grp2 <- apply(CT[, group_fac_current == fac_levels[j]], 1, function(cnts){sum(!is.na(cnts))})
+                DF$Zeros_grp1 <- apply(CT[, group_fac_current == fac_levels[i]], 1, function(cnts){sum(is.na(cnts))})
+                DF$Zeros_grp2 <- apply(CT[, group_fac_current == fac_levels[j]], 1, function(cnts){sum(is.na(cnts))})
+                n1 <- sum(group_fac_current == fac_levels[i])
+                n2 <- sum(group_fac_current == fac_levels[j])
+                DF$Sparsity_grp1 <- 100*(DF$Zeros_grp1/n1)
+                DF$Sparsity_grp2 <- 100*(DF$Zeros_grp2/n2)
+                DF$n1 <- n1
+                DF$n2 <- n2
+                # -- add fisher exact test of presence differences (should be none in simulation) --
+                Fisher <- t(sapply(1:nrow(DF), FUN = function(i){
+                        fisherMat <- matrix(c(DF$Present_grp1[i], DF$Zeros_grp1[i], DF$Present_grp2[i],
+                                              DF$Zeros_grp2[i]), ncol = 2, dimnames = list(c("Present", "Absent"), c("grp1", "grp2")))
+                        Test <- fisher.test(fisherMat)
+                        cbind(Test$p.value, Test$estimate)
+                }))
+                
+                p_val_adj_Fisher <- p.adjust(Fisher[,1], method = p.adjust.method)
+                
+                DF$p_val_Fisher <- Fisher[,1]
+                DF$p_val_Fisher_adj <- p_val_adj_Fisher
+                DF$oddsRatioFisher <- Fisher[,2]
+                
+                direction <- rep("down", nrow(DF))
+                direction[DF$Median_grp1 > DF$Median_grp2] <- "up"
+                significance_fisher <- rep("", nrow(DF))
+                significance_fisher[p_val_adj_Fisher <= 0.05] <- "*"
+                significance_fisher[p_val_adj_Fisher <= 0.01] <- "**"
+                significance_fisher[p_val_adj_Fisher <= 0.001] <- "***"
+                direction_fisher <- rep("down", nrow(DF))
+                direction_fisher[DF$Sparsity_grp1 < DF$Sparsity_grp2] <- "up"
+                
+                DF <- dplyr::mutate(DF, direction = direction, significance_fisher = significance_fisher, direction_fisher = direction_fisher)
+                
+                DF <- dplyr::select(DF, Taxon, TbT_groupSum, direction, p_val_Fisher,
+                                     p_val_Fisher_adj, significance_fisher,
+                                     direction_fisher, Median_grp1, Median_grp2, Mean_grp1,
+                                     Mean_grp2, Present_grp1, Present_grp2, Zeros_grp1, Zeros_grp2, Sparsity_grp1, Sparsity_grp2, 
+                                     n1, n2, sumGrp1, sumGrp2, sumAll, oddsRatioFisher)
+                
+                
+                DF <- cbind(DF, tax_table(physeq))
+                DF <- dplyr::arrange(DF, desc(abs(TbT_groupSum)))
+                result_list[[k]] <- DF
+                names(result_list)[[k]] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
+        }
+        
+        result_list
+}
+
+
+####################################
+## evaluate_TbTmatrixes_wilcoxTest: 
+###################################
+# An attempt to analyse TbTMatrixes with wilcox.test, similar to wilcoxTestApply. Basically simply applying wilcox.test on the colSums or colMeans
+# of the TbTMatrixes, i.e. the sum or the mean over all taxa for each sample
+## Input: 
+# - TbTMatrixes_list: The list with the list of TbTMatrixes for each simulation
+# - simlist: The list of physeq objects that have been used to calculate the TBTMatrixes_list
+# - classlabel: the name of the column in the simlist physeq objects with the factor that defines the two sample groups
+#  usually in your simulations = sample_data(simlist[[1]])$postfix
+# - colSums: if TRUE colSums are used, if FALSE colMeans
+# - excludeZeros: as in wilcoxTestApply, probably here should always be TRUE, samples where the host taxon was not present are excluded from the wilcox.test.
+## Output: 
+# - list of result DF for each simulation ordered after the wilcox.test standardized test statistic
+# - also here a fisher exact test is added to compare sparsity levels.
+
+
+evaluate_TbTmatrixes_wilcoxTest <- function(TbTmatrixes_list, physeq, group_var, p.adjust.method = "fdr", type = "median") {
+
+        if(!identical(length(TbTmatrixes_list[[1]]), ntaxa(physeq))){stop("TbTmatrixes can not fit to physeq")}
+
+        CT <- t(as(otu_table(physeq), "matrix"))
+        CT[CT == 0] <- NA # because the method ignores 0 counts, I want to ignore them when calculating Mean_grp1 and so on
+
+
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+
+        fac_levels <- levels(group_fac)
+
+        # -- get the level combis --
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels)
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        i <- ivec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- jvec[x]
+                })
+        })
+        i_s <- i_s[upper.tri(i_s)]
+        j_s <- j_s[upper.tri(j_s)]
+        # ----
+
+        result_list <- vector("list", length = length(i_s))
+
+        for (k in seq_along(i_s)) {
+
+                i <- i_s[k]
+                j <- j_s[k]
+
+                TbTmatrixes <- TbTmatrixes_list[[k]]
+                group_fac_current <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)])
+
+                if(type == "sum"){
+                        measureMatrix <- sapply(TbTmatrixes, colSums, na.rm = T)
+                        # NB: samples in which host taxon was 0 are all NA in the TbTMatrix, colSums of all NA samples = 0!
+                        measureMatrix[measureMatrix == 0] <- NA # assuming that it is practically impossible to get 0 if not the host taxon was absent in the sample
+                } else if (type == "median") {
+                        measureMatrix <- sapply(1:length(TbTmatrixes), function(e){
+                                mat <- TbTmatrixes[[e]]
+                                mat <- mat[-e, ] # removes the all 0 row where host taxon was compared to itself
+                                apply(mat, 2, median, na.rm = T)
+
+                        })
+                        colnames(measureMatrix) <- taxa_names(physeq)
+
+                        # measureMatrix[is.na(measureMatrix)] <- 0
+                } else {
+                        stop("incorrect type, must be sum or median")
+                }
+
+                res_mat <- apply(measureMatrix, 2, function(taxon_measures){
+                        x <- taxon_measures[group_fac_current == fac_levels[i]]
+                        Zeros_grp1 <- sum(is.na(x))
+                        Sparsity_grp1 <- 100*(Zeros_grp1/length(x))
+                        Present_grp1 <- length(x)-Zeros_grp1
+                        x <- x[!is.na(x)]
+                        Median_grp1 <- median(x, na.rm = T)
+                        Mean_grp1 <- mean(x, na.rm = T)
+                        if (is.na(Mean_grp1)){ Mean_grp1 = NA }
+
+                        y <- taxon_measures[group_fac_current == fac_levels[j]]
+                        Zeros_grp2 <- sum(is.na(y))
+                        Sparsity_grp2 <- 100*(Zeros_grp2/length(y))
+                        Present_grp2 <- length(y)-Zeros_grp2
+                        y <- y[!is.na(y)]
+                        Median_grp2 <- median(y, na.rm = T)
+                        Mean_grp2 <- mean(y, na.rm = T)
+                        if (is.na(Mean_grp2)){ Mean_grp2 = NA }
+
+                        # I think you might just as well do a t.test here at least for median version, because after log transform data should almost be normal
+                        # you could add a normality test
+                        if (length(x) != 0 && length(y) != 0){
+                                wilcTest <- wilcox.test(x = x, y = y, alternative = "two", paired = F, exact = F)
+                                pValue <- wilcTest$p.value
+                                W <- wilcTest$statistic
+                                # calculate standardized rank sum Wilcoxon statistics as in multtest::mt.minP
+                                Ranks <- rank(c(x, y))
+                                n1 <- length(x) # should be always equal to Present_grp1 here
+                                n2 <- length(y)
+                                # Wx <- sum(Ranks[1:n1])-(n1*(n1+1)/2) # would be the same as W
+                                # how about the other W?
+                                # Wy <- sum(Ranks[(n1+1):n2]) - (n2*(n2+1)/2)
+                                standStat <- -1*((sum(Ranks[1:n1]) - n1*(n1+n2+1)/2)/sqrt(n1*n2*(n1+n2+1)/12))
+
+                                # # if you want to check that multtest::mt.minP would give the same statistic
+                                # mati <- matrix(c(x,y), nrow = 1)
+                                # grFac <- c(rep(fac_levels[i], n1), rep(fac_levels[j], n2))
+                                # grFac <- factor(grFac, levels = c(fac_levels[i], fac_levels[j]))
+                                # standStat2 <- multtest::mt.minP(mati, grFac, test = "wilcoxon")$teststat
+                                # # identical(standStat, standStat2) # TRUE
+                                # uncomment all with standStat2 to test all the way
+
+                        } else {
+                                pValue = NA
+                                W <- NA
+                                standStat = NA
+                                n1 <- length(x)
+                                n2 <- length(y)
+                                # standStat2 = NA
+                        }
+                        
+                        fisherMat <- matrix(c(Present_grp1, Zeros_grp1, Present_grp2, Zeros_grp2), 
+                                            ncol = 2, dimnames = list(c("Present", "Absent"), c("grp1", "grp2")) )
+                        Test <- fisher.test(fisherMat)
+                        
+                        c(teststat = standStat, p_val = pValue, Median_grp1 = Median_grp1, Median_grp2 = Median_grp2, 
+                          Mean_grp1 = Mean_grp1, Mean_grp2 = Mean_grp2, n1 = n1, n2 = n2, Present_grp1 = Present_grp1, 
+                          Present_grp2 = Present_grp2, Zeros_grp1 = Zeros_grp1, Zeros_grp2 = Zeros_grp2, 
+                          Sparsity_grp1 = Sparsity_grp1, Sparsity_grp2 = Sparsity_grp2, W, 
+                          p_val_Fisher = Test$p.value, Test$estimate) #, teststat2 = standStat2
+                        
+                })
+                
+                res_mat <- t(res_mat)
+                colnames(res_mat) <- c("teststat", "p_val", "Median_grp1", "Median_grp2", "Mean_grp1", "Mean_grp2", "n1",
+                                       "n2", "Present_grp1", "Present_grp2", "Zeros_grp1", "Zeros_grp2", "Sparsity_grp1", "Sparsity_grp2", "W",
+                                       "p_val_Fisher", "oddsRatioFisher") #, , "teststat2"
+                wilc.adjusted <- p.adjust(res_mat[,"p_val"], method = p.adjust.method)
+                fisher.adjusted <- p.adjust(res_mat[,"p_val_Fisher"], method = p.adjust.method)
+                significance <- rep("", length(wilc.adjusted))
+                significance[wilc.adjusted <= 0.05] <- "*"
+                significance[wilc.adjusted <= 0.01] <- "**"
+                significance[wilc.adjusted <= 0.001] <- "***"
+                direction <- rep("down", length(wilc.adjusted))
+                direction[res_mat[, "Median_grp1"] > res_mat[, "Median_grp2"]] <- "up"
+                significance_fisher <- rep("", length(fisher.adjusted))
+                significance_fisher[fisher.adjusted <= 0.05] <- "*"
+                significance_fisher[fisher.adjusted <= 0.01] <- "**"
+                significance_fisher[fisher.adjusted <= 0.001] <- "***"
+                direction_fisher <- rep("down", length(fisher.adjusted))
+                direction_fisher[res_mat[, "Sparsity_grp1"] < res_mat[, "Sparsity_grp2"]] <- "up"
+                
+                
+                DF <- data.frame(Taxon = rownames(res_mat), res_mat, p_val_adj = wilc.adjusted, significance = significance,
+                                 direction = direction, p_val_Fisher_adj = fisher.adjusted,
+                                 significance_fisher = significance_fisher,
+                                 direction_fisher = direction_fisher)
+                
+                
+                DF <- dplyr::select(DF, 1:3, 19:21, 17, 22:24, 4:7, 10:15, 8:9, 16, 18)
+                # teststat/standStat2 version:
+                # DF <- dplyr::select(DF, 1:2, 19, 3, 20:22, 17, 23:25, 4:7, 10:15, 8:9, 16, 18)
+                
+                DF <- cbind(DF, tax_table(physeq))
+                # DF <- dplyr::arrange(DF, desc(abs(teststat)))
+                DF <- dplyr::arrange(DF, p_val)
+                
+                result_list[[k]] <- DF
+                names(result_list)[[k]] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
+        }
+        
+        result_list
+}
+
+
+
 
 
 
