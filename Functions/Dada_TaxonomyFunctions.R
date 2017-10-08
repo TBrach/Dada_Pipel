@@ -1528,11 +1528,14 @@ pairwise.perm.manova.own <- function(dist_obj, group_fac, nperm = 999,
 
 
 #######################################
-### overviewPhyseq##
+### get_overview_of_physeq##
 #################
+# The function came to live while doing simulations: it became clear that the count variation (both across samples and taxa) is
+# usually higher in real data than in simulated data. 
+# Input: just physeq
+# Output: a DF summarising features of the abundance table. 
 
-
-overviewPhyseq <- function(physeq, group_var, max_rel_ab_for_color = NULL){
+get_overview_of_physeq <- function(physeq){
         
         if(taxa_are_rows(physeq)) { physeq <- t(physeq) }
         # I prefer taxa_are_rows = FALSE so rows (= observations = samples), and colums = variables = taxa
@@ -1573,40 +1576,64 @@ overviewPhyseq <- function(physeq, group_var, max_rel_ab_for_color = NULL){
                                MedianSampleSDNoZ_RA = round(median(apply(CT_RA_NA, 1, sd, na.rm = TRUE), na.rm = TRUE), 3)
         )
         
+}
+
+
+#######################################
+### make_heat_map_physeq##
+#################
+## Input:
+# physeq object
+# group_var: the name of the group_fac column in sample_data used to order the samples in the heat map
+# max_abundance_for_color: if null the max count/relative abundance in the data is used. all counts above this value will be
+# shown yellow in the heat map
+# tax_order: character vector of the original taxon names in the order you want them shown. if NULL >> tax_order = taxa_names(physeq)
+# tax_names: the names that will be used for the taxons, if Null Taxon_1, Taxon_2 and so on will be used. NB: renaming of course after
+# ordering. 
+# color_sample_names: if TRUE and if you have less than 7 levels, the sample names will be colored using cbPalette
+# gradient_steps: the steps the blue to green to yellow will be distributed in the viridis gradient: 4 numbers ranging from 1e-14 to 1,
+# see default, you might wanna try c(0.25, 0.5, 0.75, 1) as well
+## Output:
+# the heat map trellis
+
+make_heat_map_physeq <- function(physeq, group_var, max_abundance_for_color = NULL, tax_order = NULL,
+                                 tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1)){
         
-        # # == Tr3: Histogram of template sample SD on relative abundances excluding zeros == 
-        # Temp <- data.frame(Sample = sample_names(template), Sample_SD_RA_NZ = 100*apply(OTUTTNA_RA, 1, sd, na.rm = TRUE))
-        # Tr3 <- ggplot(Temp, aes(x = Sample_SD_RA_NZ))
-        # Tr3 <- Tr3 + geom_histogram(binwidth = diff(range(Temp$Sample_SD_RA_NZ))/30, fill = cbPalette[2]) +
-        #         geom_rug() +
-        #         geom_vline(xintercept = median(Temp$Sample_SD_RA_NZ), col = "#009E73", lty = "dashed") +
-        #         ggtitle(paste("Sample SD (RA, NZ), distribution of ", nsamples(template), " template samples (median green line)", sep = "")) +
-        #         theme_bw() +
-        #         xlab("Sample_SD_RA_NZ")
+        gradient_steps <- c(0, 1e-14, gradient_steps)
+        
+        if(taxa_are_rows(physeq)) { physeq <- t(physeq) }
+        
+        if (!is.factor(sample_data(physeq)[[group_var]])) {sample_data(physeq)[[group_var]] <- as.factor(sample_data(physeq)[[group_var]])}
         
         
-        
-        # == Heatmap plot ==
-        
-        # here Samples should be columns and taxa rows
-        # zeros should be of special color to see sparsity
-        # then to have the option to give Count limits, so that every count above that value gets the max colour
-        # The latter point can be done with the scale package and the option: oob = swish
-        # please read here: <https://github.com/tidyverse/ggplot2/issues/866>
-        # see also the na.value option not used
-        
+        CT <- as(otu_table(physeq), "matrix") # taxa are columns
         DF_CT <- as.data.frame(t(CT))
-        rownames(DF_CT) <- paste("Taxon_", 1:nrow(DF_CT), sep = "")
+        
+        if (is.null(tax_order)){tax_order <- taxa_names(physeq)}
+        
+        if (length(tax_order) != nrow(DF_CT) || !all(tax_order %in% rownames(DF_CT))) {stop("the given tax_order must contain all taxa_names(physeq). If you want to subset,
+                                                                                            do it before with prune_taxa")}
+        DF_CT <- DF_CT[tax_order, ]
+        
+        if (is.null(tax_names)) {tax_names <- paste("Taxon_", 1:nrow(DF_CT), sep = "")}
+        
+        if (length(tax_names) != nrow(DF_CT) ) {stop("the given tax_names must be a character vector of length = ntaxa(physeq)")}
+        
+        
+        rownames(DF_CT) <- make.unique(tax_names)
         DF_CT$Taxa <- rownames(DF_CT)
         DF_CT <- tidyr::gather(DF_CT, key = Sample , value = Count, -Taxa)
         DF_CT$Taxa <- factor(DF_CT$Taxa, levels = rev(unique(DF_CT$Taxa)), ordered = TRUE)
         LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
-        # I later want the samples coloured by group_var
         LookUpDF <- LookUpDF[order(match(LookUpDF$Group, levels(LookUpDF$Group))), ]
         DF_CT$Sample <- factor(DF_CT$Sample, levels = LookUpDF$Sample, ordered = TRUE)
         
-        # add color to the taxa so you see up and down
-        if (length(levels(LookUpDF$Group)) <= 7){
+        if (is.null(max_abundance_for_color)) {
+                max_abundance_for_color<- max(DF_CT$Count)
+        }
+        
+        # Color the sample names based on levels in group fac
+        if (length(levels(LookUpDF$Group)) <= 7 && color_sample_names){
                 color_lookup <- data.frame(level = levels(LookUpDF$Group), color = cbPalette[2:(length(levels(LookUpDF$Group)) + 1)])
                 colxaxis <- as.character(color_lookup$color[match(LookUpDF$Group, color_lookup$level)])
         } else {
@@ -1614,22 +1641,10 @@ overviewPhyseq <- function(physeq, group_var, max_rel_ab_for_color = NULL){
         }
         
         
-        DF_CT_RA <- dplyr::group_by(DF_CT, Sample) %>% dplyr::mutate(rel_ab = Count/sum(Count))
-        
-        if (is.null(max_rel_ab_for_color) || max_rel_ab_for_color < 0 || max_rel_ab_for_color > 1) {
-                max_rel_ab_for_color <- max(DF_CT_RA$rel_ab)
-        }
-        
-        # Test that really only 0 entries are shown in red:
-        # DF_CT_RA$rel_ab[DF_CT_RA$Taxa %in% c("Taxon_1", "Taxon_2", "Taxon_3")] <- 1e-12 # will show you it only gets red as soon as it is <- 1e-14
-        # Test that values above max_rel_ab_for_color are yellow
-        # DF_CT_RA$rel_ab[DF_CT_RA$Taxa %in% c("Taxon_1", "Taxon_2", "Taxon_3")] <- .9
-        
-        
-        hmtRA <- ggplot(DF_CT_RA, aes(x = Sample, y = Taxa, fill = rel_ab))
-        hmtRA <- hmtRA + 
+        hmTr <- ggplot(DF_CT, aes(x = Sample, y = Taxa, fill = Count))
+        hmTr <- hmTr + 
                 geom_raster() + 
-                scale_fill_gradientn(limits = c(0, max_rel_ab_for_color), colors = c("red", viridis(5)), values = c(0, 1e-14, 0.15, 0.3, 0.45, 1), oob = squish) +
+                scale_fill_gradientn("", limits = c(0, max_abundance_for_color), colors = c("red", viridis(5)), values = gradient_steps, oob = squish) +
                 scale_x_discrete(position = "top") +
                 #coord_equal() +
                 labs(x=NULL, y=NULL) +
@@ -1637,9 +1652,295 @@ overviewPhyseq <- function(physeq, group_var, max_rel_ab_for_color = NULL){
                 theme(axis.ticks=element_blank(),
                       axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0,
                                                  colour = colxaxis))
+        hmTr
+}
+
+#######################################
+### make_heat_map_physeq_levels##
+#################
+# same heat map plots as from make_heat_map_physeq but for each combination of levels in your physeq
+## Input:
+# physeq object
+# group_var: the name of the group_fac column in sample_data used to order the samples in the heat map
+# max_abundance_for_color: if null the max count/relative abundance in the data is used. all counts above this value will be
+# shown yellow in the heat map
+# tax_order: character vector of the original taxon names in the order you want them shown. if NULL >> tax_order = taxa_names(physeq)
+# tax_names: the names that will be used for the taxons, if Null Taxon_1, Taxon_2 and so on will be used. NB: renaming of course after
+# ordering. 
+# color_sample_names: if TRUE and if you have less than 7 levels, the sample names will be colored using cbPalette
+# gradient_steps: the steps the blue to green to yellow will be distributed in the viridis gradient: 4 numbers ranging from 1e-14 to 1,
+# see default, you might wanna try c(0.25, 0.5, 0.75, 1) as well
+# Output: list of heat maps for each level combination
+
+make_heat_map_physeq_levels <- function(physeq, group_var, max_abundance_for_color = NULL, tax_order = NULL,
+                                        tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1)){
         
-        list(OverviewDF = Overview, heatmap_ra = hmtRA)
+        gradient_steps <- c(0, 1e-14, gradient_steps)
         
+        if(taxa_are_rows(physeq)) { physeq <- t(physeq) }
+        
+        if (!is.factor(sample_data(physeq)[[group_var]])) {sample_data(physeq)[[group_var]] <- as.factor(sample_data(physeq)[[group_var]])}
+        
+        CT <- as(otu_table(physeq), "matrix") # taxa are columns
+        DF_CT <- as.data.frame(t(CT))
+        
+        if (is.null(tax_order)){tax_order <- taxa_names(physeq)}
+        
+        if (length(tax_order) != nrow(DF_CT) || !all(tax_order %in% rownames(DF_CT))) {stop("the given tax_order must contain all taxa_names(physeq). If you want to subset,
+                                                                                            do it before with prune_taxa")}
+        DF_CT <- DF_CT[tax_order, ]
+        
+        if (is.null(tax_names)) {tax_names <- paste("Taxon_", 1:nrow(DF_CT), sep = "")}
+        
+        if (length(tax_names) != nrow(DF_CT) ) {stop("the given tax_names must be a character vector of length = ntaxa(physeq)")}
+        
+        rownames(DF_CT) <- make.unique(tax_names)
+        DF_CT$Taxa <- rownames(DF_CT)
+        DF_CT <- tidyr::gather(DF_CT, key = Sample , value = Count, -Taxa)
+        DF_CT$Taxa <- factor(DF_CT$Taxa, levels = rev(unique(DF_CT$Taxa)), ordered = TRUE)
+        LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
+        LookUpDF <- LookUpDF[order(match(LookUpDF$Group, levels(LookUpDF$Group))), ]
+        DF_CT$Sample <- factor(DF_CT$Sample, levels = LookUpDF$Sample, ordered = TRUE)
+        DF_CT$Group <- LookUpDF$Group[match(DF_CT$Sample, LookUpDF$Sample)]
+        
+        
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+        
+        fac_levels <- levels(group_fac)
+        
+        # -- get the level combis --
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        i <- ivec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- jvec[x]
+                })
+        })
+        i_s <- i_s[upper.tri(i_s)]
+        j_s <- j_s[upper.tri(j_s)]
+        # ----
+        
+        plot_list <- vector("list", length = length(i_s))
+        
+        
+        
+        for (k in seq_along(i_s)){
+                i <- i_s[k]
+                j <- j_s[k]
+                
+                group_fac_current <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)])
+                DF_CT_current <- filter(DF_CT, Group %in% group_fac_current)
+                DF_CT_current$Group <- factor(DF_CT_current$Group, levels = c(fac_levels[i], fac_levels[j]), ordered = TRUE)
+                LookUpDF_current <- LookUpDF[LookUpDF$Sample %in% DF_CT_current$Sample, ]
+                DF_CT_current$Sample <- factor(DF_CT_current$Sample, levels = LookUpDF_current$Sample, ordered = TRUE)
+                
+                if (is.null(max_abundance_for_color)) {
+                        max_abundance_for_color_current <- max(DF_CT_current$Count)
+                } else {
+                        max_abundance_for_color_current <- max_abundance_for_color
+                }
+                
+                # Color the sample names based on levels in group fac
+                if (length(levels(LookUpDF$Group)) <= 7 && color_sample_names){
+                        color_lookup <- data.frame(level = levels(LookUpDF$Group), color = cbPalette[2:(length(levels(LookUpDF$Group)) + 1)])
+                        LookUpDF$Group[match(levels(DF_CT_current$Sample), LookUpDF$Sample)]
+                        colxaxis <- as.character(color_lookup$color[match(LookUpDF$Group[match(levels(DF_CT_current$Sample), LookUpDF$Sample)], color_lookup$level)])
+                } else {
+                        colxaxis <- rep("black", nrow(LookUpDF))
+                }
+                
+                
+                hmTr <- ggplot(DF_CT_current, aes(x = Sample, y = Taxa, fill = Count))
+                hmTr <- hmTr + 
+                        geom_raster() + 
+                        scale_fill_gradientn("", limits = c(0, max_abundance_for_color_current), colors = c("red", viridis(5)), values = gradient_steps, oob = squish) +
+                        scale_x_discrete(position = "top") +
+                        #coord_equal() +
+                        labs(x=NULL, y=NULL) +
+                        theme_tufte(base_family = "Helvetica") +
+                        theme(axis.ticks=element_blank(),
+                              axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0,
+                                                         colour = colxaxis))
+                
+                plot_list[[k]] <- hmTr
+                names(plot_list)[k] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
+        }
+        plot_list
+}
+
+
+
+
+#######################################
+### plot_top_abundances_boxAndviolin##
+#################
+# generates box and violin plots of the taxons in physeq in the order given by tax_order and named by tax_names
+# if tax_order and tax_names are NULL the order and names of physeq will be used
+# facet_cols determines ncol in facet_wrap
+
+# OUTPUT:
+# generates for each level combination of the grouping factor (defined by group_var) seven plots, so for each combi a list of 7 plots
+
+plot_top_abundances_boxAndviolin <- function(physeq, group_var, tax_order = NULL, tax_names = NULL, facet_cols = 5){
+        
+        if(taxa_are_rows(physeq)) { physeq <- t(physeq) }
+        # I prefer taxa_are_rows = FALSE so rows (= observations = samples), and colums = variables = taxa
+        
+        if (!is.factor(sample_data(physeq)[[group_var]])) {sample_data(physeq)[[group_var]] <- as.factor(sample_data(physeq)[[group_var]])}
+        
+        CT <- as(otu_table(physeq), "matrix") # taxa are columns
+        DF_CT <- as.data.frame(t(CT))
+        
+        if (is.null(tax_order)){tax_order <- taxa_names(physeq)}
+        
+        if (length(tax_order) != nrow(DF_CT) || !all(tax_order %in% rownames(DF_CT))) {stop("the given tax_order must contain all taxa_names(physeq). If you want to subset,
+                                                                                            do it before with prune_taxa")}
+        DF_CT <- DF_CT[tax_order, ]
+        
+        if (is.null(tax_names)) {tax_names <- paste("Taxon_", 1:nrow(DF_CT), sep = "")}
+        
+        if (length(tax_names) != nrow(DF_CT) ) {stop("the given tax_names must be a character vector of length = ntaxa(physeq)")}
+        
+        rownames(DF_CT) <- make.unique(tax_names)
+        DF_CT$Taxa <- rownames(DF_CT)
+        
+        DF_CT <- tidyr::gather(DF_CT, key = Sample , value = Count, -Taxa)
+        DF_CT$Taxa <- factor(DF_CT$Taxa, levels = unique(DF_CT$Taxa), ordered = TRUE)
+        
+        LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
+        DF_CT$Group <- LookUpDF$Group[match(DF_CT$Sample, LookUpDF$Sample)]
+        
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+        
+        fac_levels <- levels(group_fac)
+        
+        # -- get the level combis --
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        i <- ivec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- jvec[x]
+                })
+        })
+        i_s <- i_s[upper.tri(i_s)]
+        j_s <- j_s[upper.tri(j_s)]
+        # ----
+        
+        plot_list <- vector("list", length = length(i_s))
+        
+        for (k in seq_along(i_s)){
+                i <- i_s[k]
+                j <- j_s[k]
+                
+                group_fac_current <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)])
+                DF_CT_current <- filter(DF_CT, Group %in% group_fac_current)
+                DF_CT_current$Group <- factor(DF_CT_current$Group, levels = c(fac_levels[i], fac_levels[j]), ordered = TRUE)
+                
+                Tr <- ggplot(DF_CT_current, aes(x = Taxa, y = Count, col = Group))
+                Tr <- Tr +
+                        geom_boxplot(outlier.color = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
+                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        xlab("") +
+                        ylab("abundance") +
+                        theme_bw() +
+                        theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0))
+                
+                Tr1 <- ggplot(DF_CT_current, aes(x = Group, y = Count, col = Group))
+                Tr1 <- Tr1 +
+                        geom_boxplot(outlier.color = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
+                        facet_wrap(~ Taxa, ncol = facet_cols, scales = "free_y") +
+                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        xlab("") +
+                        ylab("abundance") +
+                        theme_bw()
+                
+                Tr2 <- ggplot(DF_CT_current, aes(x = Taxa, y = Count, col = Group))
+                Tr2 <- Tr2 +
+                        geom_violin(fill = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
+                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        xlab("") +
+                        ylab("abundance") +
+                        theme_bw() +
+                        theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0))
+                
+                Tr3 <- ggplot(DF_CT_current, aes(x = Group, y = Count, col = Group))
+                Tr3 <- Tr3 +
+                        geom_violin(fill = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
+                        facet_wrap(~ Taxa, ncol = facet_cols, scales = "free_y") +
+                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        xlab("") +
+                        ylab("abundance") +
+                        theme_bw()
+                
+                # same for log10
+                # if (min(DF_CT_current$Count[DF_CT_current$Count > 0]) > 1e-6) {
+                #         DF_CT_current$Count[DF_CT_current$Count == 0] <- 1e-6
+                # } else {
+                DF_CT_current$Count[DF_CT_current$Count == 0] <- min(DF_CT_current$Count[DF_CT_current$Count > 0])
+                # }
+                
+                Tr4 <- ggplot(DF_CT_current, aes(x = Taxa, y = Count, col = Group))
+                Tr4 <- Tr4 +
+                        geom_boxplot(outlier.color = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
+                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        xlab("") +
+                        ylab("abundance") +
+                        theme_bw() +
+                        theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0)) +
+                        scale_y_log10()
+                
+                Tr5 <- ggplot(DF_CT_current, aes(x = Group, y = Count, col = Group))
+                Tr5 <- Tr5 +
+                        geom_boxplot(outlier.color = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
+                        facet_wrap(~ Taxa, ncol = facet_cols, scales = "free_y") +
+                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        xlab("") +
+                        ylab("abundance") +
+                        theme_bw() +
+                        scale_y_log10()
+                
+                Tr6 <- ggplot(DF_CT_current, aes(x = Taxa, y = Count, col = Group))
+                Tr6 <- Tr6 +
+                        geom_violin(fill = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
+                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        xlab("") +
+                        ylab("abundance") +
+                        theme_bw() +
+                        theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0)) +
+                        scale_y_log10()
+                
+                Tr7 <- ggplot(DF_CT_current, aes(x = Group, y = Count, col = Group))
+                Tr7 <- Tr7 +
+                        geom_violin(fill = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
+                        facet_wrap(~ Taxa, ncol = facet_cols, scales = "free_y") +
+                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        xlab("") +
+                        ylab("abundance") +
+                        theme_bw() +
+                        scale_y_log10()
+                
+                
+                plot_list[[k]] <- list(Tr, Tr1, Tr2, Tr3, Tr4, Tr5, Tr6, Tr7)
+                names(plot_list)[k] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
+        }
+        
+        plot_list
 }
 
 
@@ -1907,8 +2208,14 @@ wilcoxTestApply_physeq <- function(physeq, group_var, excludeZeros = FALSE, p.ad
 ### DESeq2Apply_physeq
 #######################################
 ## Inputs
+# physeq: phyloseq object
+# group_var: name of column that defines group fac in sample_data
 # SFs: often you might want to give the SizeFactors already because you wanted to calculate them on non-filtered data,
 # when SFs are not NULL, type is ignored
+# type: type in estimateSizeFactors, ignored when Size factors given
+## OUTPUT:
+# list of two lists: the first: List of DESeq2 results plus of fisher.exact test, for each level combination in group factor one data_frame = list entry
+# in the second list is just the size factor adjusted physeq object
 
 
 DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.adjust.method = "fdr"){
@@ -1940,10 +2247,14 @@ DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.
                 sizeFactors(dds) = SFs
                 # identical(sizeFactors(dds), SFs) 
         }
-       
+        
         
         dds <- estimateDispersions(dds, quiet = TRUE) 
         dds <- nbinomWaldTest(dds)
+        
+        # to get the size factor adjusted physeq object
+        physeq_out <- physeq
+        otu_table(physeq_out) <- otu_table(t(counts(dds, normalized = TRUE)), taxa_are_rows = FALSE)
         
         # -- get the level combis, NB: dds contains result infos on all combinations! --
         fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
@@ -1966,11 +2277,11 @@ DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.
         for (k in seq_along(i_s)) {
                 i <- i_s[k]
                 j <- j_s[k]
-        
+                
                 res <- as.data.frame(results(dds, contrast = c(group_var, fac_levels[i], fac_levels[j])))
-        
+                
                 res$p_val_adj <- p.adjust(res$pvalue, method = p.adjust.method) # NB: in case of "fdr" same as default DESeq2
-        
+                
                 CT <- counts(dds, normalized = TRUE)
                 n1 <- sum(group_fac == fac_levels[i])
                 n2 <- sum(group_fac == fac_levels[j])
@@ -1983,11 +2294,13 @@ DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.
                 res$Zeros_grp2 <- apply(CT[, group_fac == fac_levels[j]], 1, function(cnts){sum(cnts == 0)})
                 res$Present_grp1 <- apply(CT[, group_fac == fac_levels[i]], 1, function(cnts){sum(cnts != 0)})
                 res$Present_grp2 <- apply(CT[, group_fac == fac_levels[j]], 1, function(cnts){sum(cnts != 0)})
-                res$Sparsity_grp1 <- 100*(res$Zeros_grp1/n1)
-                res$Sparsity_grp2 <- 100*(res$Zeros_grp2/n2)
+                res$prev_grp1 <- round(100*(res$Present_grp1/n1),1)
+                res$prev_grp2 <- round(100*(res$Present_grp2/n2), 1)
+                #res$Sparsity_grp1 <- 100*(res$Zeros_grp1/n1)
+                #res$Sparsity_grp2 <- 100*(res$Zeros_grp2/n2)
                 res$n1 <- n1
                 res$n2 <- n2
-        
+                
                 # -- add fisher exact test of sparsity/prevalence again --
                 Fisher <- t(sapply(1:nrow(res), FUN = function(i){
                         fisherMat <- matrix(c(res$Present_grp1[i], res$Zeros_grp1[i], res$Present_grp2[i],
@@ -1995,9 +2308,9 @@ DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.
                         Test <- fisher.test(fisherMat)
                         cbind(Test$p.value, Test$estimate)
                 }))
-        
+                
                 p_val_adj_Fisher <- p.adjust(Fisher[,1], method = p.adjust.method)
-        
+                
                 res$p_val_Fisher <- Fisher[,1]
                 res$p_val_Fisher_adj <- p_val_adj_Fisher
                 res$oddsRatioFisher <- Fisher[,2]
@@ -2022,7 +2335,7 @@ DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.
                                      significance, direction, p_val_Fisher,
                                      p_val_Fisher_adj, significance_fisher,
                                      direction_fisher, Median_grp1, Median_grp2, Mean_grp1,
-                                     Mean_grp2, Present_grp1, Present_grp2, Zeros_grp1, Zeros_grp2, Sparsity_grp1, Sparsity_grp2, 
+                                     Mean_grp2, Present_grp1, Present_grp2, Zeros_grp1, Zeros_grp2, prev_grp1, prev_grp2, 
                                      n1, n2, baseMean, log2FoldChange, lfcSE, oddsRatioFisher)
                 # NB: I dropped here padj from DESeq since same as p_val_adj in case of p.adjust.method = "fdr"
                 res <- cbind(res, tax_table(physeq))
@@ -2032,8 +2345,8 @@ DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.
                 names(result_list)[[k]] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
         }
         
-        result_list
-                
+        out <- list(result_list, physeq_out)
+        
 }
 
 
@@ -2203,14 +2516,14 @@ evaluate_TbTmatrixes <- function(TbTmatrixes_list, physeq, group_var, p.adjust.m
                 
                 CT_current <- CT[, group_fac %in% group_fac_current]
                 
-                DF$Median_grp1 <- apply(CT[, group_fac_current == fac_levels[i]], 1, median, na.rm = T)
-                DF$Median_grp2 <- apply(CT[, group_fac_current == fac_levels[j]], 1, median, na.rm = T)
-                DF$Mean_grp1 <- apply(CT[, group_fac_current == fac_levels[i]], 1, mean, na.rm = T)
-                DF$Mean_grp2 <- apply(CT[, group_fac_current == fac_levels[j]], 1, mean, na.rm = T)
-                DF$Present_grp1 <- apply(CT[, group_fac_current == fac_levels[i]], 1, function(cnts){sum(!is.na(cnts))})
-                DF$Present_grp2 <- apply(CT[, group_fac_current == fac_levels[j]], 1, function(cnts){sum(!is.na(cnts))})
-                DF$Zeros_grp1 <- apply(CT[, group_fac_current == fac_levels[i]], 1, function(cnts){sum(is.na(cnts))})
-                DF$Zeros_grp2 <- apply(CT[, group_fac_current == fac_levels[j]], 1, function(cnts){sum(is.na(cnts))})
+                DF$Median_grp1 <- apply(CT_current[, group_fac_current == fac_levels[i]], 1, median, na.rm = T)
+                DF$Median_grp2 <- apply(CT_current[, group_fac_current == fac_levels[j]], 1, median, na.rm = T)
+                DF$Mean_grp1 <- apply(CT_current[, group_fac_current == fac_levels[i]], 1, mean, na.rm = T)
+                DF$Mean_grp2 <- apply(CT_current[, group_fac_current == fac_levels[j]], 1, mean, na.rm = T)
+                DF$Present_grp1 <- apply(CT_current[, group_fac_current == fac_levels[i]], 1, function(cnts){sum(!is.na(cnts))})
+                DF$Present_grp2 <- apply(CT_current[, group_fac_current == fac_levels[j]], 1, function(cnts){sum(!is.na(cnts))})
+                DF$Zeros_grp1 <- apply(CT_current[, group_fac_current == fac_levels[i]], 1, function(cnts){sum(is.na(cnts))})
+                DF$Zeros_grp2 <- apply(CT_current[, group_fac_current == fac_levels[j]], 1, function(cnts){sum(is.na(cnts))})
                 n1 <- sum(group_fac_current == fac_levels[i])
                 n2 <- sum(group_fac_current == fac_levels[j])
                 DF$Sparsity_grp1 <- 100*(DF$Zeros_grp1/n1)
@@ -2429,7 +2742,7 @@ evaluate_TbTmatrixes_wilcoxTest <- function(TbTmatrixes_list, physeq, group_var,
                 # DF <- dplyr::arrange(DF, desc(abs(teststat)))
                 DF <- dplyr::arrange(DF, p_val)
                 
-                result_list[[k]] <- DF
+                result_list[[k]] <- list(DF, measureMatrix)
                 names(result_list)[[k]] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
         }
         
@@ -2437,7 +2750,126 @@ evaluate_TbTmatrixes_wilcoxTest <- function(TbTmatrixes_list, physeq, group_var,
 }
 
 
+####################################
+## create_TbT_TilePlots: 
+###################################
+# NB for a lot of taxa this function takes a lot of time, see 100 x 100 taxa is already 10000 wilcoxon tests
+# the function calculates ntaxa x ntaxa matrixes of wilcoxon test p-values for TbTmatrixes list in TbTmatrixes_list
+# i.e. for each level comparison within the group factor defined by group_var in physeq:)
+# Based on the TbTMatrixes (probably ratios better than gm log ones) the p-value matrix
+# indicates which taxa is enriched compared to which other taxa.
+# in addition it adds a tile plot for each pValueMatrix
+# wilcoxon.test is used
+## Input: 
+# - TbTmatrixes_list: The list with the lists of TbTmatrixes for level combi in group factor
+# - physeq: used for TbTmatrixes_list generation
+# - NB: so far no pvalue adjustment
+## Output: 
+# - list of pValMatrixes plus TileTr for each level combination. 
+# NB: I negated the p-values if host taxon was more abundant in grp2 compared to other taxon!!
 
+create_TbT_TilePlots <- function(TbTmatrixes_list, physeq, group_var) {
+        
+        if(!identical(length(TbTmatrixes_list[[1]]), ntaxa(physeq))){stop("TbTmatrixes can not fit to physeq")}
+        
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+        
+        fac_levels <- levels(group_fac)
+        
+        # -- get the level combis --
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels)
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        i <- ivec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- jvec[x]
+                })
+        })
+        i_s <- i_s[upper.tri(i_s)]
+        j_s <- j_s[upper.tri(j_s)]
+        # ----
+        
+        result_list <- vector("list", length = length(i_s))
+        
+        for (k in seq_along(i_s)) {
+                
+                i <- i_s[k]
+                j <- j_s[k]
+                
+                TbTmatrixes <- TbTmatrixes_list[[k]]
+                # simplify Taxon names, otherwise plots look silly
+                names(TbTmatrixes) <- paste("T", 1:length(TbTmatrixes), sep = "_")
+                TbTmatrixes <- lapply(TbTmatrixes, function(mat){
+                        rownames(mat) <- paste("T", 1:length(TbTmatrixes), sep = "_")
+                        mat
+                })
+                group_fac_current <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)])
+                
+                # ntaxa * ntaxa wilcoxon tests take time!
+                pValMatrix <- sapply(TbTmatrixes, function(mat){
+                        apply(mat, 1, function(taxon_ratios){
+                                x <- taxon_ratios[group_fac_current == fac_levels[i]]
+                                # NB: it is possible that x is completely NA (if taxon was only present when host taxon was not!), therefore
+                                if(sum(!is.na(x)) == 0){x[1] <- 0}
+                                y <- taxon_ratios[group_fac_current == fac_levels[j]]
+                                if(sum(!is.na(y)) == 0){y[1] <- 0}
+                                pValue <- wilcox.test(x = x, y = y, alternative = "two", paired = F, exact = F)$p.value
+                                # For plot: change sign of pValue, so the value is positive for a taxon in its row when it is more abundant in group1
+                                Ranks <- rank(c(x[!is.na(x)], y[!is.na(y)]))
+                                n1 <- length(x[!is.na(x)])
+                                n2 <- length(y[!is.na(y)])
+                                Wx <- sum(Ranks[1:n1])-(n1*(n1+1)/2)
+                                Wy <- sum(Ranks[(n1+1):(n1+n2)])-(n2*(n2+1)/2)
+                                if(Wx > Wy){pValue <- -1*pValue}
+                                pValue
+                        })
+                })
+                
+                # -- add a tile plot of the pValMatrix --
+                
+                DF <- as.data.frame(pValMatrix)
+                DF[is.na(DF)] <- 1
+                DF$HostTaxon <- rownames(pValMatrix)
+                DF <- tidyr::gather(DF, key = Taxon , value = pValue, - HostTaxon)
+                DF$Taxon <- factor(DF$Taxon, levels = rownames(pValMatrix), ordered = TRUE)
+                DF$HostTaxon <- factor(DF$HostTaxon, levels = rev(rownames(pValMatrix)), ordered = TRUE)
+                
+                # # add color to the taxa names so you see up and down
+                # colyaxis <- vector(mode = "character", length = nrow(DF))
+                # colyaxis[] <- "black"
+                # colyaxis[grepl("TP-U", levels(DF$HostTaxon))] <- "#E69F00"
+                # colyaxis[grepl("TP-D", levels(DF$HostTaxon))] <- "#009E73"
+                # colxaxis <- vector(mode = "character", length = nrow(DF))
+                # colxaxis[] <- "black"
+                # colxaxis[grepl("TP-U", levels(DF$Taxon))] <- "#E69F00"
+                # colxaxis[grepl("TP-D", levels(DF$Taxon))] <- "#009E73"
+                DF$Fill <- "not significant"
+                DF$Fill[DF$pValue < 0.05 & DF$pValue > 0] <- "up (p < 0.05)"
+                DF$Fill[DF$pValue>-0.05 & DF$pValue< 0] <- "down (p < 0.05)"
+                DF$Fill <- factor(DF$Fill, levels = c("up (p < 0.05)", "not significant", "down (p < 0.05)"), ordered = T)
+                TileTr <- ggplot(DF, aes(x = Taxon, y = HostTaxon, fill = Fill))
+                TileTr <- TileTr + 
+                        geom_raster() + 
+                        ggtitle(names(TbTmatrixes_list)[k]) +
+                        scale_fill_manual("", values = c("not significant" = "gray98", "up (p < 0.05)" = "#E69F00", "down (p < 0.05)" = "#009E73")) +
+                        scale_x_discrete(position = "top") +
+                        labs(x=NULL, y=NULL) +
+                        theme_tufte(base_family="Helvetica") +
+                        theme(plot.title=element_text(hjust=0)) +
+                        theme(axis.ticks=element_blank()) +
+                        theme(axis.text=element_text(size=7)) +
+                        theme(legend.title=element_blank()) +
+                        theme(legend.text=element_text(size=6)) +
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0)) # colour = colxaxis
+                result_list[[k]] <- list(pValMatrix = pValMatrix, TileTr = TileTr)
+        }
+        
+        names(result_list) <- names(TbTmatrixes_list)
+        result_list
+}
 
 
 

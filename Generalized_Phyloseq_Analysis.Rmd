@@ -321,8 +321,8 @@ TrList <- plotSVdistributions(seqtab = as(otu_table(ps), "matrix"), prevalence =
 ```{r, fig.width = 14, fig.height = 15, warning = FALSE, message = FALSE, echo = FALSE}
 grid.arrange(TrrList[[1]], TrrList[[1]] + scale_y_log10(), TrrList[[2]], TrrList[[3]],
              TrrList[[4]], TrrList[[5]], ncol = 2)
-# pdf(file = "AbundanceandPrevalence_p.pdf", width = 12, height = 7)
-# grid.arrange(TrrList[[1]] + scale_y_log10(), TrrList[[2]], ncol = 2)
+# pdf(file = "AbundanceandPrevalence_p.pdf", width = 11, height = 6)
+# grid.arrange(TrrList[[3]], TrrList[[5]], ncol = 2)
 # dev.off()
 ```
 
@@ -429,6 +429,8 @@ grid.arrange(TrListBP[["Richness"]], TrListBP[["Shannon"]],
              TrListBP[["Richness_resids_FilteredReads"]], TrListBP[["Shannon_resids_FilteredReads"]],
              ncol = 2)
 #dev.off()
+
+
 ```
 
 - p.values of the boxplots:
@@ -575,6 +577,8 @@ rarefaction_curves <- rarefaction_curve_own_fast(physeq = ps, group_var = group_
 grid.arrange(rarefaction_curves[["Tr_richness_col"]], rarefaction_curves[["Tr_richness_group"]], rarefaction_curves[["Tr_richness_grad"]], ncol = 1)
 # dev.off()
 
+
+
 # png(file = "rarecurves_no_pool.png", width = 700, height = 300)
 # grid.arrange(rarefaction_curves[["Tr_richness_group"]], rarefaction_curves[["Tr_richness_grad"]],
 #              layout_matrix = matrix(c(1,2), nrow = 1))
@@ -664,7 +668,7 @@ ps_filt_ra <- transform_sample_counts(ps_filt, function(x){x/sum(x)}) # same for
 - `r ntaxa(ps_tca_filt)` out of `r ntaxa(ps)` ASVs survived the filter
 
 ```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
-# pdf(file = "filter_p.pdf", width = 7, height = 6)
+#pdf(file = "filter_p.pdf", width = 7, height = 6)
 filterList[[1]]
 #dev.off()
 ```
@@ -879,6 +883,7 @@ for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
 # pdf(file = "beta_p.pdf", width = 10, height = 8)
 do.call("grid.arrange", c(dist_analysis_list[["DistanceBoxplots"]], nrow = length(dist_analysis_list[["DistanceBoxplots"]])))
 # dev.off()
+
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
@@ -892,6 +897,8 @@ dist_analysis_list[["DistancePValues"]]
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 adonis_list
+
+# print(xtable(adonis_list[["jsd"]], align = "|c|c|c|c|c|c|", digits = 5), include.rownames = FALSE)
 ```
 
 - **Ordination Plots**
@@ -920,6 +927,10 @@ do.call("grid.arrange", c(dist_analysis_list2[["DistanceBoxplots"]], nrow = leng
 # pdf(file = "beta_p.pdf", width = 10, height = 8)
 # kable(dist_analysis_list[["DistancePValues"]][[1]])
 dist_analysis_list2[["DistancePValues"]]
+# dev.off()
+
+# pdf(file = "pcoa_jsd_ra.pdf", width = 9, height = 7)
+# TrList_ra[[1]]
 # dev.off()
 ```
 
@@ -983,60 +994,219 @@ if (is.null(second_ccp_variable)){
 }
 ```
 
-# Differential Abundance analysis
+
+
+# Differential Abundance analysis ASV level
 
 ## Heat map
 
 - start with a heat map plot of relative abundances to visualise sparsity and abundance differences
-    - NB: 0 counts are shown in red, hopefully really only zeros
+    - NB: 0 counts are shown in red
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-overview_list <- overviewPhyseq(ps_tca_filt, group_var = group_var, max_rel_ab_for_color = NULL)
-overview_list1 <- overviewPhyseq(ps_tca_filt, group_var = group_var, max_rel_ab_for_color = .1)
+overview <- get_overview_of_physeq(ps_tca_filt)
+
+Tr <- make_heat_map_physeq(ps_filt_ra, group_var, max_abundance_for_color = .05, tax_order = NULL,
+                                 tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
+
+# Tr_list <- make_heat_map_physeq_levels(ps_tca_filt, group_var, max_abundance_for_color = NULL, tax_order = NULL,
+#                                        tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(overview_list[[1]])
+knitr::kable(overview)
 ```
 
 ```{r, fig.width = 14, fig.height = 25, warning = FALSE, message = FALSE, echo = FALSE}
-overview_list[[2]]
-```
-
-```{r, fig.width = 14, fig.height = 25, warning = FALSE, message = FALSE, echo = FALSE}
-overview_list1[[2]]
+Tr
 ```
 
 ## differential prevalence analysis with fisher.test
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-diff_prevalence <- test_differential_prevalence(physeq = ps_tca_filt, group_var = group_var, p.adj.method = "fdr", minCount = 0L)
-diff_prevalence_show <- lapply(diff_prevalence, function(df) {
-        select(df, Family, Genus, Species, 2:7)
+diff_prevalence <- test_differential_prevalence(physeq = ps_filt_ra, group_var = group_var, p.adj.method = "fdr", minCount = 0L)
+
+suppressWarnings(head_values <- sapply(diff_prevalence, function(df){
+        max(which(df[, 3] < 0.05))
+}))
+# Show at least 10 taxa even if less are significant and show max 25 even if far more are significant
+head_values[head_values < 10] <- 10
+head_values[head_values > 25] <- 25
+
+prev_table_list <- lapply(1:length(diff_prevalence), function(i){
+        df <- head(diff_prevalence[[i]], head_values[i])
+        df <- dplyr::select(df, Family:Species, 3:6)
+        colnames(df)[4:5] <- c("adj_p_val", "signi.")
+        df
 })
+names(prev_table_list) <- names(diff_prevalence)
+
+
+row_names_for_heat_maps <- lapply(prev_table_list, function(df){
+        the_names <- paste(df$Family, df$Genus, df$Species)
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+
+tax_orders <- lapply(1:length(diff_prevalence), function(i){
+        df <- diff_prevalence[[i]]
+        df$Taxon[1:head_values[i]]
+})
+
+pruned_ps_filt_ra <- lapply(1:length(diff_prevalence), function(i){
+        prune_taxa(tax_orders[[i]], ps_filt_ra)
+})
+
+
+heat_maps_prev <- lapply(1:length(pruned_ps_filt_ra), function(i){
+        maps <- make_heat_map_physeq_levels(pruned_ps_filt_ra[[i]], group_var = group_var, max_abundance_for_color = .05, tax_order = tax_orders[[i]], tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps[[i]]
+})
+
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-head_values <- sapply(diff_prevalence, function(df){
-        max(which(df[, 3] < 0.05))
-})
-head_values <- head_values + 5
-head_values[head_values > 35] <- 35
-for (i in 1:length(diff_prevalence_show)){
-        print(knitr::kable(head(diff_prevalence_show[[i]], head_values[i]), caption = names(diff_prevalence_show)[i]))
+for (i in 1:length(prev_table_list)){
+        print(knitr::kable(prev_table_list[[i]], caption = names(prev_table_list)[i]))
 }
+
+# df <- prev_table_list[[2]]
+# print(xtable(df, align = "|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+# 
+# pdf(file = "fisher_prev.pdf", width = 10, height = 8)
+# heat_maps_prev[[2]]
+# dev.off()
 ```
+
+```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(heat_maps_prev, ncol = 1))
+```
+
+## DeSeq2 analysis
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+out_list <- DESeq2Apply_physeq(physeq = ps_filt, group_var = group_var, SFs = SFs, p.adjust.method = "fdr")
+DESeq2_result_list <- out_list[[1]]
+# physeq_DESadjust <- out_list[[2]]
+
+suppressWarnings(head_values <- sapply(DESeq2_result_list, function(df){
+        max(which(df$p_val_adj < 0.05))
+}))
+head_values[head_values < 10] <- 10
+head_values[head_values > 25] <- 25
+
+
+DES_table_list <- lapply(1:length(DESeq2_result_list), function(i){
+        df <- head(DESeq2_result_list[[i]], head_values[i])
+        df <- dplyr::select(df, Family:Species, 4:5, 8:9, 13:14, 19:20)
+        colnames(df)[4:7] <- c("adj_p_val", "signi.", "fisher_p", "fisher_sign")
+        df
+})
+names(DES_table_list) <- names(DESeq2_result_list)
+
+# print(xtable(DES_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+
+row_names_for_heat_maps <- lapply(DES_table_list, function(df){
+        the_names <- paste(df$Family, df$Genus, df$Species)
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+
+tax_orders <- lapply(1:length(DESeq2_result_list), function(i){
+        df <- DESeq2_result_list[[i]]
+        df$Taxon[1:head_values[i]]
+})
+
+pruned_physeqs <- lapply(1:length(DESeq2_result_list), function(i){
+        prune_taxa(tax_orders[[i]], ps_tca_filt)
+})
+
+
+heat_maps_DES <- lapply(1:length(pruned_physeqs), function(i){
+        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = 2000, tax_order = tax_orders[[i]],
+                                            tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps[[i]]
+})
+
+
+violin_plots_DES <- lapply(1:length(tax_orders), function(i){
+        plotlist <- plot_top_abundances_boxAndviolin(physeq = pruned_physeqs[[i]], group_var = group_var, tax_order = tax_orders[[i]], tax_names = row_names_for_heat_maps[[i]])
+        plotlist[[i]]
+})
+
+# there are 8 plots per list, only pick violin plot faceted, and logged abundance:
+violin_plots_DES <- lapply(violin_plots_DES, `[[`, 8)
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+for (i in 1:length(DES_table_list)){
+        print(knitr::kable(DES_table_list[[i]], caption = names(DES_table_list)[i]))
+}
+
+# print(xtable(DES_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+
+```
+
+```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(heat_maps_DES, ncol = 1))
+```
+
+```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(violin_plots_DES, ncol = 1))
+```
+
 
 ## wilcoxon test on relative abundances
 
 ### wilcoxon test including zeros (i.e. including sparsity again)
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-wilcox_ra_result_list <- wilcoxTestApply_physeq(physeq = ps_filt_ra, group_var = group_var, excludeZeros = FALSE, p.adjust.method = "fdr")
-wilcox_ra_result_list_show <- lapply(wilcox_ra_result_list, function(df) {
-        select(df, Family, Genus, Species, 2:22)
-})
+# wilcox_ra_result_list <- wilcoxTestApply_physeq(physeq = ps_filt_ra, group_var = group_var, excludeZeros = FALSE, p.adjust.method = "fdr")
+# 
+# 
+# suppressWarnings(head_values <- sapply(wilcox_ra_result_list, function(df){
+#         max(which(df$p_val_adj < 0.05))
+# }))
+# 
+# head_values[head_values < 10] <- 10
+# head_values[head_values > 25] <- 25
+# 
+# wilcox_ra_table_list <- lapply(1:length(wilcox_ra_result_list), function(i){
+#         df <- head(wilcox_ra_result_list[[i]], head_values[i])
+#         df <- dplyr::select(df, Family:Species, 4:5, 8:9, 13:14, 19:20)
+#         colnames(df)[4:7] <- c("adj_p_val", "signi.", "fisher_p", "fisher_sign")
+#         df
+# })
+# names(wilcox_ra_table_list) <- names(wilcox_ra_result_list)
+# 
+# # print(xtable(wilcox_ra_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+# 
+# row_names_for_heat_maps <- lapply(wilcox_ra_table_list, function(df){
+#         the_names <- paste(df$Family, df$Genus, df$Species)
+#         the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+# 
+# tax_orders <- lapply(1:length(wilcox_ra_result_list), function(i){
+#         df <- wilcox_ra_result_list[[i]]
+#         as.character(df$Taxon[1:head_values[i]])
+# })
+# 
+# pruned_physeqs <- lapply(1:length(wilcox_ra_result_list), function(i){
+#         prune_taxa(tax_orders[[i]], ps_filt_ra)
+# })
+# 
+# 
+# heat_maps_wilcox <- lapply(1:length(pruned_physeqs), function(i){
+#         maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = .05, tax_order = tax_orders[[i]],
+#                                             tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+#         maps[[i]]
+# })
+# 
+# 
+# violin_plots_wilcox <- lapply(1:length(tax_orders), function(i){
+#         plotlist <- plot_top_abundances_boxAndviolin(physeq = pruned_physeqs[[i]], group_var = group_var, tax_order = tax_orders[[i]], tax_names = row_names_for_heat_maps[[i]])
+#         plotlist[[i]]
+# })
+# 
+# # there are 8 plots per list, only pick violin plot faceted, and logged abundance:
+# violin_plots_wilcox <- lapply(violin_plots_wilcox, `[[`, 8)
+
 
 # # NB: I'm a bit surprised that the order based on standardized test statistic is not fully equal to the arranged order by wilcox.test p_value
 # Test <- wilcox_ra_result_list[[1]]
@@ -1086,125 +1256,330 @@ wilcox_ra_result_list_show <- lapply(wilcox_ra_result_list, function(df) {
 # # so I conclude in cases where all samples in a group have non zero counts, the mean and median values are equal for
 # # excludeZeros = FALSE and TRUE
 
-
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-suppressWarnings(head_values <- sapply(wilcox_ra_result_list, function(df){
-        max(which(df$p_val_adj < 0.05))
-}))
-head_values <- head_values + 5
-head_values[head_values == -Inf] <- 10
-head_values[head_values > 35] <- 35
-for (i in 1:length(wilcox_ra_result_list_show)){
-        print(knitr::kable(head(wilcox_ra_result_list_show[[i]], head_values[i]), caption = names(wilcox_ra_result_list_show)[i]))
-}
+# for (i in 1:length(wilcox_ra_table_list)){
+#         print(knitr::kable(wilcox_ra_table_list[[i]], caption = names(wilcox_ra_table_list)[i]))
+# }
+
+# print(xtable(wilcox_ra_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 
 ```
+
+```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+# do.call("grid.arrange", c(heat_maps_wilcox, ncol = 1))
+```
+
+```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+# do.call("grid.arrange", c(violin_plots_wilcox, ncol = 1))
+```
+
 
 ### wilcoxon test excluding zeros 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 wilcox_ra_result_list <- wilcoxTestApply_physeq(physeq = ps_filt_ra, group_var = group_var, excludeZeros = TRUE, p.adjust.method = "fdr")
-wilcox_ra_result_list_show <- lapply(wilcox_ra_result_list, function(df) {
-        select(df, Family, Genus, Species, 2:22)
-})
-```
 
-```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 suppressWarnings(head_values <- sapply(wilcox_ra_result_list, function(df){
         max(which(df$p_val_adj < 0.05))
 }))
-head_values <- head_values + 5
-head_values[head_values == -Inf] <- 10
-head_values[head_values > 35] <- 35
-for (i in 1:length(wilcox_ra_result_list_show)){
-        print(knitr::kable(head(wilcox_ra_result_list_show[[i]], head_values[i]), caption = names(wilcox_ra_result_list_show)[i]))
-}
-```
 
+head_values[head_values < 10] <- 10
+head_values[head_values > 25] <- 25
 
-## DeSeq2 analysis
-
-```{r, warning = FALSE, message = FALSE, echo = FALSE}
-DESeq2_result_list <- DESeq2Apply_physeq(physeq = ps_filt, group_var = group_var, SFs = SFs, p.adjust.method = "fdr")
-
-DESeq2_result_list_show <- lapply(DESeq2_result_list, function(df) {
-        select(df, Family, Genus, Species, 2:24)
+wilcox_ra_table_list <- lapply(1:length(wilcox_ra_result_list), function(i){
+        df <- head(wilcox_ra_result_list[[i]], head_values[i])
+        df <- dplyr::select(df, Family:Species, 4:5, 8:9, 13:14, 19:20)
+        colnames(df)[4:7] <- c("adj_p_val", "signi.", "fisher_p", "fisher_sign")
+        df
 })
+names(wilcox_ra_table_list) <- names(wilcox_ra_result_list)
+
+# print(xtable(wilcox_ra_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+
+row_names_for_heat_maps <- lapply(wilcox_ra_table_list, function(df){
+        the_names <- paste(df$Family, df$Genus, df$Species)
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+
+tax_orders <- lapply(1:length(wilcox_ra_result_list), function(i){
+        df <- wilcox_ra_result_list[[i]]
+        as.character(df$Taxon[1:head_values[i]])
+})
+
+pruned_physeqs <- lapply(1:length(wilcox_ra_result_list), function(i){
+        prune_taxa(tax_orders[[i]], ps_filt_ra)
+})
+
+
+heat_maps_wilcox <- lapply(1:length(pruned_physeqs), function(i){
+        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = .05, tax_order = tax_orders[[i]],
+                                            tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps[[i]]
+})
+
+
+violin_plots_wilcox <- lapply(1:length(tax_orders), function(i){
+        plotlist <- plot_top_abundances_boxAndviolin(physeq = pruned_physeqs[[i]], group_var = group_var, tax_order = tax_orders[[i]], tax_names = row_names_for_heat_maps[[i]])
+        plotlist[[i]]
+})
+
+# there are 8 plots per list, only pick violin plot faceted, and logged abundance:
+violin_plots_wilcox <- lapply(violin_plots_wilcox, `[[`, 8)
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-suppressWarnings(head_values <- sapply(DESeq2_result_list, function(df){
-        max(which(df$p_val_adj < 0.05))
-})) # in case of no significant you get a warning from max resulting in -Inf
-head_values <- head_values + 5
-head_values[head_values == -Inf] <- 10
-head_values[head_values > 35] <- 35
-for (i in 1:length(DESeq2_result_list_show)){
-        print(knitr::kable(head(DESeq2_result_list_show[[i]], head_values[i]), caption = names(DESeq2_result_list_show)[i]))
+for (i in 1:length(wilcox_ra_table_list)){
+        print(knitr::kable(wilcox_ra_table_list[[i]], caption = names(wilcox_ra_table_list)[i]))
 }
+
+# print(xtable(wilcox_ra_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+
 ```
+
+```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(heat_maps_wilcox, ncol = 1))
+```
+
+```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(violin_plots_wilcox, ncol = 1))
+```
+
+
+
 
 ## Taxon by Taxon Matrix analysis
 
 ### groupSum ranking
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-TbTmatrixes_list <- calculate_TbTmatrixes(ps_filt, group_var = group_var)
-# NB: because ratios have been divided by geometric mean over all samples and then log transformed, each row (over all samples) sums to 0:
-# max(sapply(TbTmatrixes_list[[1]], function(x){max(apply(x, 1, sum, na.rm = T))}))
-TbTresult_list <- evaluate_TbTmatrixes(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr")
-TbTresult_list_show <- lapply(TbTresult_list, function(df) {
-        select(df, Family, Genus, Species, 2:19, 22)
-})
+# TbTmatrixes_list <- calculate_TbTmatrixes(ps_filt, group_var = group_var)
+# # NB: because ratios have been divided by geometric mean over all samples and then log transformed, each row (over all samples) sums to 0:
+# # max(sapply(TbTmatrixes_list[[1]], function(x){max(apply(x, 1, sum, na.rm = T))}))
+# TbTresult_list <- evaluate_TbTmatrixes(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr")
+# TbTresult_list_show <- lapply(TbTresult_list, function(df) {
+#         select(df, Family, Genus, Species, 2:19, 22)
+# })
+
+# df <- head(TbTresult_list_show[["Young_vs_Old"]], 25)
+# df <- select(df, c(1:2, 4, 8, 12:13))
+# colnames(df)[4:6] <- c("fisher", "mean_young", "mean_old")
+# print(xtable(df, align = "|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+# row_names_heat <- paste(df$Family, df$Genus)
+# 
+# df <- TbTresult_list[["Young_vs_Old"]]
+# top_tbt <- as.character(df$Taxon[1:25])
+# ps_tca_filt_tbt <- prune_taxa(top_tbt, ps_tca_filt)
+# ps_filt_ra_tbt <- prune_taxa(top_tbt, ps_filt_ra)
+# 
+# overview_list_tbt <- overviewPhyseq2(ps_filt_ra_tbt, group_var = group_var, max_rel_ab_for_color = .05, tax_order = top_tbt, tax_names = row_names_heat)
+# pdf(file = "tbt_heat.pdf", width = 10, height = 8)
+# overview_list_tbt[[2]]
+# dev.off()
+# 
+# tbt_violins <- plot_top_abundances_boxAndviolin(ps_tca_filt_tbt, group_var = group_var, tax_order = top_tbt, tax_names = row_names_heat)
+# 
+# pdf(file = "tbt_violin.pdf", width = 10, height = 9)
+# tbt_violins[[2]][[4]]
+# dev.off()
+# 
+# pdf(file = "tbt_violin_log.pdf", width = 10, height = 9)
+# tbt_violins[[2]][[8]]
+# dev.off()
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 
-for (i in 1:length(TbTresult_list_show)){
-        print(knitr::kable(head(TbTresult_list_show[[i]], 20), caption = names(TbTresult_list_show)[i]))
-}
+# for (i in 1:length(TbTresult_list_show)){
+#         print(knitr::kable(head(TbTresult_list_show[[i]], 20), caption = names(TbTresult_list_show)[i]))
+# }
 ```
 
 ### wilcoxon version median
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-TbTresult_list_median <- evaluate_TbTmatrixes_wilcoxTest(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr", type = "median")
-TbTresult_list_median_show <- lapply(TbTresult_list_median, function(df) {
-        select(df, Family, Genus, Species, 2:19, 22)
-})
+# TbTresult_list_median <- evaluate_TbTmatrixes_wilcoxTest(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr", type = "median")
+# measure_matrixes <- lapply(TbTresult_list_median, `[[`, 2)
+# TbTresult_list_median <- lapply(TbTresult_list_median, `[[`, 1)
+# TbTresult_list_median_show <- lapply(TbTresult_list_median, function(df) {
+#         select(df, Family, Genus, Species, 2:19, 22)
+# })
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-suppressWarnings(head_values <- sapply(TbTresult_list_median, function(df){
-        max(which(df$p_val_adj < 0.05))
-}))
-head_values <- head_values + 5
-head_values[head_values == -Inf] <- 10
-head_values[head_values > 35] <- 35
-for (i in 1:length(TbTresult_list_median_show)){
-        print(knitr::kable(head(TbTresult_list_median_show[[i]], head_values[i]), caption = names(TbTresult_list_median_show)[i]))
-}
+# suppressWarnings(head_values <- sapply(TbTresult_list_median, function(df){
+#         max(which(df$p_val_adj < 0.05))
+# }))
+# head_values <- head_values + 5
+# head_values[head_values == -Inf] <- 10
+# head_values[head_values > 35] <- 35
+# for (i in 1:length(TbTresult_list_median_show)){
+#         print(knitr::kable(head(TbTresult_list_median_show[[i]], head_values[i]), caption = names(TbTresult_list_median_show)[i]))
+# }
 ```
 
 ### wilcoxon version sum
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-TbTresult_list_sum <- evaluate_TbTmatrixes_wilcoxTest(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr", type = "sum")
-TbTresult_list_sum_show <- lapply(TbTresult_list_sum, function(df) {
-        select(df, Family, Genus, Species, 2:19, 22)
-})
+# TbTresult_list_sum <- evaluate_TbTmatrixes_wilcoxTest(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr", type = "sum")
+# measure_matrixes <- lapply(TbTresult_list_median, `[[`, 2)
+# TbTresult_list_median <- lapply(TbTresult_list_median, `[[`, 1)
+# TbTresult_list_sum_show <- lapply(TbTresult_list_sum, function(df) {
+#         select(df, Family, Genus, Species, 2:19, 22)
+# })
+# ```
+# 
+# ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+# suppressWarnings(head_values <- sapply(TbTresult_list_sum, function(df){
+#         max(which(df$p_val_adj < 0.05))
+# }))
+# head_values <- head_values + 5
+# head_values[head_values == -Inf] <- 10
+# head_values[head_values > 35] <- 35
+# for (i in 1:length(TbTresult_list_sum_show)){
+#         print(knitr::kable(head(TbTresult_list_sum_show[[i]], head_values[i]), caption = names(TbTresult_list_sum_show)[i]))
+# }
+```
+
+### taxon vs taxon tile plots TAKES TIME, better only for few taxa
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# TbT_tiles <- create_TbT_TilePlots(TbTmatrixes_list, physeq = ps_filt, group_var = group_var)
+# TbT_tiles_show <- lapply(TbT_tiles, `[[`, 2)
 ```
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-suppressWarnings(head_values <- sapply(TbTresult_list_sum, function(df){
-        max(which(df$p_val_adj < 0.05))
-}))
-head_values <- head_values + 5
-head_values[head_values == -Inf] <- 10
-head_values[head_values > 35] <- 35
-for (i in 1:length(TbTresult_list_sum_show)){
-        print(knitr::kable(head(TbTresult_list_sum_show[[i]], head_values[i]), caption = names(TbTresult_list_sum_show)[i]))
-}
+# do.call("grid.arrange", c(TbT_tiles_show, ncol = 1))
 ```
+
+
+
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# Differential Abundance analysis at `r extra_level` level
+# ps_tca_filt_extra <- tax_glom(ps_tca_filt, taxrank = extra_level, NArm = FALSE)
+# 
+# ps_filt_extra <- tax_glom(ps_filt, taxrank = extra_level, NArm = FALSE) 
+# 
+# ps_filt_ra_extra <- transform_sample_counts(ps_filt_extra, function(x){x/sum(x)}) # same for ps_tca_filt
+# 
+# table(tax_table(ps_filt_ra_extra)[, "Phylum"])
+```
+
+## Heat map
+
+- start with a heat map plot of relative abundances to visualise sparsity and abundance differences
+    - NB: 0 counts are shown in red, hopefully really only zeros
+
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# overview_list <- overviewPhyseq(ps_tca_filt_extra, group_var = group_var, max_rel_ab_for_color = NULL)
+# overview_list1 <- overviewPhyseq(ps_tca_filt_extra, group_var = group_var, max_rel_ab_for_color = .1)
+```
+
+
+
+## differential prevalence analysis with fisher.test
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# diff_prevalence <- test_differential_prevalence(physeq = ps_tca_filt_extra, group_var = group_var, p.adj.method = "fdr", minCount = 0L)
+# level_position <- which(colnames(diff_prevalence[[1]]) == extra_level)
+# diff_prevalence_show <- lapply(diff_prevalence, function(df) {
+#         select(df, c(level_position -1 , level_position), 2:7)
+# })
+# ```
+# 
+# ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+# suppressWarnings(head_values <- sapply(diff_prevalence, function(df){
+#         max(which(df[, 3] < 0.05))
+# }))
+# head_values <- head_values + 5
+# head_values[head_values == -Inf] <- 10
+# head_values[head_values > 35] <- 35
+# for (i in 1:length(diff_prevalence_show)){
+#         print(knitr::kable(head(diff_prevalence_show[[i]], head_values[i]), caption = names(diff_prevalence_show)[i]))
+# }
+# 
+# 
+# df <- head(diff_prevalence_show[["Young_vs_Old"]], 17)
+# df <- select(df, -direction, -p_val_Young_vs_Old)
+# colnames(df)[3:4] <- c("adj_p_val", "signi.")
+# print(xtable(df, align = "|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+# row_names_heat <- paste(df$Family, df$Genus)
+# 
+# df <- diff_prevalence[["Young_vs_Old"]]
+# top_fisher <- df$Taxon[1:17]
+# ps_filt_ra_fisher <- prune_taxa(top_fisher, ps_filt_ra_extra)
+# 
+# overview_list_fisher <- overviewPhyseq2(ps_filt_ra_fisher, group_var = group_var, max_rel_ab_for_color = .1, tax_order = top_fisher, tax_names = row_names_heat)
+# pdf(file = "fisher_heat_genus.pdf", width = 10, height = 8)
+# overview_list_fisher[[2]]
+# dev.off()
+
+```
+
+## DeSeq2 analysis
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# DESeq2_result_list <- DESeq2Apply_physeq(physeq = ps_filt_extra, group_var = group_var, SFs = SFs, p.adjust.method = "fdr")
+# level_position <- which(colnames(DESeq2_result_list[[1]]) == extra_level)
+# DESeq2_result_list_show <- lapply(DESeq2_result_list, function(df) {
+#         select(df, c(level_position - 1, level_position), 2:24)
+# })
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+# suppressWarnings(head_values <- sapply(DESeq2_result_list, function(df){
+#         max(which(df$p_val_adj < 0.05))
+# })) # in case of no significant you get a warning from max resulting in -Inf
+# head_values <- head_values + 5
+# head_values[head_values == -Inf] <- 10
+# head_values[head_values > 35] <- 35
+# for (i in 1:length(DESeq2_result_list_show)){
+#         print(knitr::kable(head(DESeq2_result_list_show[[i]], head_values[i]), caption = names(DESeq2_result_list_show)[i]))
+# }
+# 
+# df <- head(DESeq2_result_list_show[["Young_vs_Old"]], 25)
+# df <- select(df, c(1:2, 5:6, 10, 14:15))
+# colnames(df)[3:7] <- c("adj_p_val", "signi.", "fisher", "mean_young", "mean_old")
+# print(xtable(df, align = "|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+# row_names_heat <- paste(df$Family, df$Genus)
+# 
+# df <- DESeq2_result_list[["Young_vs_Old"]]
+# top_DES <- as.character(df$Taxon[1:25])
+# ps_tca_filt_DES <- prune_taxa(top_DES, ps_tca_filt_extra)
+# ps_filt_ra_DES <- prune_taxa(top_DES, ps_filt_ra_extra)
+# 
+# overview_list_DES <- overviewPhyseq2(ps_filt_ra_DES, group_var = group_var, max_rel_ab_for_color = .1, tax_order = top_DES, tax_names = row_names_heat)
+# pdf(file = "DES_heat_genus.pdf", width = 10, height = 8)
+# overview_list_DES[[2]]
+# dev.off()
+# DES_violins <- plot_top_abundances_boxAndviolin(ps_tca_filt_DES, group_var = group_var, tax_order = top_DES, tax_names = row_names_heat)
+# 
+# pdf(file = "DES_violin_genus.pdf", width = 10, height = 9)
+# DES_violins[[2]][[4]]
+# dev.off()
+# 
+# pdf(file = "DES_violin_log_genus.pdf", width = 10, height = 9)
+# DES_violins[[2]][[8]]
+# dev.off()
+```
+
+
+
+
+
+### taxon vs taxon tile plots TAKES TIME, better only for few taxa
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# TbT_tiles <- create_TbT_TilePlots(TbTmatrixes_list, physeq = ps_filt_phylum, group_var = group_var)
+# TbT_tiles_show <- lapply(TbT_tiles, `[[`, 2)
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+# do.call("grid.arrange", c(TbT_tiles_show, ncol = 1))
+```
+
+
+
+

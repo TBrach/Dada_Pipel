@@ -234,6 +234,8 @@ Tr <- Tr +
         xlab("total_amplicons") +
         theme_bw()
 
+
+
 zeros$Type <- as.character(zeros$Type)
 zeros$Group <- factor(zeros$Group, levels = c("Young", "MiddleAged", "Old"), ordered = TRUE)
 DF_filt_sum <- as.data.frame(rbind(zeros, DF_filt_sum))
@@ -267,7 +269,7 @@ Tr2 <- Tr2 +
         geom_line() +
         # geom_errorbarh(aes(xmin = total - se_total, xmax = total + se_total), height = 5) +
         scale_color_manual("", values = cbPalette[2:4]) +
-        xlab("total_amplicons") +
+        xlab("total counts") +
         theme_bw() +
         theme(legend.title = element_blank())
 
@@ -284,6 +286,9 @@ Tr2f <- Tr2f +
         theme_bw() +
         theme(legend.title = element_blank())
 
+pdf(file = "alpha_filtering_comparison.pdf", width = 7, height = 4.5)
+Tr2
+dev.off()
 
 # only for the young group
 
