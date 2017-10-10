@@ -1694,6 +1694,7 @@ make_heat_map_physeq_levels <- function(physeq, group_var, max_abundance_for_col
         
         if (length(tax_names) != nrow(DF_CT) ) {stop("the given tax_names must be a character vector of length = ntaxa(physeq)")}
         
+        tax_names[is.na(tax_names)] <- "NA"
         rownames(DF_CT) <- make.unique(tax_names)
         DF_CT$Taxa <- rownames(DF_CT)
         DF_CT <- tidyr::gather(DF_CT, key = Sample , value = Count, -Taxa)
@@ -1747,7 +1748,7 @@ make_heat_map_physeq_levels <- function(physeq, group_var, max_abundance_for_col
                 # Color the sample names based on levels in group fac
                 if (length(levels(LookUpDF$Group)) <= 7 && color_sample_names){
                         color_lookup <- data.frame(level = levels(LookUpDF$Group), color = cbPalette[2:(length(levels(LookUpDF$Group)) + 1)])
-                        LookUpDF$Group[match(levels(DF_CT_current$Sample), LookUpDF$Sample)]
+                        #LookUpDF$Group[match(levels(DF_CT_current$Sample), LookUpDF$Sample)]
                         colxaxis <- as.character(color_lookup$color[match(LookUpDF$Group[match(levels(DF_CT_current$Sample), LookUpDF$Sample)], color_lookup$level)])
                 } else {
                         colxaxis <- rep("black", nrow(LookUpDF))
