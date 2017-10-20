@@ -1,3 +1,9 @@
+tol14rainbow=c("#882E72", "#B178A6", "#D6C1DE", "#1965B0", "#5289C7", "#7BAFDE", "#4EB265", "#90C987", "#CAE0AB", "#F7EE55", "#F6C141", "#F1932D", "#E8601C", "#DC050C")
+tol15rainbow=c("#114477", "#4477AA", "#77AADD", "#117755", "#44AA88", "#99CCBB", "#777711", "#AAAA44", "#DDDD77", "#771111", "#AA4444", "#DD7777", "#771144", "#AA4477", "#DD77AA")
+tol18rainbow=c("#771155", "#AA4488", "#CC99BB", "#114477", "#4477AA", "#77AADD", "#117777", "#44AAAA", "#77CCCC", "#777711", "#AAAA44", "#DDDD77", "#774411", "#AA7744", "#DDAA77", "#771122", "#AA4455", "#DD7788")
+# ...and finally, the Paul Tol 21-color salute
+tol21rainbow= c("#771155", "#AA4488", "#CC99BB", "#114477", "#4477AA", "#77AADD", "#117777", "#44AAAA", "#77CCCC", "#117744", "#44AA77", "#88CCAA", "#777711", "#AAAA44", "#DDDD77", "#774411", "#AA7744", "#DDAA77", "#771122", "#AA4455", "#DD7788")
+
 #######################################
 #### IndivQualPlot
 #######################################
@@ -1584,9 +1590,11 @@ plot_canonical_correspondance <- function(ps_ccpna, physeq, the_formula, group_v
 #######################################
 #### plot_bar_own
 #######################################
+# based on plot_bar from phyloseq, difference, orders and colors the Samples based on group_var, and orders the fill based on abundance
+# I guess inputs can be guessed on
 
 plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, fill = NULL,
-                         color_sample_names = TRUE){
+                         color_sample_names = TRUE, facet_grid = NULL){
         
         if(taxa_are_rows(physeq)) { physeq <- t(physeq) }
         
@@ -1602,6 +1610,8 @@ plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, fill 
         mdf$Sample <- factor(mdf$Sample, levels = LookUpDF$Sample, ordered = TRUE)
         
         # order fill levels according to abundance over all samples
+        mdf[, fill] <- as.character(mdf[, fill])
+        mdf[is.na(mdf[, fill]), fill] <- "NA"
         sums <- group_by_(mdf, fill) %>% summarise(sum_abundance = sum(Abundance)) %>% arrange(sum_abundance)
         mdf[, fill] <- factor(mdf[, fill], levels = as.character(sums[[1]]), ordered = TRUE)
         
@@ -1617,8 +1627,10 @@ plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, fill 
         if (length(levels(mdf[, fill])) <= 8) {
                 fill_colors <- cbPalette[1:length(levels(mdf[, fill]))]
                 names(fill_colors) <- rev(levels(mdf[, fill]))
+        } else {
+                fill_colors <- rev(viridis(length(levels(mdf[, fill]))))
+                names(fill_colors) <- rev(levels(mdf[, fill]))
         }
-        fill_colors
         
         
         Tr <- ggplot(mdf, aes_string(x = x, y = y, fill = fill))
@@ -1628,6 +1640,11 @@ plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, fill 
                 scale_fill_manual(values = fill_colors) +
                 xlab("") +
                 theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0, colour = colxaxis))
+        
+        if (!is.null(facet_grid)) {
+                Tr <- Tr + facet_grid(facet_grid)
+        }
+        
         
         return(Tr)
 }

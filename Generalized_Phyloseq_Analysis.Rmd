@@ -667,6 +667,7 @@ ps_tca_filt <- filter_taxa(ps_tca, function(x){(sum(x > min_obs) > (prevalence/1
 ps_filt <- prune_taxa(taxa_names(ps_tca_filt), ps) # needed for DESeq2Apply_physeq
 
 ps_filt_ra <- transform_sample_counts(ps_filt, function(x){x/sum(x)}) # same for ps_tca_filt
+
 ```
 
 - `r ntaxa(ps_tca_filt)` out of `r ntaxa(ps)` ASVs survived the filter
@@ -917,7 +918,7 @@ do.call("grid.arrange", c(TrList_ra, ncol = 2))
 # do.call("grid.arrange", c(nmdss[["ordination_Tr_own"]], ncol = 2))
 ```
 
-### beta diversity results size adjusted counts
+### beta diversity results for size adjusted counts
 
 - **Distance boxplots**
 
@@ -1011,8 +1012,12 @@ if (is.null(second_ccp_variable)){
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 overview <- get_overview_of_physeq(ps_tca_filt)
 
+taxNames <- as.character(tax_table(ps_filt_ra)[, "Species"])
+taxNames[is.na(taxNames)] <- "NA"
+taxNames <- sapply(strsplit(taxNames, split = "/"), `[`, 1)
+
 Tr <- make_heat_map_physeq(ps_filt_ra, group_var, max_abundance_for_color = .05, tax_order = NULL,
-                                 tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
+                                 tax_names = taxNames, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
 
 # Tr_list <- make_heat_map_physeq_levels(ps_tca_filt, group_var, max_abundance_for_color = NULL, tax_order = NULL,
 #                                        tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
@@ -1022,7 +1027,7 @@ Tr <- make_heat_map_physeq(ps_filt_ra, group_var, max_abundance_for_color = .05,
 knitr::kable(overview)
 ```
 
-```{r, fig.width = 14, fig.height = 25, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (1 + 0.07*ntaxa(ps_filt_ra)), warning = FALSE, message = FALSE, echo = FALSE}
 Tr
 ```
 
@@ -1051,8 +1056,10 @@ names(prev_table_list) <- names(diff_prevalence)
 
 
 row_names_for_heat_maps <- lapply(prev_table_list, function(df){
-        the_names <- paste(df$Family, df$Genus, df$Species, df$signi.)
-        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+        the_names <- paste(df$Family, df$Genus, df$Species)
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)
+        the_name <- paste(the_name, df$signi.)
+        }) # in case of ambiguous species assignment keep only first one
 
 tax_orders <- lapply(1:length(diff_prevalence), function(i){
         df <- diff_prevalence[[i]]
@@ -1089,7 +1096,7 @@ for (i in 1:length(prev_table_list)){
 # dev.off()
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_prev, ncol = 1))
 ```
 
@@ -1120,8 +1127,10 @@ names(DES_table_list) <- names(DESeq2_result_list)
 # print(xtable(DES_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 
 row_names_for_heat_maps <- lapply(DES_table_list, function(df){
-        the_names <- paste(df$Family, df$Genus, df$Species, df$signi.)
-        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+        the_names <- paste(df$Family, df$Genus, df$Species)
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)
+        the_name <- paste(the_name, df$signi.)
+}) # in case of ambiguous species assignment keep only first one
 
 tax_orders <- lapply(1:length(DESeq2_result_list), function(i){
         df <- DESeq2_result_list[[i]]
@@ -1135,7 +1144,7 @@ pruned_physeqs <- lapply(1:length(DESeq2_result_list), function(i){
 
 
 heat_maps_DES <- lapply(1:length(pruned_physeqs), function(i){
-        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = 2000, tax_order = tax_orders[[i]],
+        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = NULL, tax_order = tax_orders[[i]],
                                             tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
@@ -1164,11 +1173,11 @@ for (i in 1:length(DES_table_list)){
 
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_DES, ncol = 1))
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_DES, ncol = 1))
 ```
 
@@ -1327,8 +1336,10 @@ names(wilcox_ra_table_list) <- names(wilcox_ra_result_list)
 # print(xtable(wilcox_ra_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 
 row_names_for_heat_maps <- lapply(wilcox_ra_table_list, function(df){
-        the_names <- paste(df$Family, df$Genus, df$Species, df$signi.)
-        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+        the_names <- paste(df$Family, df$Genus, df$Species)
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)
+        the_name <- paste(the_name, df$signi.)
+}) # in case of ambiguous species assignment keep only first one
 
 tax_orders <- lapply(1:length(wilcox_ra_result_list), function(i){
         df <- wilcox_ra_result_list[[i]]
@@ -1371,11 +1382,11 @@ for (i in 1:length(wilcox_ra_table_list)){
 
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_wilcox, ncol = 1))
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_wilcox, ncol = 1))
 ```
 
@@ -1391,15 +1402,15 @@ TbTmatrixes_list <- calculate_TbTmatrixes(ps_filt, group_var = group_var)
 # max(sapply(TbTmatrixes_list[[1]], function(x){max(apply(x, 1, sum, na.rm = T))}))
 TbTresult_list <- evaluate_TbTmatrixes(TbTmatrixes_list, physeq = ps_filt, group_var = group_var, p.adjust.method = "fdr")
 
-
-suppressWarnings(head_values <- sapply(TbTresult_list, function(df){
-        # max(which(df$p_val_adj < 0.05))
-        25
-}))
-original_head_values <- data.frame(Comparison = c(names(head_values), "Total"), NoSignificant = c(head_values, ntaxa(ps_filt)),
-                                   PC_Significant = 100*c(head_values, ntaxa(ps_filt))/ntaxa(ps_filt))
-head_values[head_values < 10] <- 10
-head_values[head_values > 25] <- 25
+# Currently just take the same numbers as for wilcoxon test
+# suppressWarnings(head_values <- sapply(TbTresult_list, function(df){
+#         # max(which(df$p_val_adj < 0.05))
+#         25
+# }))
+# original_head_values <- data.frame(Comparison = c(names(head_values), "Total"), NoSignificant = c(head_values, ntaxa(ps_filt)),
+#                                    PC_Significant = 100*c(head_values, ntaxa(ps_filt))/ntaxa(ps_filt))
+# head_values[head_values < 10] <- 10
+# head_values[head_values > 25] <- 25
 
 TbT_table_list <- lapply(1:length(TbTresult_list), function(i){
         df <- head(TbTresult_list[[i]], head_values[i])
@@ -1421,7 +1432,7 @@ tax_orders <- lapply(1:length(TbTresult_list), function(i){
         as.character(df$Taxon[1:head_values[i]])
 })
 
-# NB: currently using ps_filt_ra here, need something better!!
+# # # # # # NB: currently using ps_filt_ra here, need something better!! # # # #
 pruned_physeqs <- lapply(1:length(TbTresult_list), function(i){
         prune_taxa(tax_orders[[i]], ps_filt_ra)
 })
@@ -1445,7 +1456,7 @@ violin_plots_tbt <- lapply(violin_plots_tbt, `[[`, 8)
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-knitr::kable(original_head_values, row.names = FALSE)
+# knitr::kable(original_head_values, row.names = FALSE)
 ```
 
 
@@ -1458,24 +1469,39 @@ for (i in 1:length(TbT_table_list)){
 
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_tbt, ncol = 1))
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_tbt, ncol = 1))
 ```
 
 
 # Differential Abundance analysis at `r extra_level` level
 
+- I chose to restart with the unfiltered phyloseq again, do taxglom and filter so again
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-ps_tca_filt_extra <- tax_glom(ps_tca_filt, taxrank = extra_level, NArm = FALSE)
+ps_extra <- tax_glom(ps, taxrank = extra_level, NArm = FALSE)
 
-ps_filt_extra <- tax_glom(ps_filt, taxrank = extra_level, NArm = FALSE)
+library_size_adjust_list <- adj_LS(ps_extra) 
+
+ps_tca_extra <- library_size_adjust_list[[1]]
+SFs <- library_size_adjust_list[[2]] # NB: differs from SFs from ASVs but correlated
+
+filterList <- plot_abundance_prev_filter(physeq = ps_tca_extra, prevalence = prevalence, taxa_sums_quantile = taxa_sums_quantile)
+
+ps_tca_filt_extra <- filter_taxa(ps_tca_extra, function(x){(sum(x > min_obs) > (prevalence/100)*length(x)) || (sum(x) > quantile(taxa_sums(ps_tca_extra), probs = taxa_sums_quantile/100))}, prune = TRUE)
+
+ps_filt_extra <- prune_taxa(taxa_names(ps_tca_filt_extra), ps_extra) # needed for DESeq2Apply_physeq
 
 ps_filt_ra_extra <- transform_sample_counts(ps_filt_extra, function(x){x/sum(x)}) # same for ps_tca_filt
+
+## add bar plots
+Tr_bar <- plot_bar_own(physeq = ps_filt_ra_extra, x = "Sample", group_var = group_var, fill = extra_level)
+#Tr_bar1 <- plot_bar_own(physeq = ps_tca_filt_extra, x = "Sample", group_var = group_var, fill = extra_level)
+
 
 # table(tax_table(ps_filt_ra_extra)[, "Phylum"], useNA = "ifany")
 # table(tax_table(ps_filt_ra_extra)[, "Family"], useNA = "ifany")
@@ -1494,14 +1520,30 @@ ps_filt_ra_extra <- transform_sample_counts(ps_filt_extra, function(x){x/sum(x)}
 #         facet_wrap(~ Level)
 ```
 
+```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
+#pdf(file = "filter_p.pdf", width = 7, height = 6)
+filterList[[1]]
+#dev.off()
+```
+
+
+```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+#pdf(file = "filter_p.pdf", width = 7, height = 6)
+Tr_bar
+#dev.off()
+```
+
 ## Heat map
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 overview <- get_overview_of_physeq(ps_tca_filt_extra)
 
-Tr <- make_heat_map_physeq(ps_filt_ra_extra, group_var, max_abundance_for_color = .1, tax_order = NULL,
-                                 tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
+taxNames <- as.character(tax_table(ps_filt_ra_extra)[, extra_level])
+taxNames[is.na(taxNames)] <- "NA"
+taxNames <- sapply(strsplit(taxNames, split = "/"), `[`, 1)
+Tr <- make_heat_map_physeq(ps_filt_ra_extra, group_var, max_abundance_for_color = NULL, tax_order = NULL,
+                                 tax_names = taxNames, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
 
 # Tr_list <- make_heat_map_physeq_levels(ps_tca_filt, group_var, max_abundance_for_color = NULL, tax_order = NULL,
 #                                        tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
@@ -1511,7 +1553,7 @@ Tr <- make_heat_map_physeq(ps_filt_ra_extra, group_var, max_abundance_for_color 
 knitr::kable(overview)
 ```
 
-```{r, fig.width = 14, fig.height = 25, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (4 + 0.07*ntaxa(ps_filt_ra_extra)), warning = FALSE, message = FALSE, echo = FALSE}
 Tr
 ```
 
@@ -1540,8 +1582,11 @@ names(prev_table_list) <- names(diff_prevalence)
 
 
 row_names_for_heat_maps <- lapply(prev_table_list, function(df){
-        the_names <- paste(df[, 1], df$signi., sep = "")
-        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) 
+        the_names <- as.character(df[, which(colnames(df) == extra_level)])
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)
+        the_name <- paste(the_name, df$signi.)
+}) # in case of ambiguous species assignment keep only first one
+
 
 tax_orders <- lapply(1:length(diff_prevalence), function(i){
         df <- diff_prevalence[[i]]
@@ -1554,7 +1599,7 @@ pruned_ps_filt_ra <- lapply(1:length(diff_prevalence), function(i){
 
 
 heat_maps_prev <- lapply(1:length(pruned_ps_filt_ra), function(i){
-        maps <- make_heat_map_physeq_levels(pruned_ps_filt_ra[[i]], group_var = group_var, max_abundance_for_color = .05, tax_order = tax_orders[[i]], tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps <- make_heat_map_physeq_levels(pruned_ps_filt_ra[[i]], group_var = group_var, max_abundance_for_color = NULL, tax_order = tax_orders[[i]], tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
 
@@ -1578,7 +1623,7 @@ for (i in 1:length(prev_table_list)){
 # dev.off()
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_prev, ncol = 1))
 ```
 
@@ -1609,8 +1654,11 @@ names(DES_table_list) <- names(DESeq2_result_list)
 # print(xtable(DES_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 
 row_names_for_heat_maps <- lapply(DES_table_list, function(df){
-        the_names <- paste(df[, 1], df$signi., sep = "")
-        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+        the_names <- as.character(df[, which(colnames(df) == extra_level)])
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)
+        the_name <- paste(the_name, df$signi.)
+})
+
 
 tax_orders <- lapply(1:length(DESeq2_result_list), function(i){
         df <- DESeq2_result_list[[i]]
@@ -1624,7 +1672,7 @@ pruned_physeqs <- lapply(1:length(DESeq2_result_list), function(i){
 
 
 heat_maps_DES <- lapply(1:length(pruned_physeqs), function(i){
-        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = 2000, tax_order = tax_orders[[i]],
+        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = NULL, tax_order = tax_orders[[i]],
                                             tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
@@ -1653,11 +1701,11 @@ for (i in 1:length(DES_table_list)){
 
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_DES, ncol = 1))
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_DES, ncol = 1))
 ```
 
@@ -1688,8 +1736,10 @@ names(wilcox_ra_table_list) <- names(wilcox_ra_result_list)
 # print(xtable(wilcox_ra_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 
 row_names_for_heat_maps <- lapply(wilcox_ra_table_list, function(df){
-        the_names <- paste(df[, 1], df$signi., sep = "")
-        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+        the_names <- as.character(df[, which(colnames(df) == extra_level)])
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)
+        the_name <- paste(the_name, df$signi.)
+}) # in case of ambiguous species assignment keep only first one
 
 tax_orders <- lapply(1:length(wilcox_ra_result_list), function(i){
         df <- wilcox_ra_result_list[[i]]
@@ -1702,7 +1752,7 @@ pruned_physeqs <- lapply(1:length(wilcox_ra_result_list), function(i){
 
 
 heat_maps_wilcox <- lapply(1:length(pruned_physeqs), function(i){
-        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = .05, tax_order = tax_orders[[i]],
+        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = NULL, tax_order = tax_orders[[i]],
                                             tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
@@ -1729,14 +1779,13 @@ for (i in 1:length(wilcox_ra_table_list)){
 }
 
 # print(xtable(wilcox_ra_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
-
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_wilcox, ncol = 1))
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_wilcox, ncol = 1))
 ```
 
@@ -1788,7 +1837,7 @@ pruned_physeqs <- lapply(1:length(TbTresult_list), function(i){
 
 
 heat_maps_tbt <- lapply(1:length(pruned_physeqs), function(i){
-        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = .05, tax_order = tax_orders[[i]],
+        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = NULL, tax_order = tax_orders[[i]],
                                             tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
@@ -1815,16 +1864,17 @@ for (i in 1:length(TbT_table_list)){
 }
 
 # print(xtable(TbT_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
-
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_tbt, ncol = 1))
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_tbt, ncol = 1))
 ```
+
+
 
 
 # Differential Abundance analysis at Phylum level
@@ -1832,28 +1882,38 @@ do.call("grid.arrange", c(violin_plots_tbt, ncol = 1))
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 extra_level = "Phylum"
-ps_tca_filt_extra <- tax_glom(ps_tca_filt, taxrank = extra_level, NArm = FALSE)
+ps_extra <- tax_glom(ps, taxrank = extra_level, NArm = FALSE)
 
-ps_filt_extra <- tax_glom(ps_filt, taxrank = extra_level, NArm = FALSE)
+library_size_adjust_list <- adj_LS(ps_extra) 
+
+ps_tca_extra <- library_size_adjust_list[[1]]
+SFs <- library_size_adjust_list[[2]] # NB: differs from SFs from ASVs but correlated
+
+filterList <- plot_abundance_prev_filter(physeq = ps_tca_extra, prevalence = prevalence, taxa_sums_quantile = taxa_sums_quantile)
+
+ps_tca_filt_extra <- filter_taxa(ps_tca_extra, function(x){(sum(x > min_obs) > (prevalence/100)*length(x)) || (sum(x) > quantile(taxa_sums(ps_tca_extra), probs = taxa_sums_quantile/100))}, prune = TRUE)
+
+ps_filt_extra <- prune_taxa(taxa_names(ps_tca_filt_extra), ps_extra) # needed for DESeq2Apply_physeq
 
 ps_filt_ra_extra <- transform_sample_counts(ps_filt_extra, function(x){x/sum(x)}) # same for ps_tca_filt
 
-# table(tax_table(ps_filt_ra_extra)[, "Phylum"], useNA = "ifany")
-# table(tax_table(ps_filt_ra_extra)[, "Family"], useNA = "ifany")
-# table(tax_table(ps_filt_ra)[, "Phylum"], useNA = "ifany")
-# table(tax_table(ps_filt_ra)[, "Family"], useNA = "ifany")
-
-# Phyla <- table(tax_table(ps_filt_ra)[, "Phylum"], useNA = "ifany")
-# Family <- table(tax_table(ps_filt_ra)[, "Family"], useNA = "ifany")
-# Genera <- table(tax_table(ps_filt_ra)[, "Genus"], useNA = "ifany")
-# DF <- data.frame(Level = c(rep("Phylum", length(Phyla)), rep("Family", length(Family)), rep("Genus", length(Genera))),
-#                  Name = c(names(Phyla), names(Family), names(Genera)),
-#                  ASVs = c(Phyla, Family, Genera))
-# Tr <- ggplot(DF, aes(x = Level, y = ASVs, fill = Name))
-# Tr <- Tr +
-#         geom_bar(stat = "identity") +
-#         facet_wrap(~ Level)
+## add bar plots
+Tr_bar <- plot_bar_own(physeq = ps_filt_ra_extra, x = "Sample", group_var = group_var, fill = extra_level)
 ```
+
+```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
+#pdf(file = "filter_p.pdf", width = 7, height = 6)
+filterList[[1]]
+#dev.off()
+```
+
+
+```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+#pdf(file = "filter_p.pdf", width = 7, height = 6)
+Tr_bar
+#dev.off()
+```
+
 
 ## Heat map
 
@@ -1861,8 +1921,12 @@ ps_filt_ra_extra <- transform_sample_counts(ps_filt_extra, function(x){x/sum(x)}
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 overview <- get_overview_of_physeq(ps_tca_filt_extra)
 
-Tr <- make_heat_map_physeq(ps_filt_ra_extra, group_var, max_abundance_for_color = .3, tax_order = NULL,
-                                 tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
+taxNames <- as.character(tax_table(ps_filt_ra_extra)[, extra_level])
+taxNames[is.na(taxNames)] <- "NA"
+taxNames <- sapply(strsplit(taxNames, split = "/"), `[`, 1)
+
+Tr <- make_heat_map_physeq(ps_filt_ra_extra, group_var, max_abundance_for_color = NULL, tax_order = NULL,
+                                 tax_names = taxNames, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
 
 # Tr_list <- make_heat_map_physeq_levels(ps_tca_filt, group_var, max_abundance_for_color = NULL, tax_order = NULL,
 #                                        tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
@@ -1872,7 +1936,7 @@ Tr <- make_heat_map_physeq(ps_filt_ra_extra, group_var, max_abundance_for_color 
 knitr::kable(overview)
 ```
 
-```{r, fig.width = 14, fig.height = 25, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (4 + 0.07*ntaxa(ps_filt_ra_extra)), warning = FALSE, message = FALSE, echo = FALSE}
 Tr
 ```
 
@@ -1899,10 +1963,11 @@ prev_table_list <- lapply(1:length(diff_prevalence), function(i){
 })
 names(prev_table_list) <- names(diff_prevalence)
 
-
 row_names_for_heat_maps <- lapply(prev_table_list, function(df){
-        the_names <- paste(df[, 1], df$signi., sep = "")
-        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) 
+        the_names <- as.character(df[, which(colnames(df) == extra_level)])
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)
+        the_name <- paste(the_name, df$signi.)
+})
 
 tax_orders <- lapply(1:length(diff_prevalence), function(i){
         df <- diff_prevalence[[i]]
@@ -1939,7 +2004,7 @@ for (i in 1:length(prev_table_list)){
 # dev.off()
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_prev, ncol = 1))
 ```
 
@@ -1970,8 +2035,10 @@ names(DES_table_list) <- names(DESeq2_result_list)
 # print(xtable(DES_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 
 row_names_for_heat_maps <- lapply(DES_table_list, function(df){
-        the_names <- paste(df[, 1], df$signi., sep = "")
-        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+        the_names <- as.character(df[, which(colnames(df) == extra_level)])
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)
+        the_name <- paste(the_name, df$signi.)
+})
 
 tax_orders <- lapply(1:length(DESeq2_result_list), function(i){
         df <- DESeq2_result_list[[i]]
@@ -2014,11 +2081,11 @@ for (i in 1:length(DES_table_list)){
 
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_DES, ncol = 1))
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_DES, ncol = 1))
 ```
 
@@ -2049,8 +2116,10 @@ names(wilcox_ra_table_list) <- names(wilcox_ra_result_list)
 # print(xtable(wilcox_ra_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 
 row_names_for_heat_maps <- lapply(wilcox_ra_table_list, function(df){
-        the_names <- paste(df[, 1], df$signi., sep = "")
-        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
+        the_names <- as.character(df[, which(colnames(df) == extra_level)])
+        the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)
+        the_name <- paste(the_name, df$signi.)
+}) # in case of ambiguous species assignment keep only first one
 
 tax_orders <- lapply(1:length(wilcox_ra_result_list), function(i){
         df <- wilcox_ra_result_list[[i]]
@@ -2093,11 +2162,11 @@ for (i in 1:length(wilcox_ra_table_list)){
 
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_wilcox, ncol = 1))
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_wilcox, ncol = 1))
 ```
 
@@ -2134,7 +2203,7 @@ names(TbT_table_list) <- names(TbTresult_list)
 # print(xtable(TbT_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 
 row_names_for_heat_maps <- lapply(TbT_table_list, function(df){
-        the_names <- paste(df[, 1], df$signi., sep = "")
+        the_names <- as.character(df[, which(colnames(df) == extra_level)])
         the_name <- sapply(strsplit(the_names, split = "/"), `[`, 1)}) # in case of ambiguous species assignment keep only first one
 
 tax_orders <- lapply(1:length(TbTresult_list), function(i){
@@ -2149,7 +2218,7 @@ pruned_physeqs <- lapply(1:length(TbTresult_list), function(i){
 
 
 heat_maps_tbt <- lapply(1:length(pruned_physeqs), function(i){
-        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = .3, tax_order = tax_orders[[i]],
+        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = NULL, tax_order = tax_orders[[i]],
                                             tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
@@ -2179,11 +2248,11 @@ for (i in 1:length(TbT_table_list)){
 
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_tbt, ncol = 1))
 ```
 
-```{r, fig.width = 14, fig.height = 30, warning = FALSE, message = FALSE, echo = FALSE}
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_tbt, ncol = 1))
 ```
 
@@ -2209,7 +2278,7 @@ do.call("grid.arrange", c(violin_plots_tbt, ncol = 1))
 ### taxon vs taxon tile plots TAKES TIME, better only for few taxa
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-# TbT_tiles <- create_TbT_TilePlots(TbTmatrixes_list, physeq = ps_filt_phylum, group_var = group_var)
+TbT_tiles <- create_TbT_TilePlots(TbTmatrixes_list, physeq = ps_filt_extra, group_var = group_var)
 # TbT_tiles_show <- lapply(TbT_tiles, `[[`, 2)
 ```
 

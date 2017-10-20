@@ -1585,7 +1585,7 @@ get_overview_of_physeq <- function(physeq){
 ## Input:
 # physeq object
 # group_var: the name of the group_fac column in sample_data used to order the samples in the heat map
-# max_abundance_for_color: if null the max count/relative abundance in the data is used. all counts above this value will be
+# max_abundance_for_color: if null the 90% quantile of count/relative abundance in the data is used. all counts above this value will be
 # shown yellow in the heat map
 # tax_order: character vector of the original taxon names in the order you want them shown. if NULL >> tax_order = taxa_names(physeq)
 # tax_names: the names that will be used for the taxons, if Null Taxon_1, Taxon_2 and so on will be used. NB: renaming of course after
@@ -1629,7 +1629,7 @@ make_heat_map_physeq <- function(physeq, group_var, max_abundance_for_color = NU
         DF_CT$Sample <- factor(DF_CT$Sample, levels = LookUpDF$Sample, ordered = TRUE)
         
         if (is.null(max_abundance_for_color)) {
-                max_abundance_for_color<- max(DF_CT$Count)
+                max_abundance_for_color <- quantile(DF_CT$Count, .9)
         }
         
         # Color the sample names based on levels in group fac
@@ -1662,7 +1662,7 @@ make_heat_map_physeq <- function(physeq, group_var, max_abundance_for_color = NU
 ## Input:
 # physeq object
 # group_var: the name of the group_fac column in sample_data used to order the samples in the heat map
-# max_abundance_for_color: if null the max count/relative abundance in the data is used. all counts above this value will be
+# max_abundance_for_color: if null the 90% percentile count/relative abundance in the data is used. all counts above this value will be
 # shown yellow in the heat map
 # tax_order: character vector of the original taxon names in the order you want them shown. if NULL >> tax_order = taxa_names(physeq)
 # tax_names: the names that will be used for the taxons, if Null Taxon_1, Taxon_2 and so on will be used. NB: renaming of course after
@@ -1740,7 +1740,7 @@ make_heat_map_physeq_levels <- function(physeq, group_var, max_abundance_for_col
                 DF_CT_current$Sample <- factor(DF_CT_current$Sample, levels = LookUpDF_current$Sample, ordered = TRUE)
                 
                 if (is.null(max_abundance_for_color)) {
-                        max_abundance_for_color_current <- max(DF_CT_current$Count)
+                        max_abundance_for_color_current <- quantile(DF_CT_current$Count, .9)
                 } else {
                         max_abundance_for_color_current <- max_abundance_for_color
                 }
