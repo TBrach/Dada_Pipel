@@ -1986,10 +1986,13 @@ heat_maps_prev <- lapply(1:length(pruned_ps_filt_ra), function(i){
 
 ```
 
+- how many significant taxa were found
+
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- the most significant taxa
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(prev_table_list)){
@@ -2067,10 +2070,13 @@ violin_plots_DES <- lapply(1:length(tax_orders), function(i){
 violin_plots_DES <- lapply(violin_plots_DES, `[[`, 8)
 ```
 
+- how many significant taxa were found
+
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- the most significant taxa
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(DES_table_list)){
@@ -2147,11 +2153,13 @@ violin_plots_wilcox <- lapply(1:length(tax_orders), function(i){
 violin_plots_wilcox <- lapply(violin_plots_wilcox, `[[`, 8)
 ```
 
+- how many significant taxa were found
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- the most significant taxa
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(wilcox_ra_table_list)){
@@ -2238,6 +2246,7 @@ violin_plots_tbt <- lapply(violin_plots_tbt, `[[`, 8)
 # knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- the most significant taxa
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(TbT_table_list)){
@@ -2257,33 +2266,42 @@ do.call("grid.arrange", c(violin_plots_tbt, ncol = 1))
 ```
 
 
+## Ratio plots
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
+raw_TbTmatrixes_list <- calculate_raw_TbTmatrixes(ps_filt_extra, group_var = group_var)
 
+taxNames <- as.character(tax_table(ps_filt_extra)[, extra_level])
+taxNames[is.na(taxNames)] <- "NA"
+taxNames <- sapply(strsplit(taxNames, split = "/"), `[`, 1)
 
+FirmicutesRatios <- create_taxa_ratio_violin_plots(TbTmatrixes_list = raw_TbTmatrixes_list, physeq = ps_filt_extra, group_var = group_var, tax_names = taxNames, taxa_nom = "Firmicutes", taxa_den = NULL, test = "t.test", p_adjust = "none")
+
+FirmicutesRatioPlots <- lapply(FirmicutesRatios, `[[`, 2)
 # ADD bacteroides to Firmicutes ratio plot
 ```
 
-
-
-
-
-
-
-
-
-
-
-### taxon vs taxon tile plots TAKES TIME, better only for few taxa
-
-```{r, warning = FALSE, message = FALSE, echo = FALSE}
-TbT_tiles <- create_TbT_TilePlots(TbTmatrixes_list, physeq = ps_filt_extra, group_var = group_var)
-# TbT_tiles_show <- lapply(TbT_tiles, `[[`, 2)
+```{r, fig.width = 14, fig.height = length(raw_TbTmatrixes_list)*5, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(FirmicutesRatioPlots, ncol = 1))
 ```
 
-```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
-# do.call("grid.arrange", c(TbT_tiles_show, ncol = 1))
+
+### taxon vs taxon ratio tile plots (takes time, so only for few taxa like here for Phylum level)
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+taxNames <- as.character(tax_table(ps_filt_extra)[, extra_level])
+taxNames[is.na(taxNames)] <- "NA"
+taxNames <- sapply(strsplit(taxNames, split = "/"), `[`, 1)
+
+# TbT_tiles <- create_TbT_TilePlots(TbTmatrixes_list, physeq = ps_filt_extra, group_var = group_var, tax_names = taxNames, test = "wilcoxon")
+
+TbT_tiles <- create_raw_TbT_TilePlots(raw_TbTmatrixes_list, physeq = ps_filt_extra, group_var = group_var, tax_names = taxNames, test = "wilcoxon")
+TbT_tiles_show <- lapply(TbT_tiles, `[[`, 2)
+```
+
+```{r, fig.width = 10, fig.height = length(raw_TbTmatrixes_list)*5, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(TbT_tiles_show, ncol = 1))
 ```
 
 
