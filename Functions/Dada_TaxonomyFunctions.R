@@ -1835,6 +1835,18 @@ plot_top_abundances_boxAndviolin <- function(physeq, group_var, tax_order = NULL
         j_s <- j_s[upper.tri(j_s)]
         # ----
         
+        if (length(levels(LookUpDF$Group)) <= 7){
+                color_lookup <- data.frame(level = levels(LookUpDF$Group), color = cbPalette[2:(length(levels(LookUpDF$Group)) + 1)])
+        } else {
+                color_lookup <- data.frame(level = levels(LookUpDF$Group), color = viridis(length(levels(LookUpDF$Group))))
+        }
+        for (e in seq_along(color_lookup)) {
+                color_lookup[, e] <- as.character(color_lookup[,e])
+        }
+        colors_to_use <- color_lookup$color
+        names(colors_to_use) <- color_lookup$level
+        
+        
         plot_list <- vector("list", length = length(i_s))
         
         for (k in seq_along(i_s)){
@@ -1849,7 +1861,7 @@ plot_top_abundances_boxAndviolin <- function(physeq, group_var, tax_order = NULL
                 Tr <- Tr +
                         geom_boxplot(outlier.color = NA) +
                         geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
-                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        scale_color_manual("", values = colors_to_use) +
                         xlab("") +
                         ylab("abundance") +
                         theme_bw() +
@@ -1860,7 +1872,7 @@ plot_top_abundances_boxAndviolin <- function(physeq, group_var, tax_order = NULL
                         geom_boxplot(outlier.color = NA) +
                         geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
                         facet_wrap(~ Taxa, ncol = facet_cols, scales = "free_y") +
-                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        scale_color_manual("", values = colors_to_use) +
                         xlab("") +
                         ylab("abundance") +
                         theme_bw()
@@ -1869,7 +1881,7 @@ plot_top_abundances_boxAndviolin <- function(physeq, group_var, tax_order = NULL
                 Tr2 <- Tr2 +
                         geom_violin(fill = NA) +
                         geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
-                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        scale_color_manual("", values = colors_to_use) +
                         xlab("") +
                         ylab("abundance") +
                         theme_bw() +
@@ -1880,10 +1892,11 @@ plot_top_abundances_boxAndviolin <- function(physeq, group_var, tax_order = NULL
                         geom_violin(fill = NA) +
                         geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
                         facet_wrap(~ Taxa, ncol = facet_cols, scales = "free_y") +
-                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        scale_color_manual("", values = colors_to_use) +
                         xlab("") +
                         ylab("abundance") +
-                        theme_bw()
+                        theme_bw() +
+                        theme(legend.position = "none")
                 
                 # same for log10
                 # if (min(DF_CT_current$Count[DF_CT_current$Count > 0]) > 1e-6) {
@@ -1896,7 +1909,7 @@ plot_top_abundances_boxAndviolin <- function(physeq, group_var, tax_order = NULL
                 Tr4 <- Tr4 +
                         geom_boxplot(outlier.color = NA) +
                         geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
-                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        scale_color_manual("", values = colors_to_use) +
                         xlab("") +
                         ylab("abundance") +
                         theme_bw() +
@@ -1908,17 +1921,18 @@ plot_top_abundances_boxAndviolin <- function(physeq, group_var, tax_order = NULL
                         geom_boxplot(outlier.color = NA) +
                         geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
                         facet_wrap(~ Taxa, ncol = facet_cols, scales = "free_y") +
-                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        scale_color_manual("", values = colors_to_use) +
                         xlab("") +
                         ylab("abundance") +
                         theme_bw() +
-                        scale_y_log10()
+                        scale_y_log10() +
+                        theme(legend.position = "none")
                 
                 Tr6 <- ggplot(DF_CT_current, aes(x = Taxa, y = Count, col = Group))
                 Tr6 <- Tr6 +
                         geom_violin(fill = NA) +
                         geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
-                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        scale_color_manual("", values = colors_to_use) +
                         xlab("") +
                         ylab("abundance") +
                         theme_bw() +
@@ -1930,11 +1944,12 @@ plot_top_abundances_boxAndviolin <- function(physeq, group_var, tax_order = NULL
                         geom_violin(fill = NA) +
                         geom_point(size = 1, alpha = 0.6, position = position_jitterdodge()) +
                         facet_wrap(~ Taxa, ncol = facet_cols, scales = "free_y") +
-                        scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                        scale_color_manual("", values = colors_to_use) +
                         xlab("") +
                         ylab("abundance") +
                         theme_bw() +
-                        scale_y_log10()
+                        scale_y_log10() +
+                        theme(legend.position = "none")
                 
                 
                 plot_list[[k]] <- list(Tr, Tr1, Tr2, Tr3, Tr4, Tr5, Tr6, Tr7)
@@ -2974,13 +2989,13 @@ create_TbT_TilePlots <- function(TbTmatrixes_list, physeq, group_var, tax_names 
 # - TbTmatrixes_list: The list with the lists of TbTmatrixes for each level combi in group factor
 # NB: here it should be raw_TbTmatrixes with 0 = 0/x, Inf = x/0, NaN = 0/0, all these values will be ignored!!
 # - physeq: used for TbTmatrixes_list generation
-# - NB: so far no pvalue adjustment
+# - p_adjust: method for p.adjust, NB: if not bonferroni or none, the tile plots are not necessarily symmetric anymore
 ## Output: 
 # - list of pValMatrixes plus TileTr for each level combination. 
 # NB: I negated the p-values if host taxon was more abundant in grp2 compared to other taxon!!
 
 create_raw_TbT_TilePlots <- function(TbTmatrixes_list, physeq, group_var, tax_names = NULL,
-                                 test = "wilcoxon") {
+                                 test = "wilcoxon", p_adjust = "none") {
         
         if(!identical(length(TbTmatrixes_list[[1]]), ntaxa(physeq))){stop("TbTmatrixes can not fit to physeq")}
         
@@ -3070,6 +3085,15 @@ create_raw_TbT_TilePlots <- function(TbTmatrixes_list, physeq, group_var, tax_na
                 # make sure diagonal is all NA (can be exceptions especially for t.test)
                 diag(pValMatrix) <- NA
                 
+                signs <- pValMatrix < 0
+                signs[is.na(signs)] <- FALSE
+                
+                pValMatrix <- abs(pValMatrix)
+                for (e in 1:nrow(pValMatrix)){
+                        pValMatrix[e, ] <- p.adjust(pValMatrix[e, ], method = p_adjust)
+                } # equal to t(apply(pValMatrix, 1, p.adjust, method = p_adjust))
+                
+                pValMatrix[signs] <- pValMatrix[signs]*(-1)
                 
                 # -- add a tile plot of the pValMatrix --
                 

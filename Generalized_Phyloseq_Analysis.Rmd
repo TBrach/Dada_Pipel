@@ -1078,10 +1078,13 @@ heat_maps_prev <- lapply(1:length(pruned_ps_filt_ra), function(i){
 
 ```
 
+- the number of significantly different taxa found:
+
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- listing the most differently "abundant" taxa for all level combinations
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(prev_table_list)){
@@ -1159,10 +1162,14 @@ violin_plots_DES <- lapply(1:length(tax_orders), function(i){
 violin_plots_DES <- lapply(violin_plots_DES, `[[`, 8)
 ```
 
+- the number of significantly different taxa found:
+
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+
+- listing the most differently "abundant" taxa for all level combinations
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(DES_table_list)){
@@ -1367,11 +1374,13 @@ violin_plots_wilcox <- lapply(1:length(tax_orders), function(i){
 violin_plots_wilcox <- lapply(violin_plots_wilcox, `[[`, 8)
 ```
 
+- the number of significantly different taxa found:
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- listing the most differently "abundant" taxa for all level combinations
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(wilcox_ra_table_list)){
@@ -1459,6 +1468,7 @@ violin_plots_tbt <- lapply(violin_plots_tbt, `[[`, 8)
 # knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- listing the most differently "abundant" taxa for all level combinations
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(TbT_table_list)){
@@ -1605,10 +1615,13 @@ heat_maps_prev <- lapply(1:length(pruned_ps_filt_ra), function(i){
 
 ```
 
+- the number of significantly different taxa found:
+
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- listing the most differently "abundant" taxa for all level combinations
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(prev_table_list)){
@@ -1687,10 +1700,13 @@ violin_plots_DES <- lapply(1:length(tax_orders), function(i){
 violin_plots_DES <- lapply(violin_plots_DES, `[[`, 8)
 ```
 
+- the number of significantly different taxa found:
+
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- listing the most differently "abundant" taxa for all level combinations
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(DES_table_list)){
@@ -1767,11 +1783,13 @@ violin_plots_wilcox <- lapply(1:length(tax_orders), function(i){
 violin_plots_wilcox <- lapply(violin_plots_wilcox, `[[`, 8)
 ```
 
+- the number of significantly different taxa found:
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- listing the most differently "abundant" taxa for all level combinations
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(wilcox_ra_table_list)){
@@ -1857,6 +1875,7 @@ violin_plots_tbt <- lapply(violin_plots_tbt, `[[`, 8)
 # knitr::kable(original_head_values, row.names = FALSE)
 ```
 
+- listing the most differently "abundant" taxa for all level combinations
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(TbT_table_list)){
@@ -1911,6 +1930,12 @@ filterList[[1]]
 ```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
 #pdf(file = "filter_p.pdf", width = 7, height = 6)
 Tr_bar
+#dev.off()
+```
+
+```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
+#pdf(file = "filter_p.pdf", width = 7, height = 6)
+Tr_bar + coord_cartesian(ylim = c(0.9, 1))
 #dev.off()
 ```
 
@@ -2021,8 +2046,7 @@ physeq_DESadjust <- out_list[[2]]
 suppressWarnings(head_values <- sapply(DESeq2_result_list, function(df){
         max(which(df$p_val_adj < 0.05))
 }))
-original_head_values <- data.frame(Comparison = c(names(head_values), "Total"), NoSignificant = c(head_values, ntaxa(ps_filt_extra)),
-                                   PC_Significant = 100*c(head_values, ntaxa(ps_filt_extra))/ntaxa(ps_filt_extra))
+original_head_values <- data.frame(Comparison = c(names(head_values), "Total"), NoSignificant = c(head_values, ntaxa(ps_filt_extra)), PC_Significant = 100*c(head_values, ntaxa(ps_filt_extra))/ntaxa(ps_filt_extra))
 head_values[head_values < 10] <- min(10, ntaxa(ps_filt_extra))
 head_values[head_values > 25] <- 25
 
@@ -2055,8 +2079,7 @@ pruned_physeqs <- lapply(1:length(DESeq2_result_list), function(i){
 
 
 heat_maps_DES <- lapply(1:length(pruned_physeqs), function(i){
-        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = 2000, tax_order = tax_orders[[i]],
-                                            tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps <- make_heat_map_physeq_levels(pruned_physeqs[[i]], group_var = group_var, max_abundance_for_color = 2000, tax_order = tax_orders[[i]], tax_names = row_names_for_heat_maps[[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
 
@@ -2296,7 +2319,7 @@ taxNames <- sapply(strsplit(taxNames, split = "/"), `[`, 1)
 
 # TbT_tiles <- create_TbT_TilePlots(TbTmatrixes_list, physeq = ps_filt_extra, group_var = group_var, tax_names = taxNames, test = "wilcoxon")
 
-TbT_tiles <- create_raw_TbT_TilePlots(raw_TbTmatrixes_list, physeq = ps_filt_extra, group_var = group_var, tax_names = taxNames, test = "wilcoxon")
+TbT_tiles <- create_raw_TbT_TilePlots(raw_TbTmatrixes_list, physeq = ps_filt_extra, group_var = group_var, tax_names = taxNames, test = "wilcoxon", p_adjust = "none")
 TbT_tiles_show <- lapply(TbT_tiles, `[[`, 2)
 ```
 
