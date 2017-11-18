@@ -664,7 +664,7 @@ boxplot_alphaDiv_fromDF <- function(DF, measures, color = NULL, shape = NULL,
         
         for (i in 1:length(measures)) {
                 
-                aes_map = aes_string(x = group, y = measures[i], shape = shape, color = color)
+                aes_map = aes_string(x = group, y = measures[i], color = color)
                 
                 if(is.null(color)){
                         Tr = ggplot(DF, aes_map) + geom_boxplot(na.rm = TRUE, col = defCol)
@@ -673,7 +673,7 @@ boxplot_alphaDiv_fromDF <- function(DF, measures, color = NULL, shape = NULL,
                         Tr = ggplot(DF, aes_map) + geom_boxplot(na.rm = TRUE)
                 }
                 
-                Tr = Tr + geom_jitter(width = .2, height = 0, alpha = 0.65)
+                Tr = Tr + geom_jitter(aes_string(shape = shape), width = .2, height = 0, alpha = 0.65)
                 
                 Tr <- Tr + scale_colour_manual("", values = cbPalette[2:8])
                 
@@ -1504,10 +1504,16 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
         
         Merged <- dplyr::mutate(Merged, PC_ASV_rem = round(100*ASVs_aft/ASVs_bef, 1), PC_ab_rem = round(100*total_ab_aft/total_ab_bef, 1))
         
-        Merged <- dplyr::select(Merged, 1, 20, 21, 2, 11, 3, 12, 4, 13, 5, 14, 6, 15, 7, 16, 8, 17, 9, 18)
+        Merged <- dplyr::select(Merged, 1, 20, 21, 2, 11, 3, 12, 4, 13, 5, 14, 6, 15, 7, 16, 8, 17, 9, 18, 10, 19)
         
-        Merged$tot_ab_bef <- round(Before$total_ab_bef)
-        Merged$tot_ab_aft <- round(After$total_ab_aft)
+        # in case some phyla have been kicked out: you need to reorder like it was "Before" to have total at the last place
+        Merged[is.na(Merged)] <- 0 # Phyla that have been removed are NA
+        colnames(Merged)[20:21] <- c("tot_ab_bef", "tot_ab_aft")
+        Merged[, 20] <- round(Merged[, 20])
+        Merged[, 21] <- round(Merged[, 21])
+        
+        #Merged$tot_ab_bef <- round(Before$total_ab_bef)
+        #Merged$tot_ab_aft <- round(After$total_ab_aft)
         
         out <- list(Tr_prev_vs_log10_ab = Tr_prev_vs_log10_ab,
                     Tr_prev_vs_log10_ab_col = Tr_prev_vs_log10_ab_col,
@@ -1608,6 +1614,7 @@ plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, fill 
         LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
         LookUpDF <- LookUpDF[order(match(LookUpDF$Group, levels(LookUpDF$Group))), ]
         mdf$Sample <- factor(mdf$Sample, levels = LookUpDF$Sample, ordered = TRUE)
+        # mdf$Sample <- factor(mdf$Sample, levels = c("A-15A", "A-5A", "A-2A", "A-1A", "B-15A", "B-5A", "B-2A", "B-1A"), ordered = TRUE)
         
         # order fill levels according to abundance over all samples
         mdf[, fill] <- as.character(mdf[, fill])

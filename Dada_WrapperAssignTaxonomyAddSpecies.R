@@ -1,5 +1,5 @@
 # source seqtab data and function
-datapath <- "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada_Analysis_Pooled_Hulk"
+datapath <- "/Users/jvb740/MarieCurie_Work/DanFunDProject/Pretest/Pretest_DadaAnalysis_FilterRarified_Pooled/"
 load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
 
 functpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions"
@@ -16,5 +16,5 @@ assignTaxonomyaddSpecies(seqtab = seqtab.nochim,
                          PathToRefs = "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/AssignTaxonomy",
                          RefDataBase = "silva_nr_v128_train_set.fa.gz",
                          SpeciesDB = "silva_species_assignment_v128.fa.gz",
-                         PathToSave = "/Users/jvb740/MarieCurie_Work/MouseProject/ResultsAndProtocols/ManiAging_Results/16S_Sequencing/2017-07-13_DK_age_ManiAging/Dada_Analysis_Pooled_Hulk/Dada_Taxonomy/Silva_v128",
+                         PathToSave = "/Users/jvb740/MarieCurie_Work/DanFunDProject/Pretest/Pretest_DadaAnalysis_FilterRarified_Pooled/Dada_Taxonomy/Silva_v128",
                          tryRC = FALSE)

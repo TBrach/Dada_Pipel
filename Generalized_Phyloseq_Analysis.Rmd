@@ -1,7 +1,7 @@
 ---
 title: "Generalized phyloseq analysis of dada2 data"
 author: "Thorsten Brach"
-date: "24/7/2017"
+date: "05/11/2017"
 output: html_document
 ---
 
@@ -71,6 +71,7 @@ group_var <- "Group" # tha variable based on which samples will be grouped
 group_var_levels <- c("Young", "MiddleAged", "Old") # the factor levels of the group_var in the order you want them in your plots (set to NULL if you do not care)
 second_ccp_variable <- "Sample.Integrity"
 # second_ccp_variable <- NULL # for canonical correspondance analysis (see <https://f1000research.com/articles/5-1492/v1>); NB: if of interest you could add more,
+shape <- NULL # used for some plots to distinguish samples within the different levels of group_var
 # --
 
 # - alpha diversity -
@@ -140,6 +141,9 @@ if (!identical(sample_names(ps), sample.names)) {
         stop("check sample names")
 }
 
+# order the concentration/shape column
+# sample_data(ps)$Conc <- factor(sample_data(ps)$Conc, levels = c("1", "2", "5", "15"), ordered = TRUE)
+
 ps
 # ----
 ```
@@ -202,6 +206,7 @@ Inputs_phyloseqAnalysis <- list(extra_level = extra_level,
                                 group_var = group_var,
                                 group_var_levels = group_var_levels,
                                 second_ccp_variable = second_ccp_variable,
+                                shape = shape,
                                 alpha_div_measures = alpha_div_measures,
                                 alpha_at_genus = alpha_at_genus,
                                 dist_methods = dist_methods,
@@ -410,7 +415,8 @@ grid.arrange(assign_vs_prev[[2]], assign_vs_ab[[2]], nrow = 2)
     - dada2 seqtabs when obtained with dada( , pooled = FALSE) tend to be without singletons, most likely because low abundance ASVs are considered errors from more abundant ASVs
 
 ```{r, message = FALSE, warning = FALSE, echo = FALSE}
-alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps, alpha_div_measures = alpha_div_measures)
+# plot_list = list()
+alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps, alpha_div_measures = alpha_div_measures, group_var = group_var, shape = shape)
 DF_alpha_no_rare <- alpha_div_wrap[["DF_alpha_list"]]$DF_alpha # used later for comparison plots to rarefied version
 TrListBP <- alpha_div_wrap[["TrListBP"]]
 TrList_lm <- alpha_div_wrap[["TrList_lm"]]
@@ -434,7 +440,8 @@ grid.arrange(TrListBP[["Richness"]], TrListBP[["Shannon"]],
              ncol = 2)
 #dev.off()
 
-
+# plot_list[[1]] <- TrListBP[["Richness"]]
+# plot_list[[2]] <- TrList_lm[["Richness"]]
 ```
 
 - p.values of the boxplots:
@@ -480,7 +487,7 @@ if (rare_type == "vegan"){
 ps.rare <- ps
 otu_table(ps.rare) <- otu_table(seqtab.nochim.rare, taxa_are_rows = taxa_are_rows)
 
-alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps.rare, alpha_div_measures = alpha_div_measures)
+alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps.rare, alpha_div_measures = alpha_div_measures, group_var = group_var, shape = shape)
 DF_alpha_rare <- alpha_div_wrap[["DF_alpha_list"]]$DF_alpha
 TrListBP <- alpha_div_wrap[["TrListBP"]]
 TrList_lm <- alpha_div_wrap[["TrList_lm"]]
@@ -587,6 +594,7 @@ grid.arrange(rarefaction_curves[["Tr_richness_col"]], rarefaction_curves[["Tr_ri
 # grid.arrange(rarefaction_curves[["Tr_richness_group"]], rarefaction_curves[["Tr_richness_grad"]],
 #              layout_matrix = matrix(c(1,2), nrow = 1))
 # dev.off()
+# plot_list[[3]] <- rarefaction_curves[["Tr_richness_col"]]
 ```
 
 
@@ -595,7 +603,7 @@ grid.arrange(rarefaction_curves[["Tr_richness_col"]], rarefaction_curves[["Tr_ri
 ```{r, message = FALSE, warning = FALSE, echo = FALSE}
 if (alpha_at_genus){
         ps_gen <- tax_glom(ps.rare, "Genus", NArm = TRUE)
-        alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps_gen, alpha_div_measures = alpha_div_measures)
+        alpha_div_wrap <- alpha_diversity_wrapper(physeq = ps_gen, alpha_div_measures = alpha_div_measures, group_var = group_var, shape = shape)
         DF_alpha_no_rare <- alpha_div_wrap[["DF_alpha_list"]]$DF_alpha # used later for comparison plots to rarefied version
         TrListBP <- alpha_div_wrap[["TrListBP"]]
         TrList_lm <- alpha_div_wrap[["TrList_lm"]]
@@ -851,7 +859,7 @@ if (length(levels(group_fac)) > 2){
 
 # == construct ordination plots ==
 
-pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "PCoA", group_var = group_var, coord_cor = TRUE) 
+pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "PCoA", group_var = group_var, shape = shape, coord_cor = FALSE) 
 
 TrList_ra <- vector(mode = "list", length = 2*length(pcoas[["ordination_Tr_samples"]])) 
 counter <- 0
@@ -878,6 +886,7 @@ for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
 # nmdss2 <- calc_ordination_from_distances(ps_tca_filt, dist_list = dist_list2, ordination_type = "NMDS", group_var = group_var) 
 
 # ====
+# plot_list[[4]] <- pcoas[["ordination_Tr_samples"]][[1]]
 ```
 
 ### beta diversity results relative abundance
@@ -1528,6 +1537,7 @@ Tr_bar <- plot_bar_own(physeq = ps_filt_ra_extra, x = "Sample", group_var = grou
 # Tr <- Tr +
 #         geom_bar(stat = "identity") +
 #         facet_wrap(~ Level)
+
 ```
 
 ```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
@@ -1918,6 +1928,9 @@ ps_filt_ra_extra <- transform_sample_counts(ps_filt_extra, function(x){x/sum(x)}
 
 ## add bar plots
 Tr_bar <- plot_bar_own(physeq = ps_filt_ra_extra, x = "Sample", group_var = group_var, fill = extra_level)
+
+# plot_list[[5]] <- Tr_bar
+# saveRDS(object = plot_list, file = "plot_list.rds")
 ```
 
 ```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}

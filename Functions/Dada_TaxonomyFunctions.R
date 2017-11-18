@@ -77,6 +77,8 @@ assignTaxonomyaddSpecies <- function(seqtab,
         InputSave[[length(InputSave) + 1]] <- TimeForaddSpecies
         
         save(taxa, taxa.species, InputSave, file = file.path(PathToSave, "Taxonomy.RData"))
+        
+        message("Function Done")
 
 
 }
@@ -852,7 +854,7 @@ adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, plots = FALSE) 
 #######################################
 # just wraps around other functions here to save writing time
 # currently only works for alpha_div_measures = c("Observed", "Shannon")
-alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "Shannon")){
+alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "Shannon"), group_var = group_var, shape = shape){
         
         DF_alpha_list <- calculate_alphadiversity(physeq = physeq, measures = alpha_div_measures)
         DF_alpha <- DF_alpha_list[[1]]
@@ -899,11 +901,11 @@ alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "
                             fitter_shannon_filteredreads = fitter_shannon_filteredreads)
         
         
-        TrListBP <- boxplot_alphaDiv_fromDF(DF = DF_alpha, color = group_var, group = group_var, measures = c(alpha_div_measures2, paste(alpha_div_measures2, "resids", sep = "_"), paste(alpha_div_measures2, "resids", "FilteredReads", sep = "_")))
+        TrListBP <- boxplot_alphaDiv_fromDF(DF = DF_alpha, color = group_var, group = group_var, shape = shape, measures = c(alpha_div_measures2, paste(alpha_div_measures2, "resids", sep = "_"), paste(alpha_div_measures2, "resids", "FilteredReads", sep = "_")))
         
-        TrList_lm <- plot_alphaDivVstotalCounts_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var)
+        TrList_lm <- plot_alphaDivVstotalCounts_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var, shape = shape)
         
-        TrList_lm_filteredReads <- plot_alphaDivVsfilteredReads_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var)
+        TrList_lm_filteredReads <- plot_alphaDivVsfilteredReads_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var, shape = shape)
         
         out <- list(DF_alpha_list = DF_alpha_list, TrListBP = TrListBP, TrList_lm = TrList_lm, TrList_lm_filteredReads = TrList_lm_filteredReads, pairwise.tt_rich = pairwise.tt_rich,
                     fitter_list = fitter.list, pairwise.tt_shannon = pairwise.tt_shannon, pairwise.tt_totalcounts = pairwise.tt_totalcounts, pairwise.tt_rich_resids = pairwise.tt_rich_resids,
@@ -955,7 +957,7 @@ calc_distances <- function(physeq, dist_methods = c("bray")) {
 ### FUNCTION: calc_ordination_from_distances
 #######################################
 
-calc_ordination_from_distances <- function(physeq, dist_list, ordination_type = "PCoA", group_var = NULL, coord_cor = FALSE){
+calc_ordination_from_distances <- function(physeq, dist_list, ordination_type = "PCoA", group_var = NULL, shape = NULL, coord_cor = FALSE){
         
         ordination_list <- vector("list", length(dist_list))
         DFList <- vector("list", length(dist_list))
@@ -975,7 +977,7 @@ calc_ordination_from_distances <- function(physeq, dist_list, ordination_type = 
                 
                 x = colnames(DF)[1]
                 y = colnames(DF)[2]
-                Tr <- ggplot(DF, aes_string(x = x, y = y, col = group_var)) 
+                Tr <- ggplot(DF, aes_string(x = x, y = y, col = group_var, shape = shape)) 
                 Tr <- Tr + geom_point() +
                         scale_color_manual("", values = cbPalette[2:8]) +
                         theme_bw(12) +
@@ -2820,7 +2822,7 @@ calculate_raw_TbTmatrixes = function(physeq, group_var){
                 
                 TbTmatrixes <- lapply(1:nrow(CT), function(i){apply(CT, 2, function(samp_cnts){samp_cnts[i]/samp_cnts})})
                 # produces for each taxon (= host taxon) a TbTMatrix
-                # NB: there are -Inf, and NaN values in the matrixes, specifically
+                # NB: there are Inf, and NaN values in the matrixes, specifically
                 # 0/x = 0, x/0 = Inf; 0/0 = NaN!
                 
                 names(TbTmatrixes) <- rownames(TbTmatrixes[[1]])
@@ -3289,6 +3291,62 @@ create_taxa_ratio_violin_plots <- function(TbTmatrixes_list, physeq, group_var, 
         names(result_list) <- names(TbTmatrixes_list)
         result_list
 }
+
+
+
+####################################
+## rank_evaluate_TbTmatrixes: 
+###################################
+# NB: you need to give same physeq as in calculate_TbTmatrixes, of course two functions could be combined, would
+# save some double calculations
+# the function calculates the TbT_groupSums as "teststatistic" in the TbTmatrixes 
+# it adds count infos from physeq, NB: Median_grp1 and so on are calculated only from non-zero
+# values because TbT method ignores zeros
+## Input: 
+# - TbTmatrixes_list: The list with the list of TbTmatrixes for each level combination in group_var defined group factor
+# - physeq: same physeq object as used in calculate_TbTmatrixes
+# - group_var: defining the group factor in physeq, same again as in calculate_TbTmatrixes
+# - p.adjust.method: here only for p.adjust on fisher p_values
+## Output: 
+# - list of result DF for each combination of levels in group_var defined group fac
+
+rank_evaluate_TbTmatrixes <- function(TbTmatrixes, group_fac, p.adjust.method = "fdr") {
+        
+        for (i in seq_along(TbTmatrixes)) {
+                
+                mat <- TbTmatrixes[[i]]
+                
+                # calculate ranks, and transform NaN (i.e. where both host taxon and denominator taxon were absent to NA)
+                
+                mat_rank <- t(apply(mat, 1, rank, na.last = "keep"))
+                # NB: in case no NA then rowSums(mat_rank) is equal to nsamples*(nsamples + 1)/2
+                
+                # next steps:
+                # - divide by geometric mean and log so rowSums are 0 in each row
+                # - set all NA to 0
+                # - get colSums to get evaluation matrix1
+                # - run wilcoxon test
+                
+               
+        }
+        
+        
+}
+
+
+
+#######################################
+### gm_own_tbt: calculate geometric mean
+#######################################
+# see above for gm_own, just a simpler version and based on the fact that NA might be in the data
+
+
+gm_own_tbt = function(x){
+        
+        exp(sum(log(x), na.rm = TRUE) / length(x[!is.na(x)]))
+
+}
+
 
 
 
