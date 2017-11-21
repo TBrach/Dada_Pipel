@@ -52,7 +52,7 @@ PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Ver
 extra_level = "Family"
 
 # - filtering inputs -
-prevalence <- 20 # in percent
+prevalence <- 0 # in percent
 min_obs <- 0L # a taxon will be considered present (for prevalence) if count > min_obs
 taxa_sums_quantile <- 90 # in percent, taxa whose taxa_sums are above this threshold will be kept even if they do not pass prevalence
 # --
@@ -80,7 +80,7 @@ alpha_at_genus <- FALSE
 # --
 
 # - beta diversity -
-dist_methods <- c("jsd", "bray", "unifrac") # otions: see unlist(distanceMethodList)
+dist_methods <- c("jsd") # otions: see unlist(distanceMethodList)
 # --
 
 # - file/path inputs -
@@ -689,7 +689,7 @@ filterList[[1]]
 - NB: the red shaded area marks the filter area, i.e. ASVs in this area are filtered out because their prevalence is below the prevalence threshold (= `r prevalence` %) and their total counts is not above the taxa_sums_quantile (= `r taxa_sums_quantile` %)
 
 ```{r, fig.width = 10, fig.height = 8, warning = FALSE, message = FALSE, echo = FALSE}
-# pdf(file = "filter2_p.pdf", width = 8, height = 8)
+# pdf(file = "filter2_0prev.pdf", width = 8, height = 8)
 filterList[[2]]
 # dev.off()
 ```
@@ -859,7 +859,7 @@ if (length(levels(group_fac)) > 2){
 
 # == construct ordination plots ==
 
-pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "PCoA", group_var = group_var, shape = shape, coord_cor = FALSE) 
+pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, ordination_type = "PCoA", group_var = group_var, shape = shape, coord_cor = TRUE) 
 
 TrList_ra <- vector(mode = "list", length = 2*length(pcoas[["ordination_Tr_samples"]])) 
 counter <- 0
@@ -894,7 +894,7 @@ for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
 - **Distance boxplots**
 
 ```{r, fig.width = 14, fig.height = 10*length(dist_analysis_list[["DistanceBoxplots"]]), warning = FALSE, message = FALSE, echo = FALSE}
-# pdf(file = "beta_p.pdf", width = 10, height = 8)
+# pdf(file = "beta_p_0prev.pdf", width = 10, height = 8)
 do.call("grid.arrange", c(dist_analysis_list[["DistanceBoxplots"]], nrow = length(dist_analysis_list[["DistanceBoxplots"]])))
 # dev.off()
 
@@ -912,14 +912,15 @@ dist_analysis_list[["DistancePValues"]]
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 adonis_list
 
-# print(xtable(adonis_list[["jsd"]], align = "|c|c|c|c|c|c|", digits = 5), include.rownames = FALSE)
+# print(xtable(adonis_list[["jsd"]], align = "|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 ```
 
 - **Ordination Plots**
 
 ```{r, fig.width = 10, fig.height = 12, warning = FALSE, message = FALSE, echo = FALSE}
-# pdf(file = "beta_p.pdf", width = 10, height = 8)
-do.call("grid.arrange", c(TrList_ra, ncol = 2))
+#pdf(file = "pcoa_ra.pdf", width = 10, height = 8)
+#do.call("grid.arrange", c(TrList_ra, ncol = 2))
+TrList_ra[[1]]
 # dev.off()
 ```
 
@@ -1723,16 +1724,22 @@ for (i in 1:length(DES_table_list)){
         print(knitr::kable(DES_table_list[[i]], caption = names(DES_table_list)[i]))
 }
 
-# print(xtable(DES_table_list[[1]], align = "|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+# print(xtable(DES_table_list[[2]][, 1:5], align = "|c|c|c|c|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
 
 ```
 
 ```{r, fig.width = 14, fig.height = (5 + 0.41*sum(head_values)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps_DES, ncol = 1))
+
+# pdf(file = "heat_family_DES.pdf", width = 10, height = 8)
+# # kable(dist_analysis_list[["DistancePValues"]][[1]])
+# heat_maps_DES[[2]]
+# dev.off()
 ```
 
 ```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_DES, ncol = 1))
+
 ```
 
 
@@ -1941,15 +1948,15 @@ filterList[[1]]
 
 
 ```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
-#pdf(file = "filter_p.pdf", width = 7, height = 6)
+# pdf(file = "bar_phylum.pdf", width = 7, height = 6)
 Tr_bar
-#dev.off()
+# dev.off()
 ```
 
 ```{r, fig.width = 14, fig.height = 7, warning = FALSE, message = FALSE, echo = FALSE}
-#pdf(file = "filter_p.pdf", width = 7, height = 6)
+# pdf(file = "bar_phylum2.pdf", width = 7, height = 6)
 Tr_bar + coord_cartesian(ylim = c(0.9, 1))
-#dev.off()
+# dev.off()
 ```
 
 
@@ -1976,6 +1983,10 @@ knitr::kable(overview)
 
 ```{r, fig.width = 14, fig.height = (4 + 0.07*ntaxa(ps_filt_ra_extra)), warning = FALSE, message = FALSE, echo = FALSE}
 Tr
+
+# pdf(file = "heat_phylum.pdf", width = 8, height = 6)
+# Tr
+# dev.off()
 ```
 
 ## differential prevalence analysis with fisher.test
@@ -2129,6 +2140,11 @@ do.call("grid.arrange", c(heat_maps_DES, ncol = 1))
 
 ```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(head_values)/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots_DES, ncol = 1))
+
+# pdf(file = "violin_phylum_DES.pdf", width = 10, height = 8)
+# # kable(dist_analysis_list[["DistancePValues"]][[1]])
+# violin_plots_DES[[2]]
+# dev.off()
 ```
 
 
@@ -2320,6 +2336,11 @@ FirmicutesRatioPlots <- lapply(FirmicutesRatios, `[[`, 2)
 
 ```{r, fig.width = 14, fig.height = length(raw_TbTmatrixes_list)*5, warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(FirmicutesRatioPlots, ncol = 1))
+
+# pdf(file = "Firmicutes_Ratios.pdf", width = 10, height = 8)
+# # kable(dist_analysis_list[["DistancePValues"]][[1]])
+# FirmicutesRatioPlots[[2]]
+# dev.off()
 ```
 
 
