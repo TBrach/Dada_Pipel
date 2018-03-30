@@ -466,7 +466,7 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
         Tr <- ggplot(CountDistribution, aes(x = InNumberSamples, y = No_ASVs))
         Tr <- Tr + geom_point(col = "#E69F00", size = 3) +
                 xlab("prevalence") +
-                ylab("number of ASVs") +
+                ylab("number of taxa") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
@@ -483,7 +483,7 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
         Tr1 <- ggplot(CountDistribution, aes(x = InNumberSamples, y = CumPerCUnique))
         Tr1 <- Tr1 + geom_point(col = "#E69F00", size = 3) +
                 xlab("prevalence") +
-                ylab("cumulative percentage of ASVs") +
+                ylab("cumulative percentage of taxa") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
@@ -493,13 +493,13 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
                 geom_hline(yintercept = SVskeptAtPCValue, lty =  "dashed") +
                 geom_vline(xintercept = (prevalence/100)*dim(seqtab)[1], lty = 'dashed') +
                 ggtitle(paste("prevalence ", prevalence, " % = ", round((prevalence/100)*dim(seqtab)[1],1), "; ", CountDistribution$CumSumUnique[index], " of ", CountDistribution$CumSumUnique[1], 
-                              " ASVs (", round(100*CountDistribution$CumSumUnique[index]/CountDistribution$CumSumUnique[1], 1), " %) have higher prevalence", sep = ""))
+                              " taxa (", round(100*CountDistribution$CumSumUnique[index]/CountDistribution$CumSumUnique[1], 1), " %) have higher prevalence", sep = ""))
         
         
         Tr2 <- ggplot(CountDistribution, aes(x = InNumberSamples, y = TotalCounts))
         Tr2 <- Tr2 + geom_point(col = "#E69F00", size = 3) +
                 xlab("prevalence") +
-                ylab("total counts of ASVs with given prevalence") +
+                ylab("total counts of taxa with given prevalence") +
                 theme_bw() +
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.y = element_blank(),
@@ -507,7 +507,7 @@ plotSVdistributions <- function(seqtab, prevalence = 10) {
         
         Tr2 <- Tr2 + ggtitle(paste(CountDistribution$CumSumTotal[1] - CountDistribution$CumSumTotal[index], " of ",
                                    CountDistribution$CumSumTotal[1], " (", round(100*(CountDistribution$CumSumTotal[1] - CountDistribution$CumSumTotal[index])/CountDistribution$CumSumTotal[1], 2),
-                                    " %) counts are from ASVs present in less than ", round((prevalence/100)*dim(seqtab)[1],1), " samples.", sep = ""))
+                                    " %) counts are from taxa present in less than ", round((prevalence/100)*dim(seqtab)[1],1), " samples.", sep = ""))
         
         Tr3 <- ggplot(CountDistribution, aes(x = InNumberSamples, y = CumPerCTotal))
         Tr3 <- Tr3 + geom_point(col = "#E69F00", size = 3) +

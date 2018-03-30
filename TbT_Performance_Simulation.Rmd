@@ -1,0 +1,658 @@
+---
+title: "McMurdieLikeSimulation"
+author: "Thorsten Brach"
+date: "11/12/2017"
+output: html_document
+---
+
+# Packages
+
+```{r, message = FALSE, warning =FALSE, include=FALSE, cache=FALSE}
+library(phyloseq); packageVersion("phyloseq")
+library(DESeq2); packageVersion("DESeq2")
+library(knitr); packageVersion("knitr")
+library(ggplot2); packageVersion("ggplot2")
+library(dplyr); packageVersion("dplyr")
+library(tidyr); packageVersion("tidyr")
+library(lubridate); packageVersion("lubridate")
+library(gridExtra); packageVersion("gridExtra")
+library(viridis); packageVersion("viridis") # for gradient plots
+library(scales); packageVersion("scales") # for the oob = squish option in gradient plots
+library(ggthemes); packageVersion("ggthemes") # 
+
+```
+
+
+
+# Source Functions and load physeq object
+
+```{r, message = FALSE, warning =FALSE}
+datapath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/TbT_SimulationData"
+
+physeq <- readRDS(file.path(datapath, "Mouse_YOMA_physeq.rds"))
+
+# source(file.path(datapath, "170514_SimulationFunctions.R"))
+source(file.path(datapath, "TbT_Simulation_Functions.R"))
+
+# change the taxa names to something simpler
+taxa_names(physeq) <- paste0("Taxon_", 1:ntaxa(physeq))
+
+# savepath <- "/Users/jvb740/MarieCurie_Work/relativeAbundanceGame/RASimulation/Simulations"
+```
+
+- the **unfiltered** input physeq contains **`r ntaxa(physeq)` taxa and `r nsamples(physeq)` samples**
+- The **sparsity in percentage is `r round(100*(sum(otu_table(physeq) == 0)/(ntaxa(physeq)*nsamples(physeq))), 3)`**
+
+
+
+# Taxa filtering on the original physeq
+
+
+##  Setting the filtering parameters
+
+```{r, message = FALSE, warning =FALSE}
+sampletypes <- "Mouse-YOMA" # in most cases you will only have one sample type
+
+prevalence <- 20
+
+# an option to use a different prevalence filter for the simulated data
+prevalence_sim <- 10 # if NULL prevalence will be used
+
+# Minimum number of reads above which to consider a taxon "observed" in a sample, for prevalence calculation
+minobs <- 0L # changed to 0 so that 1 count is already present
+
+# MinTaxaSum: taxa stay in the physeq even when not fulfilling the prevalence criterion if their taxa_sum is abouve MinTaxaSum
+MinTaxaSum <- quantile(taxa_sums(physeq), probs = 0.97) # MinTaxaSum is the 90% quantile of the taxa sums, so
+# you would not kick out any taxon that is in the top 10% of taxa_sums
+# if (MinTaxaSum < 1000){MinTaxaSum <- 1000}
+```
+
+
+##  Filter the input physeq to become the actual simulation template
+
+- NB: the McMurdie code allowed for several sampletypes, therefore the list here
+
+```{r, message = FALSE, warning =FALSE}
+physeq <- filter_taxa(physeq, function(x){(sum(x > minobs) > (prevalence/100)*length(x)) || (sum(x) > MinTaxaSum)}, prune = TRUE)
+
+# equal to or check with: 
+# sum(apply(as(otu_table(physeq), "matrix"), 2, function(x){(sum(x > minobs) > (prevalence/100)*length(x)) || (sum(x) > MinTaxaSum)}))
+
+templatelist <- list(physeq)
+names(templatelist) <- sampletypes
+```
+
+- the final filtered input physeq contains **`r ntaxa(physeq)` taxa and `r nsamples(physeq)` samples**
+- The **sparsity in percentage is `r round(100*(sum(otu_table(physeq) == 0)/(ntaxa(physeq)*nsamples(physeq))), 3)`**
+
+
+
+# Simulating the data
+
+
+##  Setting the simulation parameters
+
+```{r, message = FALSE, warning =FALSE}
+seed <- sample(10^8, size = 1)
+set.seed(seed)
+
+# Vector of the replicate numbers for each combination of simulation parameters
+reps <- 1:2 #  i.e how many simulations will be generated
+
+# Define the number of true-positive taxa (will be the same in each simulation) 
+nTP <- 9 
+
+# Define the number of samples for each group (will be the same in each simulation)
+J1 <- 25
+J2 <- 25
+
+# Define the range from wich the foldeffect (effect size) will be sampled (will be the same in each simulation)
+foldeffect <- 3:6
+
+# The average number of reads per simulated sample:
+ns <- median(sample_sums(physeq)) # with ns = median(sample_sums(physeq)) the library sizes of the simulated samples will be sampled from sample_sums(physeq). 
+
+# The delimiter in the command parameter string
+comdelim = "_"
+
+# # The number of cores to use in this simulation
+# Ncores <- 30
+
+# - generate simparams from the given parameters -
+if(is.numeric(ns)){
+        # Define the simulation parameters combinations
+        simparams <- apply(expand.grid(ns, sampletypes, reps, foldeffect[1],
+                                      foldeffect[length(foldeffect)],J1, J2), 1, paste0, collapse=comdelim)
+} else {
+        stop("ns must be numeric.")
+}
+
+# Define the labels to go with each element of the simulation parameter after splitting on the delimiter
+simparamslabels <- c("nreads", "SampleType", "Replicate", "minEffectSize", "maxEffectSize", "nsamplesgr1", "nsamplesgr2")
+
+datestamp1 <- now()
+```
+
+
+## Run simulation to get the simulated count tables
+
+```{r, message = FALSE, warning =FALSE}
+ptm <- proc.time()
+simlist <- simulate_counts_withTPTaxa(templatelist = templatelist, simparams = simparams, simparamslabels = simparamslabels, nTP = nTP)
+proc.time() - ptm
+```
+
+
+# Overview of key parameters of the simulations compared to the template physeq. Sparsity discussion
+
+One check here is
+
+- I would expect that lower abundant taxa are more sparse
+    - lower abundant meaning:
+        - 1.) smaller taxa_sums (i.e. sum of counts over all samples)
+        - 2.) lower median/mean counts in the non-zero samples (NB: should maybe adjust for sample size here before)
+
+
+
+- **In general (I looked at several data sets by now), there is clearly a correlation between log(taxa_sums) and sparsity/prevalence. This is fully expected since higher prevalence will increase taxa_sums**
+- **However, there is very little correlation between the mean/median count in non-zero samples to prevalence/sparsity.**
+- I conclude (guess) that it shoud be fair to simulate sparsity independent on mean abundance in non zero samples
+    - Currently I try to make sparsity simply similar to what was observed in the template (and adjust the abundances in the urn to the number of original samples in the template and simulation)
+- **I suggest that when comparing two sample groups you should check independently different abundance in the non-zero samples and differences in sparsity (between the groups)**
+- **So I see two parameters**: 
+    - 1.) prevalence (a species can be more prevalent (more often present) in disease than in control) > Fisher exact test on prevalence
+    - 2.) abundance when present, this is so to say the condition-dependent per-gene value q in Anders and Huber 2010. A species can get more abundant when present in diseased people than in healthy controls
+
+
+
+```{r, message = FALSE, warning =FALSE}
+OverviewList <- overviewSimulation(template = templatelist[[1]], simlist = simlist, comdelim = comdelim, plot = TRUE)
+
+Overview <- OverviewList[[1]]
+knitr::kable(Overview)
+OverviewList[["Hist_Template_SampleSD_RA"]]
+OverviewList[["Hist_Sims_SampleSD_RA"]][[1]]
+OverviewList[["Template_MaxCounts"]]
+OverviewList[["Sims_MaxCounts"]][[1]]
+# OverviewList[["HM_Template"]]
+# OverviewList[["HM_Sims"]][[1]]
+OverviewList[["HM_RA_Template"]]
+OverviewList[["HM_RA_Sims"]][[1]]
+OverviewList[["HM_RA_Sims_TP"]][[1]]
+OverviewList[["HM_Sims_TP"]][[1]]
+```
+
+- The **sparsity problem**: the phyloseq:::rarefaction_subsample used by McMurdie to generate the simulated samples produces samples with much lower sparsity than is the case in real data (template). The problem is all the bigger the higher the sample sizes, with sufficient sample sizes the sparsity in simulated samples goes to 0%. The simulated samples are thus much more homogeneous than real samples.
+- Towards a **sparsity problem solution**: 
+    - I implemented **simulate_count_samples** together with **sparsity_subsample** in a way that each taxa has roughly the same sparsity (slightly lower since I use floor) than in the template. In short, instead of using one polynomial/urn, I generate a matrix in which each column is an urn, and along this matrix I set a lot of values to 0 according to the sparsity of the taxa in the template. 
+- **NB: sparsity is now similar to the template, but the generated samples have still usually lower variation in the counts, and also the taxa counts vary less between samples than in real data.**
+
+
+# Use prevalence criterion to filter the simulated data
+
+- It is possible that the simulation generates data in which some of the taxa are absent from all samples, so you should do another prevalence filtering here 
+    - NB: in (potential) difference to the filtering step of the template, this filtering is only based on prevalence.
+- **NB: This filtering can remove TP taxa!**
+- **NB: This filtering might reduce sparsity again**
+- **NB: there is also the risk that a taxa is absent only in one of the groups!**
+
+
+```{r, message = FALSE, warning =FALSE}
+if (is.null(prevalence_sim)) {
+        prevalence_sim <- prevalence
+}
+simlist0 <- lapply(simlist, FUN = function(ps){
+        filter_taxa(ps, function(x){(sum(x != minobs) > (prevalence_sim/100)*length(x))}, prune = TRUE)
+        })
+NoTaxaBefAfter <- data.frame(Before = sapply(simlist, ntaxa), After = sapply(simlist0, ntaxa))
+NoTaxaBefAfter
+```
+
+```{r, message = FALSE, warning =FALSE}
+OverviewList0 <- overviewSimulation(template = templatelist[[1]], simlist = simlist0, comdelim = comdelim, plot = TRUE)
+
+Overview0 <- OverviewList0[[1]]
+knitr::kable(Overview0)
+OverviewList0[["Hist_Template_SampleSD_RA"]]
+OverviewList0[["Hist_Sims_SampleSD_RA"]][[1]]
+OverviewList0[["Template_MaxCounts"]]
+OverviewList0[["Sims_MaxCounts"]][[1]]
+# OverviewList0[["HM_Template"]]
+# OverviewList0[["HM_Sims"]][[1]]
+OverviewList0[["HM_RA_Template"]]
+OverviewList0[["HM_RA_Sims"]][[1]]
+OverviewList0[["HM_RA_Sims_TP"]][[1]]
+OverviewList0[["HM_Sims_TP"]][[1]]
+```
+
+# Decide on whether to continue with simlist or simlist0
+
+```{r, message = FALSE, warning =FALSE}
+simlist <- simlist0
+```
+
+# Count Transformations of the simulated data
+
+## RelativeAbundance
+
+- NB: instead of going to relative abundances by dividing by sample_sums, you could multiply counts * max(sample_sums())/sample_sums(currentSample)
+
+```{r, message = FALSE, warning =FALSE}
+
+simlist_RA <- lapply(simlist, function(sim){
+        transform_sample_counts(sim, function(x){x/sum(x)})
+})
+```
+
+## DESeq2 Size Factor adjustment
+
+- to understand the DESeq2 size adjustment see next subsection (and estimateSizeFactorsForMatrix)
+- I implemented the DESeq2 size adjustment in adj_LS which is faster than converting into DESeq, therefore I use it
+
+```{r, message = FALSE, warning =FALSE}
+ptm <- proc.time()
+simlist_DES <- lapply(simlist, adj_LS)
+proc.time() - ptm
+
+# # # compare to the time when doing the same through DESeq2
+# deseq_transform <- function(physeq){
+#         if(taxa_are_rows(physeq)){stop("Taxa should not be rows in the simulations")}
+#         GM <- apply(otu_table(physeq), 2, gm_own, zeros.count = FALSE)
+#         sample_data(physeq)$postfix <- as.factor(sample_data(physeq)$postfix)
+#         DES = phyloseq_to_deseq2(physeq, ~ postfix)
+#         SIZE <- estimateSizeFactors(DES, type = "ratio", geoMeans = GM)
+#         OTU <- t(counts(SIZE, normalized = TRUE))
+#         phyloseq(otu_table(OTU, taxa_are_rows = FALSE),
+#                  tax_table(physeq),
+#                  sample_data(physeq))
+# 
+# }
+# 
+# ptm <- proc.time()
+# simlistDES2 <- lapply(simlist, deseq_transform)
+# proc.time() - ptm
+# 
+# Mat1 <- as(otu_table(simlistDES2[[1]]), "matrix")
+# Mat2 <- as(otu_table(simlist_DES[[1]]), "matrix")
+# identical(Mat1, Mat2) # = TRUE
+```
+
+### Understand DESeq2 Size factors (?estimateSizeFactorsForMatrix) 
+
+- The commented code below illustrates:
+    - estimateSizeFactors of DESEQ2 has now three type options: **ratio**, **iterate**, and **poscounts**
+        - when set to ratio, the function will use the ratio method described in Anders et al. (2010) equation (5) and the code can be found via body(estimateSizeFactorsForMatrix). When no geoMeans is given, the function will only consider taxa present in all samples to calculate the GM/reference sample. Since the data is sparse, this leaves very few or even no taxa. If no taxa, then you get an error: "every gene contains at least one zero". To deal with this, you can:
+            - give your own GM/reference sample via geoMeans. I recommend to calculate the GM with gm_own ignoring zeros (zeros.count = FALSE, so the GM of a taxon is based only on the non-zero samples.). **NB: When then calculating the size factor of a sample, i.e. when taking the median of the ratios to the reference sample, 0 values are ignored by DESEQ and also by adj_LS**
+            - use **type = "iterate"**. This DESEQ implementation allows also to deal with data in which most genes/taxa have 0 values in at least one sample. As you can see below, this method is slow, and it results in size factors that are highly correlated with the size factors from type = ratio and geoMeans = gm_own with zeros.count = FALSE. I therefore use the latter version.
+       - the newest type = "poscounts" is exactly the same as "ratio" with geoMeans = gm_own with zeros.count = TRUE!
+
+```{r, message = FALSE, warning =FALSE}
+# # -- 1.) estimateSizeFactors type = "ratio" without geoMeans uses only taxa with no 0 in any sample #
+# 
+# sim <- simlist[[1]]
+# CT <- as(otu_table(sim), "matrix")
+# TaxaSpars <- 100*(colSums(CT == 0)/nrow(CT))
+# sim <- prune_taxa(setdiff(taxa_names(sim), names(TaxaSpars[TaxaSpars == 0])), sim)
+# sample_data(sim)$postfix <- as.factor(sample_data(sim)$postfix)
+# DES = phyloseq_to_deseq2(sim, ~ postfix)
+# SIZE <- estimateSizeFactors(DES, type = "ratio") # Fejl!
+
+# # --- 2.) DESEQ with type = ratio and geoMeans= gm_own equals adj_LS code ----------------
+# # - this also shows that DESEQ ignores both 0 ratios and NAs when calculating the median of the ratios, i.e. the size factors
+
+ps <- simlist[[1]]
+sample_data(ps)$postfix <- as.factor(sample_data(ps)$postfix)
+GM_F <- apply(otu_table(ps), 2, gm_own, zeros.count = FALSE)
+GM_T <- apply(otu_table(ps), 2, gm_own, zeros.count = TRUE)
+DES = phyloseq_to_deseq2(ps, ~ postfix)
+
+SF_ratio_GM_F <- sizeFactors(estimateSizeFactors(DES, type = "ratio", geoMeans = GM_F)) 
+
+# adj_LS uses exactly the DESeq exp(log(x)-log(y)) implementation and thus results in exactly the DESeq values
+SF_adjLS <- adj_LS(ps, zeros.count = FALSE, percentile = 50, plots = TRUE)[["SFs"]] # plots has to be true to get the SFs option
+# here the key code from adj_LS
+SF_Self <- apply(as(otu_table(ps), "matrix"), 1, function(sample_cnts){exp(quantile((log(sample_cnts)-log(GM_F))[sample_cnts > 0], probs = .5, na.rm = T))})
+# the new addition in DESeq2 version 1.16 is to normalize the SFs one more time with the geometric mean
+SF_Self <- SF_Self/exp(mean(log(SF_Self)))
+sapply(list(SF_Self, SF_adjLS), FUN = identical, SF_ratio_GM_F) #TRUE TRUE
+
+# # --- 3.) DESEQ with type = ratio and geoMeans= GM_T equals type = "poscounts" ----------------
+
+SF_poscounts <- sizeFactors(estimateSizeFactors(DES, type = "poscounts")) 
+SF_ratio_GM_T <- sizeFactors(estimateSizeFactors(DES, type = "ratio", geoMeans = GM_T))
+SF_adjLS_T <- adj_LS(ps, zeros.count = TRUE, percentile = 50, plots = TRUE)[["SFs"]]
+
+sapply(list(SF_adjLS_T, SF_ratio_GM_T), FUN = identical, SF_poscounts) # TRUE TRUE
+
+
+# -- 3.) estimateSizeFactors with type = "iterate" is highly correlated with "ratio" + geoMeans = GM_F, but iterate takes much longer------#
+
+for (i in 1:length(simlist)){
+        ps <- simlist[[i]]
+        sample_data(ps)$postfix <- as.factor(sample_data(ps)$postfix)
+        DES = phyloseq_to_deseq2(ps, ~ postfix)
+        SIZE <- estimateSizeFactors(DES, type = "iterate")
+        SF_Iterate <- sizeFactors(SIZE)
+        GM <- apply(otu_table(ps), 2, gm_own, zeros.count = FALSE)
+        SIZE2 <- estimateSizeFactors(DES, type = "ratio", geoMeans = GM)
+        SF_Ratio <- sizeFactors(SIZE2)
+        SF_Own <- adj_LS(ps, zeros.count = FALSE, percentile = 50, plots = TRUE)[["SFs"]]
+        DF <- data.frame(SF_Ratio = SF_Ratio, SF_Own = SF_Own, SF_Iterate = SF_Iterate)
+        head(DF)
+        print(identical(SF_Ratio, SF_Own)) # TRUE
+        print(identical(SF_Iterate, SF_Ratio)) # FALSE
+        #Tr <- ggplot(DF, aes(SF_Ratio, SF_Iterate))
+        #Tr <- Tr + geom_point() + geom_smooth(method = "lm")
+        print(summary(lm(data = DF, formula = SF_Ratio ~ SF_Iterate))$r.squared)
+        # so super good correlated, don't think it makes sense to use the extra time on "iterate"
+}
+
+```
+
+- **another Summary** of size factor adjustments:
+    - The default DESeq ratio based adjustment method (estimateSizeFactors(type = "ratio")) calculates the GM (reference sample) only on Taxa that have no 0 count in any of the samples (uses rowMeans(log(counts)) and then considers only finite (one 0 makes it -Inf!) values for calculating the median = sizefactor. With the sparsity in microbiome data that would often end in almost no Taxa used for size factor calculation. 
+    - Therefore geoMeans should be given to estimateSizeFactors when using type = 'ratio'. I recommend gm_own to calculate the GM, with zeros.count = FALSE. 
+        - **That means the values of each taxon in the reference (GM) sample are only calculated based on the samples in which the taxon is present!!**
+    - The actual size factors are then calculated for each sample based on the ratio sample_counts/GM. The median of this vector is the size factor of the sample. 
+        - **NB: Only non-zero ratios are used for determining the median (so does DESEQ and so does adj_LS)**
+    - **My recommendation of ratio plus gm_own zeros.count = FALSE, is almost identical to the values you get from "iterate" but faster**
+    - **poscounts is = ratio plus gm_own zeros.count = TRUE, and seems to be recommended by phyloseq, but it only gives reasonable size factors when the size factors are normalized by their geometric_means again. I think only gm_own with zeros.count = FALSE should be used**
+
+
+# Identify differently abundant taxa
+
+NB: You have the following sample size adjusted versions
+
+- 1. the original simulated count data (so no library size adjustment at all)
+- 2. the relative Abundance data 
+- 3. the count data after DESEQ size adjustment
+
+I left the DESEq variance stabilization out because I read it is only for clustering applications
+
+## Wilcoxon Tests on the simulations including zeros
+
+- NB: When it comes to true positives and false positives, I should probably use mtApply below, which is based on **phyloseq::mt(test = "wilcoxon")** , which is a wrapper for phyloseq objects of multtest:::mt.minP. See explanations of this function in the next section below!
+- However, I use the faster wilcoxonTestApply here based on wilcox.test. It is much faster since it does not the permutations to calculate a better adjp as does mt.minP. I however added the normalised test statistic (see mtApply) for ordering the Taxa
+- NB: wilcoxTestApply and mtApply give you the same teststatistic and thus order, just the rawp and especially adjp are slightly different
+
+```{r, message = FALSE, warning =FALSE, results='hide'}
+# -- wilcoxon test on unadjusted simulations --
+wilcoxon_list_raw <- wilcoxTestApply(simlist, classlabel = "postfix")
+# ----
+
+# -- wilcoxon test on relative abundances --
+wilcoxon_list_RA <-  wilcoxTestApply(simlist_RA, classlabel = "postfix")
+# ----
+
+# -- wilcoxon test on DESeq size adjusted simulations --
+wilcoxon_list_DESeqSIZE <- wilcoxTestApply(simlist_DES, classlabel = "postfix")
+# ----
+
+# # -------- mtApply versions for better adjusted pvalues according to Susan Holms --------
+# # -- wilcoxon test on unadjusted simulations --
+# wilcoxon_list_raw <- mtApply(simlist, classlabel = "postfix",  test = "wilcoxon", method = "fdr")
+# # ----
+# 
+# # -- wilcoxon test on relative abundances --
+# wilcoxon_list_RA <-  mtApply(simlist_RA, classlabel = "postfix",  test = "wilcoxon", method = "fdr")
+# # ----
+# 
+# # -- wilcoxon test on DESeq size adjusted simulations --
+# wilcoxon_list_DESeqSIZE <- mtApply(simlist_DES, classlabel = "postfix",  test = "wilcoxon", method = "fdr")
+# # ----
+```
+
+### Explanations of the multtest:::mt.minP function, or phyloseq mt, or just Wilcoxon test
+
+- in summary of what is exemplified in the commented code below
+    - you could just as well have used wilcox.test, the only differences are that:
+        - mt.minP calculates permutation adjusted p-values for step-down multiple testing procedures described in Westfall & Young (1993). These p-values are higher than those from wilcox.test. Susan Holmes recommends this permutation procedure (https://github.com/joey711/phyloseq/issues/439). The procedure results in adjusted p.values, phyloseq::mt offers to add the simple fdr adjusted p values you get from using p.adjust on rawp
+        - The teststatistic in mt.minP for wilcoxon is a standardized rank sum Wilcoxon statistics and differs from wilcox.test. They perform the same test, it is just different equations for the test statistic, see equations in the code below, and see:
+            - https://support.bioconductor.org/p/1565/
+            - https://www.youtube.com/watch?v=BT1FKd1Qzjw
+    - so when you perform a t.test using mt(), you will see the test statistic is exactly the same as in t.test of R, but the p-values are again higher because of the used permutation procedure.
+            
+
+```{r, message = FALSE, warning =FALSE, results='hide'}
+# # ---- understand the used phyloseq::mt function (mt for multiple testing) ----
+# # -- when using t.test you get same test.statistic as in t.test but different p-values--
+# sim <- simlist[[1]]
+# MT <- mt(sim, classlabel = "postfix", test = "t", method = "fdr")
+# MT2 <- multtest:::mt.minP(t(CT), classlabel = sample_data(sim)$postfix)
+# identical(MT[,1:5], MT2) # TRUE!
+# # recapitulate the values using t.test
+# CT <- as(otu_table(sim), "matrix")
+# rawp <- apply(CT, 2, FUN = function(taxon_cts){
+#         t.test(formula = taxon_cts ~ sample_data(sim)$postfix, alternative = "two.sided", var.equal = FALSE)$p.value # ?mt.minP reveals that it is unequal variances
+# })
+# statistic <- apply(CT, 2, FUN = function(taxon_cts){
+#         t.test(formula = taxon_cts ~ sample_data(sim)$postfix, alternative = "two.sided", var.equal = FALSE)$statistic
+# })
+# MTSelf <- data.frame(statistic = statistic, rawp = round(rawp, 4), adjp = round(p.adjust(rawp, method = "fdr"),4))
+# MTSelf <- MTSelf[order(rawp),]
+# # if you compare MT with MTSelf, you will see that you get the same test statistics (just opposite signs), but you get different rawp (slightly bigger) and clearly smaller adj.p, but compare fdr in MT to adjp in MTSelf. The one in MT is simply p.adjust(rawp))
+# # ----
+# 
+# # -- for wilcoxon test, mt.minP uses a standardized test statistic --
+# MTW <- mt(sim, classlabel = "postfix", test = "wilcoxon")
+# MTW2 <- multtest:::mt.minP(t(CT), classlabel = sample_data(sim)$postfix, test = "wilcoxon")
+# statistic <- apply(CT, 2, FUN = function(taxon_cts){
+#         wilcox.test(formula = taxon_cts ~ sample_data(sim)$postfix, alternative = "two.sided", exact = F)$statistic
+# })
+# rawp <- apply(CT, 2, FUN = function(taxon_cts){
+#         wilcox.test(formula = taxon_cts ~ sample_data(sim)$postfix, alternative = "two.sided", exact = F)$p.value
+# })
+# MTWSelf <- data.frame(statistic = statistic, rawp = round(rawp, 4), adjp = round(p.adjust(rawp, method = "fdr"),4))
+# MTWSelf <- MTWSelf[order(rawp),]
+# # so I get different test statistics, the reason is that mt.minP calculates standardized rank sum Wilcoxon statistics and
+# # wilcox.test calculates the test statistic shown in this video: https://www.youtube.com/watch?v=BT1FKd1Qzjw
+# # The equation used by mt.minP is mentioned here: https://support.bioconductor.org/p/1565/:
+# # The function now computes the centered and scaled version of the Wilcoxon statistic:
+# # [sum ranks for sample 1 - n1*(n1+n2+1)/2]/sqrt(n1*n2*(n1+n2+1)/12)
+# 
+# # Illustration of the two ways to calculate the test statistic:
+# rank(CT[,24])
+# RankSum_Grp1 <- sum(rank(CT[,24])[1:25])
+# RankSum_Grp2 <- sum(rank(CT[,24])[26:50])
+# Corrector_wilcox.test <- 25*(25+1)/2
+# statistic_wilcox.test <- RankSum_Grp1-Corrector_wilcox.test # exactly as in MTWSelf
+# n1 = 25
+# n2 = 25
+# Corrector_mt.teststat <- n1*(n1+n2+1)/2
+# Denominator_mt.teststat <- sqrt(n1*n2*(n1+n2+1)/12)
+# statistic_mt.teststat <- (RankSum_Grp1-Corrector_mt.teststat)/Denominator_mt.teststat # exactly as in MTW just opposite sign
+```
+
+## Wilcoxon Tests on the simulations excluding zeros
+
+Since TbT excludes zeros, I thought I should do the same for the simple wilcoxon tests on counts and relative abundances.
+
+- NB: I use here simple wilcox.test and not phyloseq::mt (i.e. multtest::mt.minP), i.e. no p-value and ajdusted p value calculations based on permutations
+    - NB: I add their normalised test statistic though (see mtApply) for ordering the Taxa
+
+```{r, message = FALSE, warning =FALSE, results='hide'}
+# -- wilcoxon test on unadjusted simulations --
+wilcoxon_list_raw_NoZ <- wilcoxTestApply(simlist, classlabel = "postfix", excludeZeros = TRUE)
+# ----
+
+# -- wilcoxon test on relative abundances --
+wilcoxon_list_RA_NoZ <-  wilcoxTestApply(simlist_RA, classlabel = "postfix", excludeZeros = TRUE)
+# ----
+
+# -- wilcoxon test on DESeq size adjusted simulations --
+wilcoxon_list_DESeqSIZE_NoZ <- wilcoxTestApply(simlist_DES, classlabel = "postfix", excludeZeros = TRUE)
+# ----
+```
+
+## DESEq pipeline
+
+```{r, message = FALSE, warning =FALSE}
+
+DESeq2_list <- DESeq2Apply(simlist, classlabel = "postfix", type = "ratio")
+
+```
+
+## TbyT Ratio Pipeline
+
+- a summary of the method for one simulation (i.e. one count table)
+    - The method produces for each taxon (= host taxon) a TbTMatrix.
+        - the samples are columns in a TbTMatrix
+        - the values in a TbTMatrix are the counts of the host taxon divided by the counts of the other taxa. Note that these ratios are independent of compositionality.
+            - so each row of a TbTMatrix compares the abundance of the host taxon to another taxon in the different samples
+        - The ratio values in each row of a TbTMatrix are then normalized by the geometric mean and the log is taken. That way the values in a row sum up to 0
+            - NB: Only non-zero and finite ratios are considered for the geometric mean. 
+            - NB2: The non-finite values (i.e. when either the host taxon or the other taxon had been of count = 0) are set to 0 in the final TbTMatrix
+    - NB: A wilcoxon over the samples for each row will tell you if the ratio of the host taxon to the other taxon is different in the two groups of samples.
+
+```{r, message= FALSE, warning = FALSE}
+# ---- Calculate the geometric_mean normalised and "logged" TbTMatrixes ----
+# For each simulation you get a list with ntaxa TbTMatrixes
+
+# ptm <- proc.time()
+TbTMatrixes_list <- CalcTbTMatrixesNEW(simlist)
+# proc.time() - ptm
+
+# # NB: each TbT matrix should sum to 0, and also each row in each TbT matrix should sum to 0
+# # check overall matrixes, e.g.
+# # sapply(TbTMatrixes_list[[1]], sum, na.rm = TRUE)
+# max(sapply(TbTMatrixes_list, function(x){max(sapply(x, sum, na.rm = T))})) 
+# # Check each taxon individually
+# max(sapply(TbTMatrixes_list, function(x){max(sapply(x, rowSums, na.rm = T))}))
+
+# --------
+
+
+# ---- Evaluate the TbT Matrixes ----
+# ptm <- proc.time()
+TbT_result_list <- resultsTbT(TbTMatrixes_list, simlist, classlabel = "postfix")
+# proc.time() - ptm
+
+# --------
+
+# ---- Calculate pvalueMatrixes for each simulation and generate a tile plot ----
+# NB: p_valueMatrixesTbT
+# NB: Takes quite some time! roughly: 12 seconds per simulation with 138 x 138 taxa
+ptm <- proc.time()
+pvalueMatrixesplusTr <- pValueMatrixesTbTplusTile(TbTMatrixes_list, simlist, classlabel = "postfix")
+proc.time() - ptm
+
+
+# ---- Evaluate the TbT Matrixes using wilcox.test on colSums ----
+# ptm <- proc.time()
+TbT_result_list2 <- resultsTbTwilcoxTest(TbTMatrixes_list, simlist, classlabel = "postfix", colSums = T, excludeZeros = TRUE)
+# proc.time() - ptm   
+TbT_result_list3 <- resultsTbTwilcoxTest(TbTMatrixes_list, simlist, classlabel = "postfix", colSums = FALSE, excludeZeros = TRUE)
+                        
+```
+
+
+
+
+
+
+
+
+# Comparing method performances to detect TP (truly differently abundant) taxa in the simulated data
+
+To compare the differential abundance detection performances, **TP_Percentage** is used. Each method estimates a differential abundance criterion for each taxon, and then sorts the taxa in a list based on this criterion. Thus, in this DiffAb_List, the taxon considered to be most abundant between the groups is on top and so on.
+
+- **TP_Percentage** is then the percentage of true positive taxa among the `nTP` = `r nTP` first Taxa of DiffAb_List.
+
+Assuming that only the TP taxa are really differntially abundant between the groups, the perfect situation is that all TP top the DiffAb_List, resulting in a TP_Percentage of 100 \%.  If so, it would in principle be possible to find a threshold of the criterion used by the respective method to separate the TP from the other taxa. 
+
+```{r, message = FALSE, warning =FALSE}
+res_list <- list(RawCounts = nonorm_wilc_list,
+                 RelAb = relAb_wilc_list,
+                 DESRatioAdj = DeSeq2SIZE_wilc_list,
+                 DESeq2 = DeSEQ2_list,
+                 TbT = TbT_list)
+
+# generate a data frame where the observations are the different simulations, and the variables are the TPPercentage of the different methods
+
+ResultDF <- sapply(res_list, function(met_res_list) {
+        sapply(met_res_list, function(res){
+                nTPSim <- sum(grepl("-TP", res$id))
+                TP_PC <- 100*(sum(grepl("-TP", as.character(res$id)[1:nTPSim]))/nTPSim)
+        })
+})
+
+ResultDF <- data.frame(Simulation = rownames(ResultDF), ResultDF)
+
+```
+
+## Illustrate method performance
+
+
+```{r, message = FALSE, warning =FALSE}
+PlotDF <- tidyr::gather(ResultDF, key = "Method", value = "TPPercentage", -Simulation)
+
+# Reorder the factor levels so they appear in the plot as you want them
+PlotDF$Method <- as.factor(PlotDF$Method)
+for (i in 1:length(names(res_list))){
+        PlotDF$Method = relevel(PlotDF$Method, rev(names(res_list))[i])
+}
+
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+               "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+# Build a title with key parameters of the simulations
+Title <- paste("NoTmin:", min(Overview0$NoTaxa), "NoTmax:", max(Overview0$NoTaxa[2:nrow(Overview0)]), "nTP:", nTP, "FEmin:", foldeffect[1],
+               "FEmax:", foldeffect[length(foldeffect)],
+               "J1:", J1, "J2:", J2, "MedSS:", round(median(Overview0$MedianSampleSum[2:nrow(Overview0)]),1), 
+               "MedSpars:", round(median(Overview0$Sparsity[2:nrow(Overview0)]),1))
+
+Tr <- ggplot(PlotDF, aes(x = Method, y = TPPercentage))
+set.seed(124) ## to get the same jitter!
+Tr + geom_boxplot(outlier.color = NA, fill = cbPalette[4], alpha = 1/2) +
+        geom_jitter(position = position_jitter(width = .2, height = 0), pch = 19) +
+        xlab("") + 
+        ylab("TP_Percentage") +
+        ggtitle(Title) +
+        theme_bw(12) +
+        theme(legend.position = "none",
+              panel.grid.minor=element_blank(),
+              panel.grid.major.x = element_blank(),
+              axis.text.x = element_text(size = 10, angle = 90, hjust = 1,
+                                         vjust = .5),
+              plot.title = element_text(size = 8))
+
+```
+
+
+## Save the simulation data for later pooling 
+
+Since it is likely that you will do a lot of simulations over time, you should save the data in a way that you can pool it later.
+
+```{r, saving}
+Input <- list(prevalence = prevalence,
+              prevalence_sim = prevalence_sim,
+              minobs = minobs,
+              MinCount = MinCount,
+              seed = seed, 
+              reps = reps,
+              nTP = nTP,
+              J1 = J1,
+              J2 = J2,
+              foldeffect = foldeffect,
+              ns = ns,
+              comdelim = comdelim,
+              sparsitycorrector = sparsitycorrector,
+              sparsityguarantee = sparsityguarantee,
+              simparams = simparams,
+              simparamslabels = simparamslabels,
+              date = datestamp1)
+
+ParamList <- list(Input = Input, Session = sessionInfo(),
+                  ResultDF = ResultDF,
+                  Overview = OverviewList0,
+                  Tr = Tr)
+
+filename <- paste(today(), "nTP", nTP, "FEmin", foldeffect[1],
+                  "FEmax", foldeffect[length(foldeffect)], "J1", J1,
+                  "J2", J2, "Seed", seed, "SpGu", sparsityguarantee, "Reps", max(reps), sep = "_")
+filename <- paste(filename, ".RDa", sep = "")
+save(ParamList, file = file.path(savepath, filename))
+
+
+```
+

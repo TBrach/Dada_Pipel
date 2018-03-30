@@ -721,13 +721,47 @@ calculate_alphadiversity <- function(physeq, measures = c("Observed", "Shannon")
                         DF_alpha[, ncol_df_alpha + i] <- residuals(fit)
                         colnames(DF_alpha)[ncol_df_alpha + i] <- paste(measures[i], "resids", "FilteredReads", sep = "_")
                 }
+                
+                names(fitlist_FilteredReads) <- measures
         }
         
-        names(fitlist_FilteredReads) <- measures
         
         DF_alpha <- data.frame(Sample = rownames(DF_alpha), DF_alpha, sample_data(physeq))
         
         outlist <- list(DF_alpha = DF_alpha, fitlist = fitlist, fitlist_FilteredReads = fitlist_FilteredReads)
+}
+
+
+#######################################
+### calculate_alphadiversityShort
+#######################################
+# NB: I use the estimate_richness function here (that is also used in plot_richness from phyloseq).
+# You could easily calculate Shannon, Chao1, Observed self, see alphaDiversityMeasures.Rmd
+# estimate_richness itself uses functions from the vegan package
+
+calculate_alphadiversityShort <- function(physeq, measures = c("Observed", "Shannon")) {
+        DF_alpha <- suppressWarnings(phyloseq::estimate_richness(physeq, measures = measures))
+        
+        DF_alpha$Total <- sample_sums(physeq)
+        
+        ncol_df_alpha <- ncol(DF_alpha)
+        # because linear fits of alpha diversity measures to total counts are often highly significant, I add the residuals of these
+        # linear fits. 
+        
+        fitlist <- list()
+        for (i in 1:length(measures)){
+                fit <- lm(DF_alpha[,measures[i]] ~ DF_alpha[,"Total"])
+                fitlist[[i]] <- fit
+                DF_alpha[, ncol_df_alpha + i] <- residuals(fit)
+                colnames(DF_alpha)[ncol_df_alpha + i] <- paste(measures[i], "resids", sep = "_")
+        }
+        
+        names(fitlist) <- measures
+        
+        
+        DF_alpha <- data.frame(Sample = rownames(DF_alpha), DF_alpha, sample_data(physeq))
+        
+        outlist <- list(DF_alpha = DF_alpha, fitlist = fitlist)
 }
 
 
@@ -881,21 +915,27 @@ alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "
         
         pairwise.tt_shannon_resids <- pairwise.t.test(x = DF_alpha$Shannon_resids, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
         
-        if(var(DF_alpha$filtered_reads) > 0) {
+        if(!is.null(DF_alpha$filtered_reads) && var(DF_alpha$filtered_reads) > 0) {
                 pairwise.tt_filtered_reads <- pairwise.t.test(x = DF_alpha$filtered_reads, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+                pairwise.tt_rich_resids_filt <- pairwise.t.test(x = DF_alpha$Richness_resids_FilteredReads, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+                pairwise.tt_shannon_resids_filt <- pairwise.t.test(x = DF_alpha$Shannon_resids_FilteredReads, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+                fitter_rich_filteredreads <- lm(DF_alpha[["Richness"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
+                fitter_shannon_filteredreads <- lm(DF_alpha[["Shannon"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
+                TrList_lm_filteredReads <- plot_alphaDivVsfilteredReads_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var, shape = shape)
         } else {
                 pairwise.tt_filtered_reads <- NA
+                pairwise.tt_rich_resids_filt <- NA
+                pairwise.tt_shannon_resids_filt <- NA
+                fitter_rich_filteredreads <- NA
+                fitter_shannon_filteredreads <- NA
+                TrList_lm_filteredReads <- NA
         }
         
-        pairwise.tt_rich_resids_filt <- pairwise.t.test(x = DF_alpha$Richness_resids_FilteredReads, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-        
-        pairwise.tt_shannon_resids_filt <- pairwise.t.test(x = DF_alpha$Shannon_resids_FilteredReads, g = DF_alpha[[group_var]], alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
         
         # add the linear models correcting for total or filtered amplicons
         fitter_rich_totalcounts <- lm(DF_alpha[["Richness"]] ~ DF_alpha[["Total"]] + DF_alpha[[group_var]])
         fitter_shannon_totalcounts <- lm(DF_alpha[["Shannon"]] ~ DF_alpha[["Total"]] + DF_alpha[[group_var]])
-        fitter_rich_filteredreads <- lm(DF_alpha[["Richness"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
-        fitter_shannon_filteredreads <- lm(DF_alpha[["Shannon"]] ~ DF_alpha[["filtered_reads"]] + DF_alpha[[group_var]])
+        
         fitter.list <- list(fitter_rich_totalcounts = fitter_rich_totalcounts, fitter_shannon_totalcounts = fitter_shannon_totalcounts,
                             fitter_shannon_filteredreads = fitter_shannon_filteredreads, 
                             fitter_shannon_filteredreads = fitter_shannon_filteredreads)
@@ -905,7 +945,7 @@ alpha_diversity_wrapper <- function(physeq, alpha_div_measures = c("Observed", "
         
         TrList_lm <- plot_alphaDivVstotalCounts_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var, shape = shape)
         
-        TrList_lm_filteredReads <- plot_alphaDivVsfilteredReads_fromList(DF_List = DF_alpha_list, measures = alpha_div_measures2, color = group_var, shape = shape)
+       
         
         out <- list(DF_alpha_list = DF_alpha_list, TrListBP = TrListBP, TrList_lm = TrList_lm, TrList_lm_filteredReads = TrList_lm_filteredReads, pairwise.tt_rich = pairwise.tt_rich,
                     fitter_list = fitter.list, pairwise.tt_shannon = pairwise.tt_shannon, pairwise.tt_totalcounts = pairwise.tt_totalcounts, pairwise.tt_rich_resids = pairwise.tt_rich_resids,

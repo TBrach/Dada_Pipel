@@ -1,0 +1,147 @@
+---
+title: "McMurdieLikeSimulation"
+author: "Thorsten Brach"
+date: "11/12/2017"
+output: html_document
+---
+
+# Packages
+
+```{r, message = FALSE, warning =FALSE, include=FALSE, cache=FALSE}
+library(phyloseq); packageVersion("phyloseq")
+library(DESeq2); packageVersion("DESeq2")
+library(knitr); packageVersion("knitr")
+library(ggplot2); packageVersion("ggplot2")
+library(dplyr); packageVersion("dplyr")
+library(tidyr); packageVersion("tidyr")
+library(lubridate); packageVersion("lubridate")
+library(gridExtra); packageVersion("gridExtra")
+library(viridis); packageVersion("viridis") # for gradient plots
+library(scales); packageVersion("scales") # for the oob = squish option in gradient plots
+library(ggthemes); packageVersion("ggthemes") # 
+
+```
+
+
+
+# Source Functions and load physeq object
+
+```{r, message = FALSE, warning =FALSE}
+datapath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/TbT_SimulationData"
+
+physeq <- readRDS(file.path(datapath, "Mouse_YOMA_physeq.rds"))
+
+# source(file.path(datapath, "170514_SimulationFunctions.R"))
+source(file.path(datapath, "TbT_Simulation_Functions.R"))
+
+# change the taxa names to something simpler
+taxa_names(physeq) <- paste0("Taxon_", 1:ntaxa(physeq))
+
+# savepath <- "/Users/jvb740/MarieCurie_Work/relativeAbundanceGame/RASimulation/Simulations"
+```
+
+- the **unfiltered** input physeq contains **`r ntaxa(physeq)` taxa and `r nsamples(physeq)` samples**
+- The **sparsity in percentage is `r round(100*(sum(otu_table(physeq) == 0)/(ntaxa(physeq)*nsamples(physeq))), 3)`**
+
+
+
+# Taxa filtering on the original physeq
+
+
+##  Setting the filtering parameters
+
+```{r, message = FALSE, warning =FALSE}
+sampletypes <- "Mouse-YOMA" # in most cases you will only have one sample type
+
+prevalence <- 20
+
+# an option to use a different prevalence filter for the simulated data
+prevalence_sim <- 10 # if NULL prevalence will be used
+
+# Minimum number of reads above which to consider a taxon "observed" in a sample, for prevalence calculation
+minobs <- 0L # changed to 0 so that 1 count is already present
+
+# MinTaxaSum: taxa stay in the physeq even when not fulfilling the prevalence criterion if their taxa_sum is abouve MinTaxaSum
+MinTaxaSum <- quantile(taxa_sums(physeq), probs = 0.97) # MinTaxaSum is the 90% quantile of the taxa sums, so
+# you would not kick out any taxon that is in the top 10% of taxa_sums
+# if (MinTaxaSum < 1000){MinTaxaSum <- 1000}
+```
+
+
+##  Filter the input physeq to become the actual simulation template
+
+- NB: the McMurdie code allowed for several sampletypes, therefore the list here
+
+```{r, message = FALSE, warning =FALSE}
+physeq <- filter_taxa(physeq, function(x){(sum(x > minobs) > (prevalence/100)*length(x)) || (sum(x) > MinTaxaSum)}, prune = TRUE)
+
+# equal to or check with: 
+# sum(apply(as(otu_table(physeq), "matrix"), 2, function(x){(sum(x > minobs) > (prevalence/100)*length(x)) || (sum(x) > MinTaxaSum)}))
+
+templatelist <- list(physeq)
+names(templatelist) <- sampletypes
+```
+
+- the final filtered input physeq contains **`r ntaxa(physeq)` taxa and `r nsamples(physeq)` samples**
+- The **sparsity in percentage is `r round(100*(sum(otu_table(physeq) == 0)/(ntaxa(physeq)*nsamples(physeq))), 3)`**
+
+
+
+# Simulating the data
+
+
+##  Setting the simulation parameters
+
+```{r, message = FALSE, warning =FALSE}
+seed <- sample(10^8, size = 1)
+set.seed(seed)
+
+# Vector of the replicate numbers for each combination of simulation parameters
+reps <- 1:2 #  i.e how many simulations will be generated
+
+# Define the number of true-positive taxa (will be the same in each simulation) 
+nTP <- 9 
+
+# Define the number of samples for each group (will be the same in each simulation)
+J1 <- 25
+J2 <- 25
+
+# Define the range from wich the foldeffect (effect size) will be sampled (will be the same in each simulation)
+foldeffect <- 3:6
+
+# The average number of reads per simulated sample:
+ns <- median(sample_sums(physeq)) # with ns = median(sample_sums(physeq)) the library sizes of the simulated samples will be sampled from sample_sums(physeq). 
+
+# The delimiter in the command parameter string
+comdelim = "_"
+
+# # The number of cores to use in this simulation
+# Ncores <- 30
+
+# - generate simparams from the given parameters -
+if(is.numeric(ns)){
+        # Define the simulation parameters combinations
+        simparams <- apply(expand.grid(ns, sampletypes, reps, foldeffect[1],
+                                      foldeffect[length(foldeffect)],J1, J2), 1, paste0, collapse=comdelim)
+} else {
+        stop("ns must be numeric.")
+}
+
+# Define the labels to go with each element of the simulation parameter after splitting on the delimiter
+simparamslabels <- c("nreads", "SampleType", "Replicate", "minEffectSize", "maxEffectSize", "nsamplesgr1", "nsamplesgr2")
+
+datestamp1 <- now()
+```
+
+
+## Run simulation to get the simulated count tables
+
+```{r, message = FALSE, warning =FALSE}
+ptm <- proc.time()
+simlist <- simulate_counts_withTPTaxa(templatelist = templatelist, simparams = simparams, simparamslabels = simparamslabels, nTP = nTP)
+proc.time() - ptm
+```
+
+
+
+
