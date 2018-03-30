@@ -77,17 +77,17 @@ boxplots_alphdiv <- function(DF_alpha, measures, group, shape, color_levels, tes
         # in case you have more than two levels in group_var_levels
         fac_levels_num <- setNames(seq_along(group_var_levels), group_var_levels) 
         i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
-                sapply(seq_along(ivec), function(x){
-                        i <- ivec[x]
+                sapply(seq_along(jvec), function(x){
+                        i <- jvec[x]
                 })
         })
         j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
                 sapply(seq_along(ivec), function(x){
-                        j <- jvec[x]
+                        j <- ivec[x]
                 })
         })
-        i_s <- i_s[upper.tri(i_s)]
-        j_s <- j_s[upper.tri(j_s)]
+        i_s <- i_s[lower.tri(i_s)]
+        j_s <- j_s[lower.tri(j_s)]
         
         comparisonList <- list()
         for (k in seq_along(i_s)){
