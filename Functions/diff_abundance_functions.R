@@ -1,3 +1,65 @@
+pal <- function(col, border = "light gray", ...){
+        n <- length(col)
+        plot(0, 0, type="n", xlim = c(0, 1), ylim = c(0, 1),
+             axes = FALSE, xlab = "", ylab = "", ...)
+        rect(0:(n-1)/n, 0, 1:n/n, 1, col = col, border = border)
+}
+
+
+# tol1qualitative=c("#4477AA")
+# tol2qualitative=c("#4477AA", "#CC6677")
+# tol3qualitative=c("#4477AA", "#DDCC77", "#CC6677")
+# tol4qualitative=c("#4477AA", "#117733", "#DDCC77", "#CC6677")
+# tol5qualitative=c("#332288", "#88CCEE", "#117733", "#DDCC77", "#CC6677")
+# tol6qualitative=c("#332288", "#88CCEE", "#117733", "#DDCC77", "#CC6677","#AA4499")
+# tol7qualitative=c("#332288", "#88CCEE", "#44AA99", "#117733", "#DDCC77", "#CC6677","#AA4499")
+# tol8qualitative=c("#332288", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", "#CC6677","#AA4499")
+# tol9qualitative=c("#332288", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", "#CC6677", "#882255", "#AA4499")
+# tol10qualitative=c("#332288", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", "#661100", "#CC6677", "#882255", "#AA4499")
+# tol11qualitative=c("#332288", "#6699CC", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", "#661100", "#CC6677", "#882255", "#AA4499")
+# tol12qualitative=c("#332288", "#6699CC", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", "#661100", "#CC6677", "#AA4466", "#882255", "#AA4499")
+# tol14rainbow=c("#882E72", "#B178A6", "#D6C1DE", "#1965B0", "#5289C7", "#7BAFDE", "#4EB265", "#90C987", "#CAE0AB", "#F7EE55", "#F6C141", "#F1932D", "#E8601C", "#DC050C")
+tol15rainbow=c("#114477", "#4477AA", "#77AADD", "#117755", "#44AA88", "#99CCBB", "#777711", "#AAAA44", "#DDDD77", "#771111", "#AA4444", "#DD7777", "#771144", "#AA4477", "#DD77AA")
+#tol18rainbow=c("#771155", "#AA4488", "#CC99BB", "#114477", "#4477AA", "#77AADD", "#117777", "#44AAAA", "#77CCCC", "#777711", "#AAAA44", "#DDDD77", "#774411", "#AA7744", "#DDAA77", "#771122", "#AA4455", "#DD7788")
+# ...and finally, the Paul Tol 21-color salute
+#tol21rainbow= c("#771155", "#AA4488", "#CC99BB", "#114477", "#4477AA", "#77AADD", "#117777", "#44AAAA", "#77CCCC", "#117744", "#44AA77", "#88CCAA", "#777711", "#AAAA44", "#DDDD77", "#774411", "#AA7744", "#DDAA77", "#771122", "#AA4455", "#DD7788")
+
+# make your own colorscheme to well distinguish 15 quantitiative colors
+QuantColors15 <- tol15rainbow[c(1, 12, 4, 7, 13, 2, 11, 5, 8, 14, 3, 10, 6, 9, 15)]
+
+# pal(QuantColors15)
+
+#######################################
+### get_unique_facLevel_combinations
+#######################################
+# often needed to set the comparisons attribute in stat_compare_means from ggplot, it excludes comparison with each other and also removes 2 to 3 vs 3 to 2
+
+get_unique_facLevel_combinations <- function(fac_levels){
+        
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(jvec), function(x){
+                        i <- jvec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- ivec[x]
+                })
+        })
+        i_s <- i_s[lower.tri(i_s)]
+        j_s <- j_s[lower.tri(j_s)]
+        
+        comparisonList <- list()
+        for (k in seq_along(i_s)){
+                comparisonList[[k]] <- c(fac_levels[i_s[k]], fac_levels[j_s[k]])
+        }
+        
+        comparisonList
+        
+}
+
+
 #######################################
 ### get_overview_of_physeq##
 #################
@@ -884,7 +946,8 @@ wilcoxTestApply_physeq <- function(physeq, group_var, excludeZeros = FALSE, p.ad
 prepare_diff_abundance_results_for_plotting <- function(res_list, physeq, taxonomic_level, TbT = "no") {
         
         if(TbT == "yes"){
-                head_values <- 10
+                head_values <- rep(10, times = length(res_list))
+                names(head_values) <- names(res_list)
         } else {
                 suppressWarnings(head_values <- sapply(res_list, function(df){
                         max(which(df[, "p_val_adj"] < 0.05))
@@ -1220,7 +1283,7 @@ calculate_raw_TbTmatrixes = function(physeq, group_var){
 
 
 ####################################
-## create_taxa_ratio_violin_plots: 
+## plot_taxa_ratios_levelPairs 
 ###################################
 ## Input: 
 # - TbTmatrixes_list: The list with the lists of TbTmatrixes for each level combi in group factor
@@ -1237,12 +1300,12 @@ calculate_raw_TbTmatrixes = function(physeq, group_var){
 # - p_adjust_method
 
 ## Output: 
-# - list of pVals data frame (the pValues from t.test or wilcox.test after p.adjust) plus Violin plot,
-# so for each level combi in group_var a list of length 2
+# - list of pVals data frame (the pValues from t.test or wilcox.test after p.adjust) plus Violin plot plus Boxplot,
+# so for each level combi in group_var a list of length 2.
 
 
-create_taxa_ratio_violin_plots <- function(TbTmatrixes_list, physeq, group_var, tax_names = NULL,
-                                           taxa_nom = "Firmicutes", taxa_den = NULL, test = "t.test", p_adjust_method = "BH",
+plot_taxa_ratios_levelPairs <- function(TbTmatrixes_list, physeq, group_var, tax_names = NULL,
+                                           taxa_nom = "Firmicutes", taxa_den = NULL, color_levels, test = "t.test", p_adjust_method = "fdr",
                                            symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))) {
         
         if(!identical(length(TbTmatrixes_list[[1]]), ntaxa(physeq))){stop("TbTmatrixes can not fit to physeq")}
@@ -1251,7 +1314,7 @@ create_taxa_ratio_violin_plots <- function(TbTmatrixes_list, physeq, group_var, 
         
         fac_levels <- levels(group_fac)
         
-        # - get the level combis, NB: dds contains result infos on all combinations! -
+        # - get the level combis -
         fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
         i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
                 sapply(seq_along(jvec), function(x){
@@ -1270,6 +1333,7 @@ create_taxa_ratio_violin_plots <- function(TbTmatrixes_list, physeq, group_var, 
         result_list <- vector("list", length = length(i_s))
         
         LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
+        # order so the samples of a group are shown beside of each other (not really necessary for a violin plot)
         LookUpDF <- LookUpDF[order(match(LookUpDF$Group, levels(LookUpDF$Group))), ]
         
         
@@ -1286,9 +1350,10 @@ create_taxa_ratio_violin_plots <- function(TbTmatrixes_list, physeq, group_var, 
                         if(!identical(length(TbTmatrixes), length(tax_names))){stop("tax_names do not fit in length to TbTmatrixes")}
                 }
                 
-                names(TbTmatrixes) <- make.unique(tax_names)
+                # names(TbTmatrixes) <- make.unique(tax_names)
+                names(TbTmatrixes) <- tax_names #tax_names should be unique
                 
-                TbTmatrix <- TbTmatrixes[[taxa_nom]] # the only relevant matrix for this plot
+                TbTmatrix <- TbTmatrixes[[taxa_nom]] # the only relevant matrix for this plot, it is where tax_nom counts have been divided by the counts of all other taxa
                 
                 if (is.null(TbTmatrix)) {stop("taxa_nom not found")}
                 
@@ -1296,16 +1361,27 @@ create_taxa_ratio_violin_plots <- function(TbTmatrixes_list, physeq, group_var, 
                 
                 TbT_DF <- as.data.frame(TbTmatrix)
                 TbT_DF$Taxon <- rownames(TbT_DF)
+                # - use taxa_den (denominator) to restrict the taxa to which taxa_nom is compared to -
                 if (is.null(taxa_den)) {taxa_den <- tax_names}
                 TbT_DF <- TbT_DF[TbT_DF$Taxon %in% taxa_den, ]
+                # --
+                
+                # - change to long DF -
                 TbT_DF_l <- gather(TbT_DF, key = Sample, value = Ratio, -Taxon)
+                # --
+                # - add the group_var level information using the original level order in group_var -
                 TbT_DF_l$Group <- as.character(LookUpDF$Group[match(TbT_DF_l$Sample, LookUpDF$Sample)])
-                group_fac_current <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)])
+                group_fac_current <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)]) # keeps the current levels in original order
                 TbT_DF_l$Group <- factor(TbT_DF_l$Group, levels = levels(group_fac_current), ordered = T)
+                # --
+                
+                # - change all ratios where either nominator taxon or denominator taxon had count = 0 to NA -
+                # remember: 0/0 = NaN (not finite), 0/x = 0, x/0 = Inf
                 TbT_DF_l$Ratio[!is.finite(TbT_DF_l$Ratio) | TbT_DF_l$Ratio == 0] <- NA
+                # --
                 
-                
-                # - find taxa that would throw an error in statistical test and create DF for statistical test that excludes those -
+                # - find taxa that would throw an error in statistical test and remove those taxa from DF -
+                # first find the taxa that would throw an error in t.test or wilcox.test
                 var_plus_length_check <- group_by(TbT_DF_l, Taxon, Group) %>% summarise(Variance = var(Ratio, na.rm = T), NotNA = sum(!is.na(Ratio)))
                 if (test == "t.test"){
                         var_plus_length_check <- filter(var_plus_length_check, !(Variance > 0) | NotNA < 2)
@@ -1313,20 +1389,34 @@ create_taxa_ratio_violin_plots <- function(TbTmatrixes_list, physeq, group_var, 
                         var_plus_length_check <- filter(var_plus_length_check, NotNA < 1)
                 }
                 
-                if (nrow(var_plus_length_check) != 0) {
-                        TbT_DF_l_test <- filter(TbT_DF_l, !(Taxon %in% unique(var_plus_length_check$Taxon)))
-                } else {
-                        TbT_DF_l_test <- TbT_DF_l
+                if (nrow(var_plus_length_check) != 0) { # should always remove at least the case where taxa_denominator = taxa_nom, since those ratios are all 1, hence no variance
+                        TbT_DF_l <- filter(TbT_DF_l, !(Taxon %in% unique(var_plus_length_check$Taxon)))
                 }
+                # --
                 
-                pVals <- ggpubr::compare_means(formula = Ratio ~ Group, data = TbT_DF_l_test, group.by = "Taxon", method = test, p.adjust.method = p_adjust_method, symnum.args = symnum.args)
+                # - use ggpubr::compare_menas to calculate all pValues of the Ratios for the different taxa_den between current group_levels -
+                pVals <- ggpubr::compare_means(formula = Ratio ~ Group, data = TbT_DF_l, group.by = "Taxon", method = test, p.adjust.method = p_adjust_method, symnum.args = symnum.args)
                 
                 pVals <- dplyr::arrange(pVals, p)
                 
-                TbT_DF_l_test$Taxon <- factor(TbT_DF_l_test$Taxon, levels = pVals$Taxon, ordered = TRUE)
-                # so only plot those taxa for which you actually could do the significance test
+                # NB: the pVals change when you log the ratios (scale_y_log10())
+                TbT_DF_l$RatioLog10 <- log10(TbT_DF_l$Ratio)
+                pValsLog <- ggpubr::compare_means(formula = RatioLog10 ~ Group, data = TbT_DF_l, group.by = "Taxon", method = test, p.adjust.method = p_adjust_method, symnum.args = symnum.args)
+                pValsLog <- dplyr::arrange(pValsLog, p)
+                # --
                 
-                Tr <- ggplot(TbT_DF_l_test, aes(x = Group, y = Ratio, col = Group))
+                # NB: I plot now for log and non log independently, even though ggpubr is so smart to change the p-values when you just use
+                # Tr + scale_y_log10(). I plot independently because log might change the order!
+                TbT_DF_l_log <- TbT_DF_l
+                
+                # - order taxa based on pVals result -
+                TbT_DF_l$Taxon <- factor(TbT_DF_l$Taxon, levels = pVals$Taxon, ordered = TRUE)
+                TbT_DF_l_log$Taxon <- factor(TbT_DF_l_log$Taxon, levels = pValsLog$Taxon, ordered = TRUE)
+                # --
+                
+                
+                # - plot: NB: also for non removed taxa some samples might have NA ratios that will be removed -
+                Tr <- ggplot(TbT_DF_l, aes(x = Group, y = Ratio, col = Group))
                 Tr <- Tr +
                         geom_violin() +
                         geom_point(size = 1, alpha = 0.6, position = position_jitterdodge(dodge.width = 1)) +
@@ -1339,9 +1429,62 @@ create_taxa_ratio_violin_plots <- function(TbTmatrixes_list, physeq, group_var, 
                         theme(legend.position = "none")
                 
                 
-                Tr <- Tr + ggpubr::stat_compare_means(label = "p.format", method = "t.test", label.x = 1.5)
+                Tr <- Tr + ggpubr::stat_compare_means(label = "p.signif", method = test, label.x = 1.5)
                 
-                result_list[[k]] <- list(pVals, Tr)
+                
+                Tr1 <- ggplot(TbT_DF_l, aes(x = Group, y = Ratio, col = Group))
+                Tr1 <- Tr1 +
+                        geom_boxplot(outlier.color = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge(dodge.width = 1)) +
+                        # scale_color_manual(values = c(color_lookup$color[i], color_lookup$color[j])) +
+                        scale_color_manual(values = color_levels) +
+                        facet_wrap(~ Taxon, scales = "free_y") +
+                        xlab("") +
+                        ylab(paste("abundance ratio of", taxa_nom, "to stated taxon")) +
+                        theme_bw() +
+                        theme(legend.position = "none")
+                
+                
+                Tr1 <- Tr1 + ggpubr::stat_compare_means(label = "p.signif", method = test, label.x = 1.5) # p.format
+                
+                
+                Tr2 <- ggplot(TbT_DF_l_log, aes(x = Group, y = Ratio, col = Group))
+                Tr2 <- Tr2 +
+                        geom_violin() +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge(dodge.width = 1)) +
+                        # scale_color_manual(values = c(color_lookup$color[i], color_lookup$color[j])) +
+                        scale_color_manual(values = color_levels) +
+                        facet_wrap(~ Taxon, scales = "free_y") +
+                        xlab("") +
+                        ylab(paste("abundance ratio of", taxa_nom, "to stated taxon")) +
+                        theme_bw() +
+                        theme(legend.position = "none")
+                
+                
+                Tr2 <- Tr2 + ggpubr::stat_compare_means(label = "p.signif", method = test, label.x = 1.5)
+                Tr2 <- Tr2 + scale_y_log10()
+                
+                
+                Tr3 <- ggplot(TbT_DF_l_log, aes(x = Group, y = Ratio, col = Group))
+                Tr3 <- Tr3 +
+                        geom_boxplot(outlier.color = NA) +
+                        geom_point(size = 1, alpha = 0.6, position = position_jitterdodge(dodge.width = 1)) +
+                        # scale_color_manual(values = c(color_lookup$color[i], color_lookup$color[j])) +
+                        scale_color_manual(values = color_levels) +
+                        facet_wrap(~ Taxon, scales = "free_y") +
+                        xlab("") +
+                        ylab(paste("abundance ratio of", taxa_nom, "to stated taxon")) +
+                        theme_bw() +
+                        theme(legend.position = "none")
+                
+                
+                Tr3 <- Tr3 + ggpubr::stat_compare_means(label = "p.signif", method = test, label.x = 1.5)
+                Tr3 <- Tr3 + scale_y_log10()
+                
+                
+                # --
+                
+                result_list[[k]] <- list(pVals, Tr, Tr1, pValsLog, Tr2, Tr3)
                 # rm(Tr, TbT_DF_l, TbT_DF, TbT_DF_l_test, pVals)
         }
         
@@ -1350,7 +1493,265 @@ create_taxa_ratio_violin_plots <- function(TbTmatrixes_list, physeq, group_var, 
 }
 
 
-test <- plot_bar_own(physeq = ps_filt_ra, group_var = group_var)
+####################################
+## plot_taxa_ratios_AllLevels 
+###################################
+# see plot_taxa_ratios_levelPairs: Here you directly calculate the count by count ratio matrix only for the tax_nom, you still facet by taxa_den
+# (denominator) but you keep all levels in all plots. Makes extensive use of ggpubr, NB: ggpubr is so smart to adjust p-values when you use
+# scale_y_log10
+
+## Output: 
+# - list(pVals = pVals, Tr = Tr, Tr1 = Tr1, pValsLog = pValsLog, Tr2 = Tr2, Tr3 = Tr3)
+
+
+plot_taxa_ratios_AllLevels <- function(physeq, group_var, tax_names = NULL,
+                                        taxa_nom = "Firmicutes", taxa_den = NULL, color_levels, test = "t.test", p_adjust_method = "fdr",
+                                        symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))) {
+        
+        
+        # - check that given tax_names fit to physeq and change taxa_names of physeq -
+        if (is.null(tax_names)){
+                tax_names <- paste("T", 1:length(TbTmatrixes), sep = "_")
+        } 
+        
+        if(!identical(ntaxa(physeq), length(tax_names))){stop("tax_names do not fit in length to physeq")}
+        
+        taxa_names(physeq) <- tax_names
+        # --
+        
+        
+        if (taxa_are_rows(physeq)) {physeq <- t(physeq)}
+        
+        # - calculate the matrix taxa_nom/(all other taxa) -         
+        CT <- t(as(otu_table(physeq), 'matrix')) # now taxa are rows and samples are columns
+        
+        i <- which(rownames(CT) == taxa_nom)
+        if (length(i) != 1) {stop("taxa_nom not found in tax_names or tax_names not unique!")}
+        
+        
+        TbTmatrix <- apply(CT, 2, function(samp_cnts){samp_cnts[i]/samp_cnts})
+        # produces for each taxon (= host taxon) a TbTMatrix
+        # NB: there are possibly Inf, and NaN values in the matrix, specifically
+        # 0/x = 0, x/0 = Inf; 0/0 = NaN!
+        # --
+        
+        TbT_DF <- as.data.frame(TbTmatrix)
+        TbT_DF$Taxon <- rownames(TbT_DF)
+        # - use taxa_den (denominator) to restrict the taxa to which taxa_nom is compared to -
+        if (is.null(taxa_den)) {taxa_den <- tax_names}
+        TbT_DF <- TbT_DF[TbT_DF$Taxon %in% taxa_den, ]
+        # --
+        
+        # - change to long DF -
+        TbT_DF_l <- gather(TbT_DF, key = Sample, value = Ratio, -Taxon)
+        # --
+        
+        # - add the group_var level information  -
+        LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
+        TbT_DF_l$Group <- as.character(LookUpDF$Group[match(TbT_DF_l$Sample, LookUpDF$Sample)])
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+        TbT_DF_l$Group <- factor(TbT_DF_l$Group, levels = levels(group_fac), ordered = T)
+        # --
+        
+        # - change all ratios where either nominator taxon or denominator taxon had count = 0 to NA -
+        # remember: 0/0 = NaN (not finite), 0/x = 0, x/0 = Inf
+        TbT_DF_l$Ratio[!is.finite(TbT_DF_l$Ratio) | TbT_DF_l$Ratio == 0] <- NA
+        # --
+        
+        # - find taxa that would throw an error in statistical test and remove those taxa from DF -
+        # first find the taxa that would throw an error in t.test or wilcox.test
+        var_plus_length_check <- group_by(TbT_DF_l, Taxon, Group) %>% summarise(Variance = var(Ratio, na.rm = T), NotNA = sum(!is.na(Ratio)))
+        if (test == "t.test"){
+                var_plus_length_check <- filter(var_plus_length_check, !(Variance > 0) | NotNA < 2)
+        } else if (test == "wilcox.test") {
+                var_plus_length_check <- filter(var_plus_length_check, NotNA < 1)
+        }
+        
+        if (nrow(var_plus_length_check) != 0) { # should always remove at least the case where taxa_denominator = taxa_nom, since those ratios are all 1, hence no variance
+                TbT_DF_l <- filter(TbT_DF_l, !(Taxon %in% unique(var_plus_length_check$Taxon)))
+        }
+        # --
+        
+        # - use ggpubr::compare_menas to calculate all pValues of the Ratios for the different taxa_den between current group_levels -
+        pVals <- ggpubr::compare_means(formula = Ratio ~ Group, data = TbT_DF_l, group.by = "Taxon", method = test, p.adjust.method = p_adjust_method, symnum.args = symnum.args)
+        
+        pVals <- dplyr::arrange(pVals, p)
+        
+        # NB: the pVals change when you log the ratios (scale_y_log10())
+        TbT_DF_l$RatioLog10 <- log10(TbT_DF_l$Ratio)
+        pValsLog <- ggpubr::compare_means(formula = RatioLog10 ~ Group, data = TbT_DF_l, group.by = "Taxon", method = test, p.adjust.method = p_adjust_method, symnum.args = symnum.args)
+        pValsLog <- dplyr::arrange(pValsLog, p)
+        # --
+        
+        # NB: I plot now for log and non log independently, even though ggpubr is so smart to change the p-values when you just use
+        # Tr + scale_y_log10(). I plot independently because log might change the order!
+        TbT_DF_l_log <- TbT_DF_l
+        
+        # - order taxa based on pVals result -
+        TbT_DF_l$Taxon <- factor(TbT_DF_l$Taxon, levels = unique(pVals$Taxon), ordered = TRUE)
+        TbT_DF_l_log$Taxon <- factor(TbT_DF_l_log$Taxon, levels = unique(pValsLog$Taxon), ordered = TRUE)
+        # --
+        
+        # - since you might have more than two levels in each plot you need to set the comparisons argument in stat_compare_means -
+        comparisonList <- get_unique_facLevel_combinations(levels(group_fac))
+        # --
+        
+        # - plot: NB: also for non removed taxa some samples might have NA ratios that will be removed -
+        
+        Tr <- ggplot(TbT_DF_l, aes(x = Group, y = Ratio, col = Group))
+        Tr <- Tr +
+                geom_violin() +
+                geom_point(size = 1, alpha = 0.6, position = position_jitterdodge(dodge.width = 1)) +
+                # scale_color_manual(values = c(color_lookup$color[i], color_lookup$color[j])) +
+                scale_color_manual(values = color_levels) +
+                facet_wrap(~ Taxon, scales = "free_y") +
+                xlab("") +
+                ylab(paste("abundance ratio of", taxa_nom, "to stated taxon")) +
+                theme_bw() +
+                theme(legend.position = "none")
+        
+        Tr <- Tr + ggpubr::stat_compare_means(comparisons = comparisonList, label = "p.signif", method = "t.test", hide.ns = TRUE)
+        
+        Tr1 <- ggplot(TbT_DF_l, aes(x = Group, y = Ratio, col = Group))
+        Tr1 <- Tr1 +
+                geom_boxplot(outlier.color = NA) +
+                geom_point(size = 1, alpha = 0.6, position = position_jitterdodge(dodge.width = 1)) +
+                # scale_color_manual(values = c(color_lookup$color[i], color_lookup$color[j])) +
+                scale_color_manual(values = color_levels) +
+                facet_wrap(~ Taxon, scales = "free_y") +
+                xlab("") +
+                ylab(paste("abundance ratio of", taxa_nom, "to stated taxon")) +
+                theme_bw() +
+                theme(legend.position = "none")
+        
+        
+        Tr1 <- Tr1 + ggpubr::stat_compare_means(comparisons = comparisonList, label = "p.signif", method = test, hide.ns = TRUE) # p.format
+        
+        
+        Tr2 <- ggplot(TbT_DF_l_log, aes(x = Group, y = Ratio, col = Group))
+        Tr2 <- Tr2 +
+                geom_violin() +
+                geom_point(size = 1, alpha = 0.6, position = position_jitterdodge(dodge.width = 1)) +
+                # scale_color_manual(values = c(color_lookup$color[i], color_lookup$color[j])) +
+                scale_color_manual(values = color_levels) +
+                facet_wrap(~ Taxon, scales = "free_y") +
+                xlab("") +
+                ylab(paste("abundance ratio of", taxa_nom, "to stated taxon")) +
+                theme_bw() +
+                theme(legend.position = "none")
+        
+        
+        Tr2 <- Tr2 + ggpubr::stat_compare_means(comparisons = comparisonList, label = "p.signif", method = test, hide.ns = TRUE)
+        Tr2 <- Tr2 + scale_y_log10()
+        
+        
+        Tr3 <- ggplot(TbT_DF_l_log, aes(x = Group, y = Ratio, col = Group))
+        Tr3 <- Tr3 +
+                geom_boxplot(outlier.color = NA) +
+                geom_point(size = 1, alpha = 0.6, position = position_jitterdodge(dodge.width = 1)) +
+                # scale_color_manual(values = c(color_lookup$color[i], color_lookup$color[j])) +
+                scale_color_manual(values = color_levels) +
+                facet_wrap(~ Taxon, scales = "free_y") +
+                xlab("") +
+                ylab(paste("abundance ratio of", taxa_nom, "to stated taxon")) +
+                theme_bw() +
+                theme(legend.position = "none")
+        
+        Tr3 <- Tr3 + ggpubr::stat_compare_means(comparisons = comparisonList, label = "p.signif", method = test, hide.ns = TRUE)
+        Tr3 <- Tr3 + scale_y_log10()
+        
+        
+        list(pVals = pVals, Tr = Tr, Tr1 = Tr1, pValsLog = pValsLog, Tr2 = Tr2, Tr3 = Tr3)
+        
+}
+
+
+####################################
+## plot_sampleSums_FirmtoBac 
+###################################
+# to check if there is a trend that sequencing size affects F to B ratios
+
+## Output: 
+# - list(pVals = pVals, Tr = Tr, Tr1 = Tr1, pValsLog = pValsLog, Tr2 = Tr2, Tr3 = Tr3)
+
+
+plot_sampleSums_FirmtoBac <- function(physeq, group_var, tax_names = NULL,
+                                       taxa_nom = "Firmicutes", taxa_den = NULL, color_levels, test = "t.test", p_adjust_method = "fdr",
+                                       symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))) {
+        
+        
+        # - check that given tax_names fit to physeq and change taxa_names of physeq -
+        if (is.null(tax_names)){
+                tax_names <- paste("T", 1:length(TbTmatrixes), sep = "_")
+        } 
+        
+        if(!identical(ntaxa(physeq), length(tax_names))){stop("tax_names do not fit in length to physeq")}
+        
+        taxa_names(physeq) <- tax_names
+        # --
+        
+        
+        if (taxa_are_rows(physeq)) {physeq <- t(physeq)}
+        
+        # - calculate the matrix taxa_nom/(all other taxa) -         
+        CT <- t(as(otu_table(physeq), 'matrix')) # now taxa are rows and samples are columns
+        
+        i <- which(rownames(CT) == taxa_nom)
+        if (length(i) != 1) {stop("taxa_nom not found in tax_names or tax_names not unique!")}
+        
+        
+        TbTmatrix <- apply(CT, 2, function(samp_cnts){samp_cnts[i]/samp_cnts})
+        # produces for each taxon (= host taxon) a TbTMatrix
+        # NB: there are possibly Inf, and NaN values in the matrix, specifically
+        # 0/x = 0, x/0 = Inf; 0/0 = NaN!
+        # --
+        
+        TbT_DF <- as.data.frame(TbTmatrix)
+        TbT_DF$Taxon <- rownames(TbT_DF)
+        # - use taxa_den (denominator) to restrict the taxa to which taxa_nom is compared to -
+        if (is.null(taxa_den)) {taxa_den <- tax_names}
+        TbT_DF <- TbT_DF[TbT_DF$Taxon %in% taxa_den, ]
+        # --
+        
+        # - change to long DF -
+        TbT_DF_l <- gather(TbT_DF, key = Sample, value = Ratio, -Taxon)
+        # --
+        
+        # - add the group_var level information and the total_counts -
+        LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]], total_count = sample_sums(physeq))
+        TbT_DF_l$Group <- as.character(LookUpDF$Group[match(TbT_DF_l$Sample, LookUpDF$Sample)])
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+        TbT_DF_l$Group <- factor(TbT_DF_l$Group, levels = levels(group_fac), ordered = T)
+        TbT_DF_l$total_count <- LookUpDF$total_count[match(TbT_DF_l$Sample, LookUpDF$Sample)]
+        # --
+        
+        # - change all ratios where either nominator taxon or denominator taxon had count = 0 to NA -
+        # remember: 0/0 = NaN (not finite), 0/x = 0, x/0 = Inf
+        TbT_DF_l$Ratio[!is.finite(TbT_DF_l$Ratio) | TbT_DF_l$Ratio == 0] <- NA
+        # --
+        
+        
+        # - plot: NB: also for non removed taxa some samples might have NA ratios that will be removed -
+        
+        Tr <- ggplot(TbT_DF_l, aes(x = total_count, y = Ratio))
+        Tr <- Tr +
+                geom_point(size = 1, alpha = 0.6, aes(col = Group)) +
+                # scale_color_manual(values = c(color_lookup$color[i], color_lookup$color[j])) +
+                scale_color_manual("", values = color_levels) +
+                facet_wrap(~ Taxon, scales = "free_y") +
+                xlab("sample_sums()") +
+                ylab(paste("abundance ratio of", taxa_nom, "to stated taxon")) +
+                theme_bw()
+        
+        
+        
+        Tr
+        
+}
+
+
+
+
 
 #######################################
 #### plot_bar_own
@@ -1358,7 +1759,7 @@ test <- plot_bar_own(physeq = ps_filt_ra, group_var = group_var)
 # based on plot_bar from phyloseq, difference, orders and colors the Samples based on group_var, and orders the fill based on abundance
 # I guess inputs can be guessed on
 
-plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, fill = NULL,
+plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, color_levels, fill = NULL,
                          color_sample_names = TRUE, facet_grid = NULL){
         
         if(taxa_are_rows(physeq)) { physeq <- t(physeq) }
@@ -1367,9 +1768,9 @@ plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, fill 
         
         if (is.null(fill)) { fill = "Phylum"}
         
-        mdf <- psmelt(physeq)
+        mdf <- phyloseq::psmelt(physeq)
         
-        # order samples accoridng to levels
+        # order samples according to levels
         LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
         LookUpDF <- LookUpDF[order(match(LookUpDF$Group, levels(LookUpDF$Group))), ]
         mdf$Sample <- factor(mdf$Sample, levels = LookUpDF$Sample, ordered = TRUE)
@@ -1381,17 +1782,15 @@ plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, fill 
         sums <- group_by_(mdf, fill) %>% summarise(sum_abundance = sum(Abundance)) %>% arrange(sum_abundance)
         mdf[, fill] <- factor(mdf[, fill], levels = as.character(sums[[1]]), ordered = TRUE)
         
-        if (length(levels(LookUpDF$Group)) <= 7 && color_sample_names){
-                color_lookup <- data.frame(level = levels(LookUpDF$Group), color = cbPalette[2:(length(levels(LookUpDF$Group)) + 1)])
-                #LookUpDF$Group[match(levels(mdf$Sample), LookUpDF$Sample)]
-                colxaxis <- as.character(color_lookup$color[match(LookUpDF$Group[match(levels(mdf$Sample), LookUpDF$Sample)], color_lookup$level)])
-        } else {
-                colxaxis <- rep("black", nrow(LookUpDF))
-        }
+
+        # - define names of x axis using color_levels (which must be a named character vector) -        
+        colxaxis <- color_levels[LookUpDF$Group]
+        # --
         
         
-        if (length(levels(mdf[, fill])) <= 8) {
-                fill_colors <- cbPalette[1:length(levels(mdf[, fill]))]
+        
+        if (length(levels(mdf[, fill])) <= 15) {
+                fill_colors <- QuantColors15[1:length(levels(mdf[, fill]))]
                 names(fill_colors) <- rev(levels(mdf[, fill]))
         } else {
                 fill_colors <- rev(viridis(length(levels(mdf[, fill]))))
@@ -1412,8 +1811,253 @@ plot_bar_own <- function(physeq, x = "Sample", y = "Abundance", group_var, fill 
         }
         
         
-        return(Tr)
+        Tr
 }
 
 
+#######################################
+#### plot_bar_own_compare
+#######################################
+# generates abundance barplots (see plot_bar_own) to compare ps to ps_tca, i.e. to see how SFs adjustment affects the abundances 
+
+plot_bar_own_compare <- function(physeq, physeq2, x = "Sample", y = "Abundance", group_var, color_levels, fill = NULL,
+                         color_sample_names = TRUE){
+        
+        # - prepare mdf of ps physeq -
+        if(taxa_are_rows(physeq)) { physeq <- t(physeq) }
+        
+        if (!is.factor(sample_data(physeq)[[group_var]])) {sample_data(physeq)[[group_var]] <- as.factor(sample_data(physeq)[[group_var]])}
+        
+        if (is.null(fill)) { fill = "Phylum"}
+        
+        mdf <- phyloseq::psmelt(physeq)
+        
+        # order samples according to levels
+        LookUpDF <- data.frame(Sample = sample_names(physeq), Group = sample_data(physeq)[[group_var]])
+        LookUpDF <- LookUpDF[order(match(LookUpDF$Group, levels(LookUpDF$Group))), ]
+        mdf$Sample <- factor(mdf$Sample, levels = LookUpDF$Sample, ordered = TRUE)
+        # mdf$Sample <- factor(mdf$Sample, levels = c("A-15A", "A-5A", "A-2A", "A-1A", "B-15A", "B-5A", "B-2A", "B-1A"), ordered = TRUE)
+        
+        # order fill levels according to abundance over all samples
+        mdf[, fill] <- as.character(mdf[, fill])
+        mdf[is.na(mdf[, fill]), fill] <- "NA"
+        sums <- group_by_(mdf, fill) %>% summarise(sum_abundance = sum(Abundance)) %>% arrange(sum_abundance)
+        mdf[, fill] <- factor(mdf[, fill], levels = as.character(sums[[1]]), ordered = TRUE)
+        
+        # --
+        
+        # - prepare mdf of ps_tca physeq -
+        if(taxa_are_rows(physeq2)) { physeq2 <- t(physeq2) }
+        
+        if (!is.factor(sample_data(physeq2)[[group_var]])) {sample_data(physeq2)[[group_var]] <- as.factor(sample_data(physeq2)[[group_var]])}
+        
+        if (is.null(fill)) { fill = "Phylum"}
+        
+        mdf2 <- phyloseq::psmelt(physeq2)
+        
+        # order samples according to levels
+        LookUpDF <- data.frame(Sample = sample_names(physeq2), Group = sample_data(physeq2)[[group_var]])
+        LookUpDF <- LookUpDF[order(match(LookUpDF$Group, levels(LookUpDF$Group))), ]
+        mdf2$Sample <- factor(mdf2$Sample, levels = LookUpDF$Sample, ordered = TRUE)
+        # mdf2$Sample <- factor(mdf2$Sample, levels = c("A-15A", "A-5A", "A-2A", "A-1A", "B-15A", "B-5A", "B-2A", "B-1A"), ordered = TRUE)
+        
+        # order fill levels according to abundance over all samples
+        mdf2[, fill] <- as.character(mdf2[, fill])
+        mdf2[is.na(mdf2[, fill]), fill] <- "NA"
+        sums <- group_by_(mdf2, fill) %>% summarise(sum_abundance = sum(Abundance)) %>% arrange(sum_abundance)
+        mdf2[, fill] <- factor(mdf2[, fill], levels = as.character(sums[[1]]), ordered = TRUE)
+        # --
+        
+        mdf$Typer <- "before"
+        mdf2$Typer <- "after SF adjustment"
+        
+        mdf <- rbind(mdf, mdf2)
+        mdf$Typer <- factor(mdf$Typer, levels = c("before", "after SF adjustment"), ordered = TRUE)
+        
+        # - define names of x axis using color_levels (which must be a named character vector) -        
+        colxaxis <- color_levels[LookUpDF$Group]
+        # --
+        
+        
+        
+        if (length(levels(mdf[, fill])) <= 15) {
+                fill_colors <- QuantColors15[1:length(levels(mdf[, fill]))]
+                names(fill_colors) <- rev(levels(mdf[, fill]))
+        } else {
+                fill_colors <- rev(viridis(length(levels(mdf[, fill]))))
+                names(fill_colors) <- rev(levels(mdf[, fill]))
+        }
+        
+        
+        Tr <- ggplot(mdf, aes_string(x = x, y = y, fill = fill))
+        Tr <- Tr + 
+                geom_bar(stat = "identity", position = "stack") +
+                theme_bw() +
+                scale_fill_manual(values = fill_colors) +
+                xlab("") +
+                facet_grid(~ Typer) +
+                theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0, colour = colxaxis))
+        
+        Tr
+}
+
+
+
+####################################
+## create_raw_TbT_TilePlots: 
+###################################
+# wilcoxon.test is used
+## Input: 
+# - TbTmatrixes_list: The list with the lists of TbTmatrixes for each level combi in group factor
+# NB: here it should be raw_TbTmatrixes with 0 = 0/x, Inf = x/0, NaN = 0/0, all these values will be ignored!!
+# - physeq: used for TbTmatrixes_list generation
+# - p_adjust: method for p.adjust, NB: if not bonferroni or none, the tile plots are not necessarily symmetric anymore
+## Output: 
+# - list of pValMatrixes plus TileTr for each level combination. 
+# NB: I negated the p-values if host taxon was more abundant in grp2 compared to other taxon!!
+
+create_raw_TbT_TilePlots <- function(TbTmatrixes_list, physeq, group_var, tax_names = NULL,
+                                     test = "wilcoxon", p_adjust = "none") {
+        
+        if(!identical(length(TbTmatrixes_list[[1]]), ntaxa(physeq))){stop("TbTmatrixes can not fit to physeq")}
+        
+        if(test != "wilcoxon" & test != "t.test"){stop("test unknown, must be wilcoxon or t.test")}
+        
+        group_fac <- factor(sample_data(physeq)[[group_var]])
+        
+        fac_levels <- levels(group_fac)
+        
+        # - get the level combis -
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(jvec), function(x){
+                        i <- jvec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- ivec[x]
+                })
+        })
+        i_s <- i_s[lower.tri(i_s)]
+        j_s <- j_s[lower.tri(j_s)]
+        # --
+        
+        result_list <- vector("list", length = length(i_s))
+        
+        for (k in seq_along(i_s)) {
+                
+                i <- i_s[k]
+                j <- j_s[k]
+                
+                TbTmatrixes <- TbTmatrixes_list[[k]]
+                
+                if (is.null(tax_names)){
+                        tax_names <- paste("T", 1:length(TbTmatrixes), sep = "_")
+                } else {
+                        if(!identical(length(TbTmatrixes), length(tax_names))){stop("tax_names do not fit in length to TbTmatrixes")}
+                }
+                
+                names(TbTmatrixes) <- tax_names
+                
+                TbTmatrixes <- lapply(TbTmatrixes, function(mat){
+                        rownames(mat) <- tax_names
+                        mat
+                })
+                group_fac_current <- droplevels(group_fac[as.numeric(group_fac) %in% c(i, j)])
+                
+                # ntaxa * ntaxa wilcoxon tests take time!
+                pValMatrix <- sapply(TbTmatrixes, function(mat){
+                        apply(mat, 1, function(taxon_ratios){
+                                x <- taxon_ratios[group_fac_current == fac_levels[i]]
+                                x <- x[is.finite(x) & x != 0] # removes all ratios in which one of the two taxa was not present!
+                                y <- taxon_ratios[group_fac_current == fac_levels[j]]
+                                y <- y[is.finite(y) & y != 0] # removes 0/0 = NaN, 0/x = 0, x/0 = Inf
+                                if (test == "wilcoxon"){
+                                        if (length(x) > 0 && length(y) > 0){
+                                                pValue <- wilcox.test(x = x, y = y, alternative = "two", paired = F, exact = F)$p.value
+                                                # NB: wilcox.test ignores in default setting (maybe see na.action) NA, NaN, Inf, -Inf
+                                                # For plot: change sign of pValue to negative if taxon is more abundant in group 1. 
+                                                Ranks <- rank(c(x[!is.na(x)], y[!is.na(y)]))
+                                                n1 <- length(x[!is.na(x)])
+                                                n2 <- length(y[!is.na(y)])
+                                                Wx <- sum(Ranks[1:n1])-(n1*(n1+1)/2)
+                                                Wy <- sum(Ranks[(n1+1):(n1+n2)])-(n2*(n2+1)/2)
+                                                if(Wx > Wy){pValue <- -1*pValue}
+                                                pValue
+                                                
+                                        } else {
+                                                pValue = 1
+                                        }
+                                        
+                                } else if (test == "t.test") {
+                                        if (length(x) > 1 && length(y) > 1 && var(x) > 0 && var(y) > 0){
+                                                pValue <- t.test(x = x, y = y, alternative = "two")$p.value
+                                                if (mean(x, na.rm = T) > mean(y, na.rm = T)){pValue <- -1*pValue}
+                                                pValue
+                                        } else {
+                                                pValue <- 1
+                                        }
+                                        
+                                }
+                                
+                        })
+                })
+                
+                # make sure diagonal is all NA (can be exceptions especially for t.test)
+                diag(pValMatrix) <- NA
+                
+                signs <- pValMatrix < 0
+                signs[is.na(signs)] <- FALSE
+                
+                pValMatrix <- abs(pValMatrix)
+                for (e in 1:nrow(pValMatrix)){
+                        pValMatrix[e, ] <- p.adjust(pValMatrix[e, ], method = p_adjust)
+                } # equal to t(apply(pValMatrix, 1, p.adjust, method = p_adjust))
+                
+                pValMatrix[signs] <- pValMatrix[signs]*(-1)
+                
+                # -- add a tile plot of the pValMatrix --
+                
+                DF <- as.data.frame(pValMatrix)
+                DF[is.na(DF)] <- 2 # just to avoid missing values in plot and have a clear non-pValue value to mark self comparisons as black
+                DF$HostTaxon <- rownames(pValMatrix)
+                DF <- tidyr::gather(DF, key = Taxon , value = pValue, - HostTaxon)
+                DF$Taxon <- factor(DF$Taxon, levels = rownames(pValMatrix), ordered = TRUE)
+                DF$HostTaxon <- factor(DF$HostTaxon, levels = rev(rownames(pValMatrix)), ordered = TRUE)
+                
+                # # add color to the taxa names so you see up and down
+                # colyaxis <- vector(mode = "character", length = nrow(DF))
+                # colyaxis[] <- "black"
+                # colyaxis[grepl("TP-U", levels(DF$HostTaxon))] <- "#E69F00"
+                # colyaxis[grepl("TP-D", levels(DF$HostTaxon))] <- "#009E73"
+                # colxaxis <- vector(mode = "character", length = nrow(DF))
+                # colxaxis[] <- "black"
+                # colxaxis[grepl("TP-U", levels(DF$Taxon))] <- "#E69F00"
+                # colxaxis[grepl("TP-D", levels(DF$Taxon))] <- "#009E73"
+                DF$Fill <- "not significant"
+                DF$Fill[DF$pValue < 0.05 & DF$pValue > 0] <- "up (p < 0.05)"
+                DF$Fill[DF$pValue > -0.05 & DF$pValue < 0] <- "down (p < 0.05)"
+                DF$Fill[DF$pValue == 2] <- " "
+                DF$Fill <- factor(DF$Fill, levels = c("up (p < 0.05)", "not significant", "down (p < 0.05)", " "), ordered = T)
+                TileTr <- ggplot(DF, aes(x = Taxon, y = HostTaxon, fill = Fill))
+                TileTr <- TileTr + 
+                        geom_raster() + 
+                        ggtitle(names(TbTmatrixes_list)[k]) +
+                        scale_fill_manual("", values = c("not significant" = "gray98", "up (p < 0.05)" = "#AA4499", "down (p < 0.05)" = "#88CCEE", " " = "black")) +
+                        scale_x_discrete(position = "top") +
+                        labs(x=NULL, y=NULL) +
+                        theme_tufte(base_family="Helvetica") +
+                        theme(plot.title=element_text(hjust=0)) +
+                        theme(axis.ticks=element_blank()) +
+                        theme(axis.text=element_text(size=7)) +
+                        theme(legend.title=element_blank()) +
+                        theme(legend.text=element_text(size=6)) +
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0)) # colour = colxaxis
+                result_list[[k]] <- list(pValMatrix = pValMatrix, TileTr = TileTr)
+        }
+        
+        names(result_list) <- names(TbTmatrixes_list)
+        result_list
+}
 

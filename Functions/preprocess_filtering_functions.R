@@ -37,7 +37,7 @@ gm_own = function(x, na.rm=FALSE, zeros.count = TRUE){
 # plots: if TRUE SFs and plots will be given in an output list, otherwise just the adjusted physeq is returned
 
 
-adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, plots = FALSE)  {
+adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, SFs = NULL, plots = FALSE)  {
         
         # ---- Step 1: Calculate Geometric mean for each taxa over all samples ------
         # NB: these GM is basically the reference sample
@@ -47,17 +47,21 @@ adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, plots = FALSE) 
                 GM <- apply(otu_table(physeq), 2, gm_own, zeros.count = zeros.count) 
         }
         
-        # ---- Step 2: Calculate Size factors --------
+        # ---- Step 2: Calculate Size factors  unless given --------
         
         # NB: x/y = exp(log(x) - log(y))
         
-        if (taxa_are_rows(physeq)) {
-                SFs <- apply(as(otu_table(physeq), "matrix"), 2, function(sample_cnts){exp(quantile((log(sample_cnts)-log(GM))[sample_cnts > 0], probs = percentile/100, na.rm = T))})
-                SFs <- SFs/exp(mean(log(SFs)))
-        } else {
-                SFs <- apply(as(otu_table(physeq), "matrix"), 1, function(sample_cnts){exp(quantile((log(sample_cnts)-log(GM))[sample_cnts > 0], probs = percentile/100, na.rm = T))})
-                SFs <- SFs/exp(mean(log(SFs)))
-        } 
+        if (is.null(SFs)){
+                
+                if (taxa_are_rows(physeq)) {
+                        SFs <- apply(as(otu_table(physeq), "matrix"), 2, function(sample_cnts){exp(quantile((log(sample_cnts)-log(GM))[sample_cnts > 0], probs = percentile/100, na.rm = T))})
+                        SFs <- SFs/exp(mean(log(SFs)))
+                } else {
+                        SFs <- apply(as(otu_table(physeq), "matrix"), 1, function(sample_cnts){exp(quantile((log(sample_cnts)-log(GM))[sample_cnts > 0], probs = percentile/100, na.rm = T))})
+                        SFs <- SFs/exp(mean(log(SFs)))
+                }
+                
+        }
         
         
         if(min(SFs) == 0) { warning("in at least one sample the Size Factor was 0!") }
@@ -138,6 +142,43 @@ adj_LS <- function(physeq, zeros.count = FALSE, percentile = 50, plots = FALSE) 
                 list(physeq = phynew, SFs = SFs)
                 
         }
+}
+
+
+
+#######################################
+### calc_SFs
+#######################################
+# implementation of DESeq2 library size similar to estimateSizeFactorsForMatrix
+# in difference to adjust_LS (obsolete) ignore.zero.ratios is always TRUE (so 0 ratios are always ignored)
+
+
+calc_SFs <- function(physeq, zeros.count = FALSE, percentile = 50)  {
+        
+        # ---- Step 1: Calculate Geometric mean for each taxa over all samples ------
+        # NB: these GM is basically the reference sample
+        if(taxa_are_rows(physeq)){
+                GM <- apply(otu_table(physeq), 1, gm_own, zeros.count = zeros.count)   
+        } else {
+                GM <- apply(otu_table(physeq), 2, gm_own, zeros.count = zeros.count) 
+        }
+        
+        # ---- Step 2: Calculate Size factors --------
+        
+        # NB: x/y = exp(log(x) - log(y))
+        
+        if (taxa_are_rows(physeq)) {
+                SFs <- apply(as(otu_table(physeq), "matrix"), 2, function(sample_cnts){exp(quantile((log(sample_cnts)-log(GM))[sample_cnts > 0], probs = percentile/100, na.rm = T))})
+                SFs <- SFs/exp(mean(log(SFs)))
+        } else {
+                SFs <- apply(as(otu_table(physeq), "matrix"), 1, function(sample_cnts){exp(quantile((log(sample_cnts)-log(GM))[sample_cnts > 0], probs = percentile/100, na.rm = T))})
+                SFs <- SFs/exp(mean(log(SFs)))
+        } 
+        
+        
+        if(min(SFs) == 0) { warning("in at least one sample the Size Factor was 0!") }
+        
+        SFs
 }
 
 

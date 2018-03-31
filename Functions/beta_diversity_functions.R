@@ -1,4 +1,35 @@
 #######################################
+### get_unique_facLevel_combinations
+#######################################
+# often needed to set the comparisons attribute in stat_compare_means from ggplot, it excludes comparison with each other and also removes 2 to 3 vs 3 to 2
+
+get_unique_facLevel_combinations <- function(fac_levels){
+        
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
+        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(jvec), function(x){
+                        i <- jvec[x]
+                })
+        })
+        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
+                sapply(seq_along(ivec), function(x){
+                        j <- ivec[x]
+                })
+        })
+        i_s <- i_s[lower.tri(i_s)]
+        j_s <- j_s[lower.tri(j_s)]
+        
+        comparisonList <- list()
+        for (k in seq_along(i_s)){
+                comparisonList[[k]] <- c(fac_levels[i_s[k]], fac_levels[j_s[k]])
+        }
+        
+        comparisonList
+        
+}
+
+
+#######################################
 ### FUNCTION: calc_beta_div_distances
 #######################################
 
@@ -157,12 +188,9 @@ compare_beta_div_distances_directly <- function(dist_list, physeq, group_var, te
                                       legend.position = "none")
                         
                         # there is probably a less clumsy way to get to the my_comparisons
-                        comparisons <- expand.grid(GroupToGroupLevels, GroupToGroupLevels)
-                        comparisons <- comparisons[as.vector(lower.tri(matrix(1:9, ncol = 3), diag=F)),]
-                        comparisons <- sapply(comparisons, as.character)
-                        comparisons <- lapply(1:nrow(comparisons), function(i){comparisons[i,]})
+                        comparisonList <- get_unique_facLevel_combinations(GroupToGroupLevels)
                         
-                        Tr <- Tr + stat_compare_means(comparisons = comparisons, label = "p.format", method = test, hide.ns = TRUE)
+                        Tr <- Tr + stat_compare_means(comparisons = comparisonList, label = "p.format", method = test, hide.ns = TRUE)
                         
                         pValListDirect[[i]] <- df_p
                         
