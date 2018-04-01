@@ -1,15 +1,17 @@
 ---
-title: "Analysis 16S of DanFunD chosen samples: Based on Generalized phyloseq analysis of dada2 data, then improved"
+title: "General analysis of 16S Data starting with a phyloseq object"
 author: "Thorsten Brach"
-date: "26/03/2018"
+date: "01/04/2018"
 output: html_document
 ---
 
 
-# Improvements:
+# Options for future improvements:
 
 - the violin plots show currently t.test p-values, but that would mean doing it self instead of using ggpubr
 - More importantly, the violin plots (plot_toptaxa_boxAndviolin) are shown as log abundances but you calculate res_lists in wilcoxon with non-logged abundances, so you should also do it with log abundances and order the logged violin plots based on these res_lists. NB: the ggpubr t.test signif values are correct because ggpubr adjusts the p_values when scale_y_log10 is used (it's really smart package). 
+   - also, since you exclude 0s in the wilxcoxon you should exclude them also in the violin plots
+- The thing with excluding 0 in violin plots would apply also to Tbt, but here you should work on getting TbT counts.
 - a few functions you should allow to set test for ggpubr, and use wilcox.test also in the if else code, where you use wilcoxon which does not work with ggpubr.
 - improve TbT method by trying the following:
     - 0 = 0, i.e. when host taxon was count 0 it should stay 0 (covers 0 and NaN = 0/0 ratio values)
@@ -58,11 +60,11 @@ PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Ver
 ```
 
 
-# load functions and set input parameters
+# Load functions and set input parameters
 
 
 ```{r, echo = FALSE, message=FALSE}
-# -- load all functions in --
+# -- Load all functions in --
 functionpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions/"
 # source(file.path(functionpath, "Dada_TaxonomyFunctions.R"))
 # source(file.path(functionpath, "Dada_PlotFunctions.R"))
@@ -77,10 +79,10 @@ source(file.path(functionpath, "diff_abundance_functions.R"))
 # - Set the taxonomic_level for the analysis -
 # NB, NB: when taxaonomic_level = "Species" a lot of ASV will already be pooled in tax_glom because a lot of ASV have usually same taxonomy down to Species. 
 # So if you want ASV level analysis, you have to set taxonomic_level <- NULL
-taxonomic_level <- "Species" 
+taxonomic_level <- NULL 
 # --
 
-# - define the group variable, i.e. the factor that separates the samples -
+# - Define the group variable, i.e. the factor that separates the samples -
 group_var <- "Group" # tha variable based on which samples will be grouped 
 # group_var <- "seq_batch" # tha variable based on which samples will be grouped 
 # group_var <- "batch" 
@@ -93,13 +95,13 @@ names(color_levels) <- group_var_levels
 shape <- NULL #option to distinguish another factor in plots based on shapes
 # --
 
-# - filtering inputs -
+# - Filtering inputs -
 prevalence <- 5 # in percent
 min_obs <- 0L # a taxon will be considered present (for prevalence) if count > min_obs
 taxa_sums_quantile <- 90 # in percent, taxa whose taxa_sums are above this threshold will be kept even if they do not pass prevalence
 # --
 
-# - alpha diversity and rarifaction inputs -
+# - Alpha diversity and rarifaction inputs -
 alpha_div_measures <- c("Observed", "Shannon")
 seed <- 1234
 step_size <- 200 # for rarefaction curves
@@ -115,9 +117,8 @@ dist_methods <- c("jsd", "unifrac") # otions: see unlist(distanceMethodList)
 
 ```
 
-# Load phyloseq (ps) object and set group_var
+# Load phyloseq (ps) object and prepare it for analysis
 
-- **NB: this file works fully only for complete phyloseq objects (i.e. including tree)**
 
 ```{r, echo = FALSE, message=FALSE}
 # # - Load the object I got from Tue - 
@@ -220,8 +221,9 @@ sample_data(ps)[[group_var]] <- factor(sample_data(ps)[[group_var]], levels = gr
 
 ```
 
+- **the loaded phyloseq object has `r ntaxa(ps)` taxa (amplicon sequence variants = ASVs)**
 
-# print input parameters and package versions
+# Print input parameters and package versions
 
 ```{r, echo = FALSE, message = FALSE}
 
@@ -270,7 +272,7 @@ knitr::kable(Inputs_phyloseqAnalysis, caption = "Input arguments for this phylos
 
 ## What is the most abundant and prevalent phylum?
 
-- NB: there is no adjustment for library size here, so taxa_sums are calculated over unadjusted counts in the different samples
+- NB: there was no adjustment for library size yet, so taxa_sums (total counts) are calculated based on the unadjusted counts in the different samples
 
 ```{r, echo = FALSE, message=FALSE}
 df_ab_prev <- data.frame(ASV_ID = 1:ntaxa(ps), 
@@ -283,7 +285,9 @@ df_ab_prev <- data.frame(ASV_ID = 1:ntaxa(ps),
 df_ab_prev <- cbind(df_ab_prev, tax_table(ps))
 
 
-Phyla <- dplyr::summarise(group_by(df_ab_prev, Phylum), ASVs = n(), PC_ASV = round(100*ASVs/ntaxa(ps),1), PC_total_prev = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
+Phyla <- dplyr::summarise(group_by(df_ab_prev, Phylum), 
+                          ASVs = n(), 
+                          PC_ASV = round(100*ASVs/ntaxa(ps),1), PC_total_prev = round(100*sum(prevalence)/sum(df_ab_prev$prevalence), 1),
                    PC_total_counts = round(100*sum(total_counts_of_ASV)/sum(df_ab_prev$total_counts_of_ASV), 1), 
                    mean_prev_in_PC = round(100*mean(prevalence)/nsamples(ps), 1),
                    mean_total_counts = round(mean(total_counts_of_ASV)),
@@ -295,7 +299,7 @@ Phyla <- dplyr::summarise(group_by(df_ab_prev, Phylum), ASVs = n(), PC_ASV = rou
 knitr::kable(Phyla)
 ```
 
-- **Firmicutes accounts for most ASVs (70%), and also for 70% of the total abundance/counts.**  
+- **Write your conclusion here:** *e.g.: there are more ASV from Firmicutes than Bacteroidetes, but the Bacteroidetes ASVs have on average more counts over all samples. The average ASV is present in less than 10% of the samples.*  
 
 
 ### Removal of ASVs with Phylum = NA
@@ -305,7 +309,7 @@ knitr::kable(Phyla)
 ps <- phyloseq::subset_taxa(ps, !is.na(Phylum)) # kick out taxa that could not be assigned even at phylum level
 ```
 
-- `r Phyla$ASVs[is.na(Phyla$Phylum)]` ASVs were removed, leaving `r ntaxa(ps)` ASVs
+- **`r Phyla$ASVs[is.na(Phyla$Phylum)]` ASVs were removed, leaving `r ntaxa(ps)` ASVs.**
 
 
 ## Assignment distribution of ASVs
@@ -318,12 +322,12 @@ assignment_distribution <- get_assignemnt_distribution(tax_table(ps))
 knitr::kable(assignment_distribution)
 ```
 
-- almost 70% of the ASV's are assigned to genus level but only 8.1% to species level.
+- **Write your conclusion here:** *e.g.: almost 70% of taxa/ASVs are assigned to Genus level but less than 10% to Species level*  
 
 
 ### Is the taxonomic assignment better for more abundant/pevalent ASVs?
 
-- NB again: abundance filters ASVs are here based on total counts over all samples (taxa_sums) without the abundances in the different samples being corrected for sequencing depth (library size)
+- Again NB for the interpretation of the following plots: the abundance filters on the ASVs are based on total counts over all samples (taxa_sums), and the abundances have not been corrected for sequencing depth (library size) of the samples yest.
 
 ```{r, echo = FALSE, message=FALSE}
 assign_vs_ab <- check_assignment_vs_abundance(taxa = tax_table(ps), seqtab = as(otu_table(ps), "matrix"), abundanceQuantiles = seq(0, 95, by = 5))
@@ -336,10 +340,10 @@ assign_vs_prev <- check_assignment_vs_prevalence(taxa = tax_table(ps), seqtab = 
 grid.arrange(assign_vs_prev[[2]], assign_vs_ab[[2]], nrow = 2)
 ```
 
-- **very clear yes, there is a trend that the more abundant and especially more prevalent ASVs are more often assigned to species level**
+- **Write your conclusion here:** *e.g.: very clear yes, there is a trend that the more abundant and especially more prevalent ASVs are more often assigned to species level* 
 
 
-## abundance and prevalence distributions of the `r ntaxa(ps)` amplicon sequence variants (ASVs) found in `r nsamples(ps)` samples
+## Abundance and prevalence distributions of the remaining `r ntaxa(ps)` amplicon sequence variants (ASVs) in `r nsamples(ps)` samples
 
 
 ```{r, echo = FALSE, message=FALSE}
@@ -355,28 +359,33 @@ grid.arrange(TrrList[[1]], TrrList[[1]] + scale_y_log10(), TrrList[[2]], TrrList
 # dev.off()
 ```
 
-- **The last two plots illustrate that ASVs with higher mean/median counts in non-zero samples are more likely to have higher prevalence, BUT really only slightly more likely because the R.square is minimal!**
+- **Write your conclusion here:** *e.g.: The last two plots illustrate that ASVs with higher mean/median counts in non-zero samples (i.e. in samples where they are present) are more likely to have higher prevalence (are present in more samples). BUT really only slightly more likely because the R.square is minimal! So I there to say: the fact that a taxon grows to higher abundance when it's are present does not make it more likely to be present in many samples*
 
 
-# Perform tax_glom to `r taxonomic_level`
 
+# Perform tax_glom to the chosen taxonomic_level, which is: `r if (is.null(taxonomic_level)) {"ASV"} else {taxonomic_level}`
+
+- **NB: also the size factors for the later total count adjustment (a la DESeq2) are calculated here based on the ASV level phyloseq object, because I realised that sixe factors are less reliable (well more variable) when calculated on less taxa, which makes sense since they are based on a median ratio and I expect a median to be less stable for less taxa**
 - `r ntaxa(ps)` are there before the tax_glom
 
 ```{r, echo = FALSE, message=FALSE}
+# NB NB NB NB NB NB NB NB NB
 # I decided to calculate the SF's always on ASV's level physeqs, based on the way it is calculated (median ratio) I think you should have at least 200 taxa
 # NB: this affects DESeq and wilcoxon part, all with tca physeqks
+# NB NB NB NB NB NB NB NB NB
+
 SFs <- calc_SFs(physeq = ps)
 
 if (!is.null(taxonomic_level)){
         ps <- phyloseq::tax_glom(ps, taxrank = taxonomic_level, NArm = FALSE)
 } else {
-        taxonomic_level <- "Species" # for later labelling, even though in this case it is ASV level analysis
+        taxonomic_level <- "Species" # for later labelling in plots, even though in this case it is ASV level analysis but there is no strain taxonomy in taxa_table
 }
 ```
 
-- `r ntaxa(ps)` remain after the tax_glom
+- **`r ntaxa(ps)` remain after the tax_glom**
 
-## prevalence and abundance of the taxa after tax_glom in relation to the chosen prevalence setting for filtering
+## Prevalence and abundance of the taxa after tax_glom in relation to the chosen prevalence that you later use for filtering
 
 ```{r, echo = FALSE, message=FALSE}
 TrList <- plotSVdistributions(seqtab = as(otu_table(ps), "matrix"), prevalence = prevalence)
@@ -391,16 +400,20 @@ grid.arrange(TrList[[1]], TrList[[2]], TrList[[3]] + scale_y_log10(), TrList[[4]
 
 ```
 
-- assuming you would use the given prevalence as a filter threshold, the plots show you the number of taxa you would filter out, and the percentage of counts that would go with them.
+- *NB: prevalence is independent of library size adjustment, but counts are of course affected. So the exact counts leaving with prevalence filtered taxa and the total counts differ a bit between ps and ps_tca. The plots should still give an impression that removing a lot of low prevalence ASVs does not necessarily remove a lot of counts.*
+- **Write your conclusion here:** *e.g.: my prevalence is low enough that clearly less than 10% of the counts will be removed*
 
 
-# alpha-diversity
 
-## quick check whether sample_sums differed between group_var levels
+# Alpha-diversity analysis
+
+## Check whether sample_sums/total_counts differ between group_var levels
+
+- **NB: ggpubr is used to add t.test (or wilcoxon) p-values, I use hide.ns if not significant, but it still leaves the bar, so if there is a bar without asterisk, it means not significantly differnt**
 
 ```{r, message = FALSE, warning = FALSE, echo = FALSE}
 
-SampleSumList <- boxplot_sampleSums(physeq = ps, group_var = group_var, color_levels = color_levels, test = "t.test", p_adjust_method = "fdr",
+SampleSumList <- boxplot_sampleSums(physeq = ps, group_var = group_var, color_levels = color_levels, shape = shape, test = "t.test", p_adjust_method = "fdr",
                                     symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")))
 
 ```
@@ -408,6 +421,9 @@ SampleSumList <- boxplot_sampleSums(physeq = ps, group_var = group_var, color_le
 ```{r, fig.width = 7, fig.height = 5, warning = FALSE, message = FALSE, echo = FALSE}
 SampleSumList[["Tr"]]
 ```
+
+- **Write your conclusion here:** *e.g.: no significant differences in the sample_sums between the group levels.*
+
 
 
 ## raw **alpha-diversity**, i.e. without correction for total counts in the samples (i.e. no rarefying)
@@ -440,20 +456,25 @@ TrList <- c(alpha_div_boxplots, alpha_div_lmPlots)
 TrList <- TrList[order(names(TrList))] # to get the plots in the right order
 ```
 
+
 ```{r, fig.width = 14, fig.height = (length(TrList)/3)*5, warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(TrList, ncol = 3))
 ```
 
-- p.values of alpha diversity values comparing the levels in group_var
+- p.values comparing alpha diversities between the levels in group_var
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 knitr::kable(alpha_div_pVals)
 # print(xtable(alpha_div_pVals, align = "|c|c|c|c|c|c|c|c|c|", digits = 5), include.rownames = FALSE)
 ```
 
-- **Conclusion: old samples have slightly higher alpha-diversity, but NB there are batch effects that most likely play a role**
+- **Write your conclusion here:** *e.g.: level 1 has higher alpha diversity. There is a clear trend that alpha diversity gets higher with higher total_counts, but also the residuals of level 1 in a lm alpha diversity to total_counts are higher than those of level 2. Test for confounders, for example via the shape option*
+
+
 
 ## alpha diversity after **rarefying**
+
+- **Rarefaction level: `r rare_level`, rarefaction type: `r rare_type`**
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 # - do the rarefaction using vegan package or own sampling function: -
@@ -510,20 +531,21 @@ TrList <- TrList[order(names(TrList))] # to get the plots in the right order
 do.call("grid.arrange", c(TrList, ncol = 3))
 ```
 
-- p.values of alpha diversity values comparing the levels in group_var
+- - p.values comparing alpha diversities between the levels in group_var
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 knitr::kable(alpha_div_pVals)
 # print(xtable(alpha_div_pVals, align = "|c|c|c|c|c|c|c|c|c|", digits = 5), include.rownames = FALSE)
 ```
 
-- as usual for dada2 data, there is little to no effect by rarifying when dada2 data isused
-- **Rarefaction level: `r rare_level`, rarefaction type: `r rare_type`**
+- **Write your conclusion here:** *e.g.: as expected for dada2 pooled = FALSE data, rarifying has little effect on alpha diversity measures*
+
+
 
 ## Rarefaction curves
 
-- rarefaction curves calculate alpha diversity (richness) for each sample for different total counts in steps from 0 up to maximum total (chosen rare_max_total).
-    - samples with total counts < max_total have consequently shorter rarefaction curves, i.e. curves that stop before max_total
+- rarefaction curves calculate alpha diversity (richness) for each sample for different total counts in steps from 0 up to the chosen maximal total count value (i.e. rare_max_total, for final value see below plots).
+    - samples with total counts < rare_max_total have consequently shorter rarefaction curves, i.e. curves that stop before max_total
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 if (is.null(rare_max_total)){
@@ -540,17 +562,18 @@ grid.arrange(rarefaction_curves[["Tr_richness_col"]], rarefaction_curves[["Tr_ri
 
 ```
 
-- visual proof that dada2 data plateaus super early because of the absence of singletons.
+- The used rare_max_total was `r rare_max_total`
+- **Write your conclusion here:** *e.g.: visual proof that dada2 data plateaus super early because of the absence of singletons.*
 
 
 # Preprocessing (filtering)
 
-- filtering strategy:
-    - I filter on prevalence (keeping taxa with prevalence > `r prevalence`) and taxa_sums() (keeping taxa whose taxa sums/ total counts over all samples are above the `r taxa_sums_quantile` quantile)
+- **filtering strategy**:
+    - I filter on prevalence (keeping taxa with prevalence > `r prevalence`) and taxa_sums() (keeping taxa whose taxa sums/total counts over all samples are above the `r taxa_sums_quantile` quantile)
         - prevalence filter so that ASVs that are very rare and only in few samples have no effect on the distance measures
         - taxa_sums_quantile filter, so that very abundant ASVs (clearly real species you would think) stay, even if they are only in a few samples. These might well separate these samples
-    - because of the taxa_sums_quantile filter, I first do a DeSEQ total counts adjustment on the samples. NB: this only affects the taxa_sums_quantile filter, it does not affect prevalence nor the subsequent relative abundances that are used for distance calculations.
-    - another "filter" that could be interesting, is to do the distance analysis on genus level (tax_glom) and potentially exclude NAs (I.e. doing distance analysis only on the genera we actually know)
+    - because of the taxa_sums_quantile filter, I first do a DeSEQ-like total counts adjustment on the samples *using the size factors that have been calculated above on the ASV phyloseq*. NB: this library size adjustment affects the taxa_sums_quantile filter, it does not affect prevalence nor the subsequent relative abundances. So only analyses using ps_tca are affected, not analyses using ps_filt or ps_filt_ra (relative abundance).
+- **NB: to see how the size factors affect the total counts of the different samples, see also the Phylum analysis at the bottom of the document**
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
@@ -568,14 +591,15 @@ ps_filt <- phyloseq::prune_taxa(taxa_names(ps_tca_filt), ps) # you need ps_filt 
 ps_filt_ra <- phyloseq::transform_sample_counts(ps_filt, function(x){x/sum(x)}) # same for ps_tca_filt
 # --
 
-# - generate a visual overview of the filtering step -
+# - Generate a visual overview of the filtering step -
 filterList <- plot_abundance_prev_filter(physeq = ps_tca, prevalence = prevalence, taxa_sums_quantile = taxa_sums_quantile)
 # --
 
+# - Show the size factors to get an impression whether they are different between your groups -
+SFList <- plot_sizeFactors(physeq = ps, SFs = SFs, group_var = group_var, color_levels = color_levels, shape = shape, test = "t.test", p_adjust_method = "fdr", symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")))
+# --
 ```
 
-- `r ntaxa(ps_filt)` out of `r ntaxa(ps)` taxa survived the filter (`r round(100*ntaxa(ps_filt)/ntaxa(ps), 1)` %)
-- `r sum(otu_table(ps_tca_filt))` out of `r sum(otu_table(ps_tca))` counts survived the filter (`r round(100*sum(otu_table(ps_tca_filt))/sum(otu_table(ps_tca)), 1)` %)
 
 ```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
 #pdf(file = "filter_p.pdf", width = 7, height = 6)
@@ -594,10 +618,24 @@ knitr::kable(filterList[[3]])
 # print(xtable(filterList[[3]][,c(1,2,4,6:9)], align = "|c|c|c|c|c|c|c|c|", digits = 1), include.rownames = FALSE)
 ```
 
+- **`r ntaxa(ps_filt)` out of `r ntaxa(ps)` taxa survived the filter (`r round(100*ntaxa(ps_filt)/ntaxa(ps), 1)` %)**
+- **`r sum(otu_table(ps_tca_filt))` out of `r sum(otu_table(ps_tca))` counts survived the filter (`r round(100*sum(otu_table(ps_tca_filt))/sum(otu_table(ps_tca)), 1)` %)** (based on ps_tca vs ps_tca_filt, not ps vs ps_filt)
+
+
+```{r, fig.width = 14, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
+#pdf(file = "filter_p.pdf", width = 7, height = 6)
+grid.arrange(SFList[[2]], SFList[[3]], ncol = 2)
+#dev.off()
+```
+
+
+- **Write your conclusion here:** *e.g.: size factors look reasonable, filtering was as expected quite some taxa were filtered out but not a lot of counts. Not sure if some taxa were more affected than others*
+
+
 
 # beta-diversity distances and ordination
 
-## calculate distances, test for significance, construct ordination plots
+## Calculate distances, construct ordination plots, test for significance
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, include = FALSE}
 # - calculate the beta diversity distances -
@@ -656,7 +694,9 @@ for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
 # plot_list[[4]] <- pcoas[["ordination_Tr_samples"]][[1]]
 ```
 
-### beta diversity results relative abundance
+
+
+### Beta diversity results for relative abundance (ps_filt_ra)
 
 - **Distance boxplots**
 
@@ -664,15 +704,18 @@ for (i in 1:length(pcoas2[["ordination_Tr_samples"]])) {
 # pdf(file = "beta_p_0prev.pdf", width = 10, height = 8)
 do.call("grid.arrange", c(dist_analysis_list[["DistanceBoxplots"]], nrow = length(dist_analysis_list[["DistanceBoxplots"]])))
 # dev.off()
-
 ```
+
+
+- **Write your conclusion here:** *e.g.: Whenever a group clearly separates from another group, I would expect that the within group distances (blue) are smaller than the between group distances (red). If this is not the case I do not care about significant p-values, as there are simply so many distance comparisons.*
+
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-# pdf(file = "beta_p.pdf", width = 10, height = 8)
-# kable(dist_analysis_list[["DistancePValues"]][[1]])
-knitr::kable(dist_analysis_list[["DistancePValuesDirect"]], caption = names(dist_analysis_list[["DistancePValuesDirect"]]))
-# dev.off()
+for (i in 1:length(dist_analysis_list[["DistancePValuesDirect"]])){
+        print(knitr::kable(dist_analysis_list[["DistancePValuesDirect"]][[i]], caption = names(dist_analysis_list[["DistancePValuesDirect"]])[i]))
+}
 ```
+
 
 - **Ordination Plots**
 
@@ -687,15 +730,21 @@ do.call("grid.arrange", c(TrList_ra, ncol = 2))
 # do.call("grid.arrange", c(nmdss[["ordination_Tr_own"]], ncol = 2))
 ```
 
+
 - **adonis, Permutational Multivariate Analysis of Variance Using Distance Matrix**:
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(adonis_list, caption = names(adonis_list))
-# print(xtable(adonis_list[["jsd"]], align = "|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+for (i in 1:length(adonis_list)){
+        print(knitr::kable(adonis_list[[i]], caption = names(adonis_list)[i]))
+}
 ```
 
 
-### beta diversity results for size adjusted counts
+- **Write your conclusion here:** *Neiter me nor adonis can see obvious clustering of the groups based on beta-diversity distances calculated from relative abundance values*
+
+
+
+### Beta diversity results for size adjusted counts (ps_tca_filt)
 
 - **Distance boxplots**
 
@@ -706,11 +755,13 @@ do.call("grid.arrange", c(dist_analysis_list2[["DistanceBoxplots"]], nrow = leng
 
 ```
 
+- **Write your conclusion here:** *e.g.: Whenever a group clearly separates from another group, I would expect that the within group distances (blue) are smaller than the between group distances (red). If this is not the case I do not care about significant p-values, as there are simply so many distance comparisons that they tend to be significant.*
+
+
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-# pdf(file = "beta_p.pdf", width = 10, height = 8)
-# kable(dist_analysis_list[["DistancePValues"]][[1]])
-knitr::kable(dist_analysis_list2[["DistancePValuesDirect"]], caption = names(dist_analysis_list2[["DistancePValuesDirect"]]))
-# dev.off()
+for (i in 1:length(dist_analysis_list2[["DistancePValuesDirect"]])){
+        print(knitr::kable(dist_analysis_list2[["DistancePValuesDirect"]][[i]], caption = names(dist_analysis_list2[["DistancePValuesDirect"]])[i]))
+}
 ```
 
 - **Ordination Plots**
@@ -729,17 +780,24 @@ do.call("grid.arrange", c(TrList_counts, ncol = 2))
 - **adonis, Permutational Multivariate Analysis of Variance Using Distance Matrix**:
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-knitr::kable(adonis_list2, caption = names(adonis_list2))
-# print(xtable(adonis_list[["jsd"]], align = "|c|c|c|c|c|c|", digits = 4), include.rownames = FALSE)
+for (i in 1:length(adonis_list2)){
+        print(knitr::kable(adonis_list2[[i]], caption = names(adonis_list2)[i]))
+}
 ```
+
+
+- **Write your conclusion here:** *Neiter me nor adonis can see obvious clustering of the groups based on beta-diversity distances calculated from size factor adjusted counts*
+
 
 
 # Differential Abundance analysis
 
-## Overview heat map
+- **For all analyses, fisher, DeSeq, wilcoxon, TbT, even if no taxon was significantly different between the groups (levels), the ten taxa with the lowest p-value (test stat) are illustrated. Also even if more than 25 taxa are significant, only the 25 top hits are illustrated.**
+- **NB further: if significance levels are shown with asterisk in the violin plots, these are significant levels coming from a t.test or wilcoxon test (ggpubr stat_compare_mean), the significance levels from the actual test are shown in the tables and indicated in the taxon_names of the violin plots**
 
-- start with a heat map plot of relative abundances to visualise sparsity and abundance differences
-    - NB: 0 counts are shown in red
+
+
+## Overview heat map
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
@@ -749,23 +807,33 @@ taxNames <- as.character(tax_table(ps_filt_ra)[, taxonomic_level])
 taxNames[is.na(taxNames)] <- "NA"
 taxNames <- sapply(strsplit(taxNames, split = "/"), `[`, 1)
 
-Tr <- make_heat_map_physeq(ps_filt_ra, group_var, max_abundance_for_color = .05, tax_order = NULL,
+Tr <- make_heat_map_physeq(ps_filt_ra, group_var, color_levels = color_levels, max_abundance_for_color = .05, tax_order = NULL,
                                  tax_names = taxNames, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
 
 # Tr_list <- make_heat_map_physeq_levels(ps_tca_filt, group_var, max_abundance_for_color = NULL, tax_order = NULL,
 #                                        tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.25, 0.5, 0.75, 1))
 ```
 
+- some statistics on ps_tca_filt (size adjusted counts phyloseq)
+
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 knitr::kable(overview)
 ```
+
+- a heat map plot of relative abundances (ps_filt_ra) to visualise sparsity and maybe also abundance differences
+- **NB: 0 counts, i.e. where the taxon is absent in a sample,  are shown in red**
 
 ```{r, fig.width = 14, fig.height = (1 + 0.07*ntaxa(ps_filt_ra)), warning = FALSE, message = FALSE, echo = FALSE}
 Tr
 ```
 
+- **Write your conclusion here:** *Can you find taxa that are clearly more "red" in one group than the other, i.e. more sparse?*
 
-## differential prevalence analysis with fisher.test
+
+
+## Differential prevalence analysis with fisher.test
+
+- **simply a fisher exact test testing whether some taxa are more prevalent in one group than the other**
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 # - choose the physeq object to run the test on -
@@ -782,7 +850,7 @@ table_and_plotIntput <- prepare_diff_abundance_results_for_plotting(res_list = r
 
 # - generate plots for result visualisation -
 heat_maps <- lapply(1:length(res_list), function(i){
-        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, max_abundance_for_color = .05, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, color_levels = color_levels, max_abundance_for_color = .05, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
 # --
@@ -794,7 +862,7 @@ heat_maps <- lapply(1:length(res_list), function(i){
 knitr::kable(table_and_plotIntput[["original_head_values"]], row.names = FALSE)
 ```
 
-- list the most differently "abundant" taxa for all level combinations
+- list the most differently "abundant" taxa for all group_var level combinations (**NB: even if no taxon is significant the 10 with the lowest p_values are shown**)
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(res_list)){
@@ -802,9 +870,13 @@ for (i in 1:length(res_list)){
 }
 ```
 
+- show heat maps fo the most differently "abundant" taxa for all group_var level combinations (again 10 shown if less are actually significant)
+
 ```{r, fig.width = 14, fig.height = (5 + 0.41*sum(table_and_plotIntput[["head_values"]])), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps, ncol = 1))
 ```
+
+- **Write your conclusion here:** *e.g: Some taxa were indeed only found in one group or the other*
 
 
 
@@ -827,7 +899,7 @@ table_and_plotIntput <- prepare_diff_abundance_results_for_plotting(res_list = r
 
 # - generate plots for result visualisation -
 heat_maps <- lapply(1:length(res_list), function(i){
-        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, max_abundance_for_color = NULL, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, color_levels = color_levels, max_abundance_for_color = NULL, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
 
@@ -840,7 +912,6 @@ violin_plots <- lapply(1:length(res_list), function(i){
 # there are 8 plots per list, only pick violin plot faceted, and logged abundance (with pseudocounts):
 violin_plots <- lapply(violin_plots, `[[`, 8)
 # --
-
 ```
 
 - the number of significantly different taxa found:
@@ -850,7 +921,7 @@ knitr::kable(table_and_plotIntput[["original_head_values"]], row.names = FALSE)
 ```
 
 
-- list the most differently "abundant" taxa for all level combinations
+- list of the most differently "abundant" taxa for all level combinations
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
 for (i in 1:length(res_list)){
@@ -858,20 +929,27 @@ for (i in 1:length(res_list)){
 }
 ```
 
+- corresponding heat maps of the most differently abundant taxa
+
 ```{r, fig.width = 14, fig.height = (5 + 0.41*sum(table_and_plotIntput[["head_values"]])), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps, ncol = 1))
 ```
 
+- corresponding violin plots of most differentially abundant taxa (nb: asterisks fro t.test)
 
 ```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(table_and_plotIntput[["head_values"]])/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots, ncol = 1))
 ```
 
 
+- **Write your conclusion here:** *e.g: the taxa DESeq finds differ mainly in prevalence, i.e. they are not present at all in one of the other group.*
 
-## wilcoxon test excluding zeros (NB: could also be done with ps_tca_filt)
 
-- and NB: could also be done with log10 counts
+
+## Wilcoxon test excluding zeros using relative abundances 
+
+- **NB: done with ps_filt_ra, but could also be done with ps_tca_filt, or maybe log(ps_tca_filt)**
+
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 # - choose the physeq object to run the test on -
@@ -888,7 +966,7 @@ table_and_plotIntput <- prepare_diff_abundance_results_for_plotting(res_list = r
 
 # - generate plots for result visualisation -
 heat_maps <- lapply(1:length(res_list), function(i){
-        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, max_abundance_for_color = .05, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, color_levels = color_levels, max_abundance_for_color = .05, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
 
@@ -919,22 +997,28 @@ for (i in 1:length(res_list)){
 }
 ```
 
+- the corresponding heat maps of the most differentially abundant taxa
+
 ```{r, fig.width = 14, fig.height = (5 + 0.41*sum(table_and_plotIntput[["head_values"]])), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps, ncol = 1))
 ```
 
+- the corresponding heat maps of the most differentially abundant taxa
 
 ```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(table_and_plotIntput[["head_values"]])/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots, ncol = 1))
 ```
 
+- **Write your conclusion here:** *e.g.: Since prevalence is not really linked to abundance when present (see low R2 in the plots above), I like to exclude 0s and compare prevalence separately.*
+
+
 
 ## Taxon by Taxon Matrix analysis
 
-- you need to find a way to get p_val via this method.
-- you further need to find a way to plot the results, currently your plots are based on counts and not TbT ratios
+- Remember: Taxon by taxon ratios are independent of sample size adjustment, I anyway use ps_tca_filt here to expemplify the results. Maybe in the future I find a better "count" value fitting to the TbT method.
+- **NB: the method lacks currently own p-values, so the names in the heat map and violin plots are always taxonomic_level_namne__, while in for example DeSEQ the last __ are signi. and signi_adj.**
 
-### groupSum ranking
+### Based on groupSum ranking
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 # - choose the physeq object to run the test on -
@@ -954,7 +1038,7 @@ table_and_plotIntput <- prepare_diff_abundance_results_for_plotting(res_list = r
 
 # - generate plots for result visualisation -
 heat_maps <- lapply(1:length(res_list), function(i){
-        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, max_abundance_for_color = NULL, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, color_levels = color_levels, max_abundance_for_color = NULL, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
         maps[[i]]
 })
 
@@ -986,20 +1070,27 @@ for (i in 1:length(res_list)){
 }
 ```
 
+- corresponding heat maps
+
 ```{r, fig.width = 14, fig.height = (5 + 0.41*sum(table_and_plotIntput[["head_values"]])), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(heat_maps, ncol = 1))
 ```
 
+- corresponding violin plots
 
 ```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(table_and_plotIntput[["head_values"]])/5)), warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(violin_plots, ncol = 1))
 ```
 
+- **Write your conclusion here:** *e.g.: it deals with the zeros by basically ignoring them, that gives advantage to more prevalent taxas. I like that.*
+
 
 
 # Few analyses at phylum level
 
-## abundance barplots of all samples
+- **NB: these are addded independent of the chosen taxonomic_level because they give good overview**
+
+## Abundance barplots of all samples
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 if (taxonomic_level != "Phylum"){
@@ -1030,14 +1121,18 @@ bar_plot_ps_vs_ps_tca <- plot_bar_own_compare(physeq = ps, physeq2 = ps_tca, x =
 grid.arrange(bar_plot_ps_vs_ps_tca, bar_plot_ps_ra, ncol = 1)
 ```
 
+- **Write your conclusion here:** *e.g.: You can see the effect of library size adjustment (size factors), which does not affect the relative abundances, some samples might almost lack Bacteroidetes, isn't that weird?*
+
+
+
 ## Firmicutes to other phyla ratio
 
+- **good to look at because independent of library size adjustment and compositionality**
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
 # - choose the physeq object to run the test on -
 physeq_to_test <- ps
 # --
-
 
 # - calculate ratio matrixes and assemble taxa names for plots -
 raw_TbTmatrixes_list <- calculate_raw_TbTmatrixes(physeq = physeq_to_test, group_var = group_var)
@@ -1045,7 +1140,6 @@ taxNames <- as.character(tax_table(physeq_to_test)[, taxonomic_level])
 taxNames[is.na(taxNames)] <- "NA"
 taxNames <- sapply(strsplit(taxNames, split = "/"), `[`, 1)
 # --
-
 
 # - plot Firmicutes to all other phyla ratio plots NB: you could change taxa_den to maybe only Bacteroides -
 FirmicutesRatios <- plot_taxa_ratios_levelPairs(TbTmatrixes_list = raw_TbTmatrixes_list, physeq = physeq_to_test, group_var = group_var, tax_names = taxNames, taxa_nom = "Firmicutes", taxa_den = NULL, color_levels = color_levels, test = "t.test", p_adjust_method = "fdr", symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")))
@@ -1060,11 +1154,18 @@ FirmicutesRatiosAllLevels <- plot_taxa_ratios_AllLevels(physeq = physeq_to_test,
 FBRatiosTotalCounts <- plot_sampleSums_FirmtoBac(physeq = physeq_to_test, group_var = group_var, tax_names = taxNames, taxa_nom = "Firmicutes", taxa_den = "Bacteroidetes", color_levels = color_levels, test = "t.test", p_adjust_method = "fdr", symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")))
 
 # --
-
-
 ```
 
+- just a test if sample_sums might affect the Firmicutes to Bacteroidetes ratio
+
+```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
+FBRatiosTotalCounts + scale_y_log10()# in this version I plot the boxplot again the logged ones
+```
+
+
+- now the ratio plots and pVals, **NB: currently t.test here!**
 - NB: these plots show only taxa for which statistical test (t or wilcoxon) was possible, and only samples for which both taxa were present!
+- **NB: the plots show the logged ratios, the analysis was also done on non-logged ratios, see pVals below**
 
 ```{r, fig.width = 14, fig.height = length(FirmicutesRatioPlotsLevelPairs)*5, warning = FALSE, message = FALSE, echo = FALSE}
 do.call("grid.arrange", c(FirmicutesRatioPlotsLevelPairs, ncol = 1))
@@ -1074,30 +1175,48 @@ do.call("grid.arrange", c(FirmicutesRatioPlotsLevelPairs, ncol = 1))
 FirmicutesRatiosAllLevels[[6]] # in this version I plot the boxplot again the logged ones
 ```
 
-```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
-FBRatiosTotalCounts + scale_y_log10()# in this version I plot the boxplot again the logged ones
-```
-
-
-
-### taxon vs taxon ratio tile plots (takes time, so only for few taxa like here for Phylum level)
-
-- works but think about it before putting it in
+- the p-vals for the ratios
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-# # - choose the physeq object to run the test on -
-# physeq_to_test <- ps
-# # --
-# 
-# 
-# TbT_tiles <- create_raw_TbT_TilePlots(raw_TbTmatrixes_list, physeq = physeq_to_test, group_var = group_var, tax_names = taxNames, test = "wilcoxon", p_adjust = "none")
-# TbT_tiles_show <- lapply(TbT_tiles, `[[`, 2)
+for (i in 1:length(FirmicutesRatios)){
+        print(knitr::kable(FirmicutesRatios[[i]][["pVals"]], caption = names(FirmicutesRatios)[i]))
+}
 ```
 
 
+- the p-vals for the ratios
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+for (i in 1:length(FirmicutesRatios)){
+        print(knitr::kable(FirmicutesRatios[[i]][["pValsLog"]], caption = names(FirmicutesRatios)[i]))
+}
+```
 
 
+- **Write your conclusion here:** *e.g.: The Firmicutes to Actinobacteria ratio seems higher in group 2. NB. this is independent of compositionality or library size adjustment.*
 
+
+### Taxon vs taxon ratio tile plots 
+
+- Basically performs ratio **wilcoxon test** for *all phyla combinations*. So if you replace t.test with wilcox.test above, you get the results for Firmicutes. 
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# - choose the physeq object to run the test on -
+physeq_to_test <- ps
+# --
+
+
+TbT_tiles <- create_raw_TbT_TilePlots(raw_TbTmatrixes_list, physeq = physeq_to_test, group_var = group_var, tax_names = taxNames, test = "wilcoxon", p_adjust = "none")
+TbT_tiles_show <- lapply(TbT_tiles, `[[`, 2)
+```
+
+**NB: purple (up) means ratio row taxon/column taxon is higher in first group, and vice versa**
+
+```{r, fig.width = 8, fig.height = length(TbT_tiles_show)*5, warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(TbT_tiles_show, ncol = 1))
+```
+
+- **Write your conclusion here:** *e.g.: very few ratios differ. See that the table is symmetrical, it should be.*
 
 
 

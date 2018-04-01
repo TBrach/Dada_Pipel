@@ -130,7 +130,7 @@ get_overview_of_physeq <- function(physeq){
 ## Output:
 # the heat map trellis
 
-make_heat_map_physeq <- function(physeq, group_var, max_abundance_for_color = NULL, tax_order = NULL,
+make_heat_map_physeq <- function(physeq, group_var, color_levels, max_abundance_for_color = NULL, tax_order = NULL,
                                  tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1)){
         
         gradient_steps <- c(0, 1e-14, gradient_steps)
@@ -166,13 +166,9 @@ make_heat_map_physeq <- function(physeq, group_var, max_abundance_for_color = NU
                 max_abundance_for_color <- quantile(DF_CT$Count, .9)
         }
         
-        # Color the sample names based on levels in group fac
-        if (length(levels(LookUpDF$Group)) <= 7 && color_sample_names){
-                color_lookup <- data.frame(level = levels(LookUpDF$Group), color = cbPalette[2:(length(levels(LookUpDF$Group)) + 1)])
-                colxaxis <- as.character(color_lookup$color[match(LookUpDF$Group, color_lookup$level)])
-        } else {
-                colxaxis <- rep("black", nrow(LookUpDF))
-        }
+        if (max_abundance_for_color == 0) {max_abundance_for_color <- max(DF_CT$Count)}
+        
+        colxaxis <- color_levels[LookUpDF$Group]
         
         
         hmTr <- ggplot(DF_CT, aes(x = Sample, y = Taxa, fill = Count))
@@ -208,7 +204,7 @@ make_heat_map_physeq <- function(physeq, group_var, max_abundance_for_color = NU
 # see default, you might wanna try c(0.25, 0.5, 0.75, 1) as well
 # Output: list of heat maps for each level combination
 
-make_heat_map_physeq_levels <- function(physeq, group_var, max_abundance_for_color = NULL, tax_order = NULL,
+make_heat_map_physeq_levels <- function(physeq, group_var, color_levels, max_abundance_for_color = NULL, tax_order = NULL,
                                         tax_names = NULL, color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1)){
         
         gradient_steps <- c(0, 1e-14, gradient_steps)
@@ -248,17 +244,17 @@ make_heat_map_physeq_levels <- function(physeq, group_var, max_abundance_for_col
         # -- get the level combis --
         fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) 
         i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
-                sapply(seq_along(ivec), function(x){
-                        i <- ivec[x]
+                sapply(seq_along(jvec), function(x){
+                        i <- jvec[x]
                 })
         })
         j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
                 sapply(seq_along(ivec), function(x){
-                        j <- jvec[x]
+                        j <- ivec[x]
                 })
         })
-        i_s <- i_s[upper.tri(i_s)]
-        j_s <- j_s[upper.tri(j_s)]
+        i_s <- i_s[lower.tri(i_s)]
+        j_s <- j_s[lower.tri(j_s)]
         # ----
         
         plot_list <- vector("list", length = length(i_s))
@@ -281,14 +277,10 @@ make_heat_map_physeq_levels <- function(physeq, group_var, max_abundance_for_col
                         max_abundance_for_color_current <- max_abundance_for_color
                 }
                 
-                # Color the sample names based on levels in group fac
-                if (length(levels(LookUpDF$Group)) <= 7 && color_sample_names){
-                        color_lookup <- data.frame(level = levels(LookUpDF$Group), color = cbPalette[2:(length(levels(LookUpDF$Group)) + 1)])
-                        #LookUpDF$Group[match(levels(DF_CT_current$Sample), LookUpDF$Sample)]
-                        colxaxis <- as.character(color_lookup$color[match(LookUpDF$Group[match(levels(DF_CT_current$Sample), LookUpDF$Sample)], color_lookup$level)])
-                } else {
-                        colxaxis <- rep("black", nrow(LookUpDF))
-                }
+                if (max_abundance_for_color_current == 0) {max_abundance_for_color_current = max(DF_CT_current$Count)}
+                
+                # Color the sample names based on color_levels
+                colxaxis <- color_levels[LookUpDF_current$Group]
                 
                 
                 hmTr <- ggplot(DF_CT_current, aes(x = Sample, y = Taxa, fill = Count))
@@ -1385,7 +1377,7 @@ plot_taxa_ratios_levelPairs <- function(TbTmatrixes_list, physeq, group_var, tax
                 var_plus_length_check <- group_by(TbT_DF_l, Taxon, Group) %>% summarise(Variance = var(Ratio, na.rm = T), NotNA = sum(!is.na(Ratio)))
                 if (test == "t.test"){
                         var_plus_length_check <- filter(var_plus_length_check, !(Variance > 0) | NotNA < 2)
-                } else if (test == "wilcoxon") {
+                } else if (test == "wilcox.test") {
                         var_plus_length_check <- filter(var_plus_length_check, NotNA < 1)
                 }
                 
@@ -1484,7 +1476,7 @@ plot_taxa_ratios_levelPairs <- function(TbTmatrixes_list, physeq, group_var, tax
                 
                 # --
                 
-                result_list[[k]] <- list(pVals, Tr, Tr1, pValsLog, Tr2, Tr3)
+                result_list[[k]] <- list(pVals = pVals, Tr = Tr, Tr1 = Tr1, pValsLog = pValsLog, Tr2 = Tr2, Tr3 = Tr3)
                 # rm(Tr, TbT_DF_l, TbT_DF, TbT_DF_l_test, pVals)
         }
         

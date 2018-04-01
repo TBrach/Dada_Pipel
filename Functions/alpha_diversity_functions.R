@@ -39,21 +39,22 @@ get_unique_facLevel_combinations <- function(fac_levels){
 
 # NB: makes use of ggpubr::stat_compare_means that allows you to adjust more settings, e.g. plotting symbols instead of numbers (change label to "p.signif")
 
-boxplot_sampleSums <- function(physeq, group_var, color_levels, test = "t.test", p_adjust_method = "fdr",
+boxplot_sampleSums <- function(physeq, group_var, color_levels, shape, test = "t.test", p_adjust_method = "fdr",
                                symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))){
         
-        DF <- data.frame(Group = sample_data(physeq)[[group_var]], total_count = sample_sums(physeq))
+        DF <- cbind(sample_data(physeq), total_count = sample_sums(physeq))
         
-        
-        Tr <-  ggplot(DF, aes(x = Group, y = total_count, color = Group)) 
+        Tr <-  ggplot(DF, aes_string(x = group_var, y = "total_count", color = group_var)) 
         Tr <- Tr + 
                 geom_boxplot(outlier.color = NA) +
-                geom_jitter(width = .2, height = 0, alpha = 0.65) +
+                geom_jitter(aes_string(shape = shape), width = .2, height = 0, alpha = 0.65) +
                 xlab("") +
                 ylab("sample_sums()") +
                 scale_color_manual("", values = color_levels) +
-                theme_bw() +
-                theme(legend.position = "none")
+                theme_bw()
+        if(is.null(shape)){
+                Tr <- Tr + theme(legend.position = "none")
+        }
         
         # - since you might have more than two levels in each plot you need to set the comparisons argument in stat_compare_means -
         group_fac <- factor(sample_data(physeq)[[group_var]])
@@ -63,7 +64,9 @@ boxplot_sampleSums <- function(physeq, group_var, color_levels, test = "t.test",
         
         Tr <- Tr + ggpubr::stat_compare_means(comparisons = comparisonList, label = "p.signif", method = test, hide.ns = TRUE)
         
-        pVals <- compare_means(formula = total_count ~ Group, data = DF, method = test, p.adjust.method = p_adjust_method, symnum.args = symnum.args)
+        formulaa <- as.formula(paste("total_count ~", group_var, sep = " "))
+        
+        pVals <- compare_means(formula = formulaa, data = DF, method = test, p.adjust.method = p_adjust_method, symnum.args = symnum.args)
 
         list(pVals = pVals, Tr = Tr)
 }
