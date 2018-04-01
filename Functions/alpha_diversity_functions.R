@@ -180,7 +180,7 @@ boxplots_alphdiv <- function(DF_alpha, measures, group, shape, color_levels, tes
                         xlab("") +
                         scale_color_manual("", values = color_levels) +
                         theme_bw()
-                Tr <- Tr + stat_compare_means(comparisons = comparisonList, method = "t.test", label = "p.format") # "p.signif"
+                Tr <- Tr + stat_compare_means(comparisons = comparisonList, method = "t.test", label = "p.signif", hide.ns = TRUE) # "p.signif"
                 boxplotList[[i]] <- Tr
                 names(boxplotList)[i] <- colnames(DF_alpha)[y_columns[i]]
         }
