@@ -1,4 +1,7 @@
 cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+tol15rainbow=c("#114477", "#4477AA", "#77AADD", "#117755", "#44AA88", "#99CCBB", "#777711", "#AAAA44", "#DDDD77", "#771111", "#AA4444", "#DD7777", "#771144", "#AA4477", "#DD77AA")
+# make your own colorscheme to well distinguish 15 quantitiative colors
+QuantColors15 <- tol15rainbow[c(1, 12, 4, 7, 13, 2, 11, 5, 8, 14, 3, 10, 6, 9, 15)]
 
 #######################################
 ### lmp (to get p_value from lm fit)
@@ -136,33 +139,68 @@ check_assignment_vs_prevalence <- function(taxa, seqtab, prevalences = seq(0, 90
 #######################################
 #### plot_correlations_abundance_prev_sparsity
 #######################################
-# df_ab_prev: data frame with "ASV_ID", "total_counts_of_ASV", "prevalence", "sparsity", "mean_count_nonzero",
-# "median_count_nonzero"
-# outputs a list with different plots and fits
+# physeq
+# col = here a string of a taxonomic level
 
-plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ # NB: you could color by Phylum for example
+plot_correlations_abundance_prev_sparsity <- function(physeq, col = NULL){ # NB: you could color by Phylum for example
+        
+        df_ab_prev <- data.frame(ASV_ID = 1:ntaxa(physeq), 
+                                 total_counts_of_ASV = taxa_sums(physeq),
+                                 prevalence = colSums(as(otu_table(physeq), "matrix") != 0), # in how many samples is ASV present
+                                 sparsity = colSums(as(otu_table(physeq), "matrix") == 0), # in how many samples is ASV absent
+                                 mean_count_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){mean(x[x > 0])}),
+                                 median_count_nonzero = apply(as(otu_table(physeq), "matrix"), 2, function(x){median(x[x > 0])}))
+        
+        df_ab_prev <- cbind(df_ab_prev, tax_table(physeq))
+        
         
         nsamples <- df_ab_prev$prevalence[1] + df_ab_prev$sparsity[1]
         
+        if (!is.null(col)) {
+                
+                CountOrder <- dplyr::group_by_(df_ab_prev, col) %>% dplyr::summarise(total_count_sum = sum(total_counts_of_ASV)) %>% dplyr::arrange(desc(total_count_sum))
+                # - make sure that also NAs are plotted, i.e. where coloring taxonomic rank is NA -
+                CountOrder[[col]] <- as.character(CountOrder[[col]])
+                CountOrder[[col]][is.na(CountOrder[[col]])] <- "NA"
+                df_ab_prev[[col]] <- as.character(df_ab_prev[[col]])
+                df_ab_prev[[col]][is.na(df_ab_prev[[col]])] <- "NA"
+                df_ab_prev[[col]] <- factor(df_ab_prev[[col]], levels = CountOrder[[col]], ordered = TRUE)
+                
+                if (nrow(CountOrder) <= 15) {
+                        custom_colors <- QuantColors15[1:nrow(CountOrder)]
+                        
+                } else {
+                        custom_colors <- viridis(nrow(CountOrder))
+                        
+                }
+                
+                names(custom_colors) <- levels(df_ab_prev[[col]])
+        }
+        
+        
+
         Tr_ab <- ggplot(df_ab_prev, aes(x = ASV_ID, y = total_counts_of_ASV))
         if (is.null(col)) {
-                Tr_ab <- Tr_ab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+                Tr_ab <- Tr_ab + geom_point(col = cbPalette[2], size = 2, alpha = 0.95) 
         } else {
-                Tr_ab <- Tr_ab + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+                Tr_ab <- Tr_ab + geom_point(aes_string(col = col), size = 2, alpha = 0.95)
+                Tr_ab <- Tr_ab + scale_color_manual(values = custom_colors)
+                
         }
         Tr_ab <- Tr_ab +
                 ylab("total counts of ASV (= taxa_sums())") +
-                theme_bw(12)
+                theme_bw()
         
         
         Tr_prev <- ggplot(df_ab_prev, aes(x = ASV_ID, y = prevalence))
         if (is.null(col)) {
-                Tr_prev <- Tr_prev + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+                Tr_prev <- Tr_prev + geom_point(col = cbPalette[2], size = 2, alpha = 0.95) 
         } else {
-                Tr_prev <- Tr_prev + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+                Tr_prev <- Tr_prev + geom_point(aes_string(col = col), size = 2, alpha = 0.95)
+                Tr_prev <- Tr_prev + scale_color_manual(values = custom_colors)
         }
         Tr_prev <- Tr_prev +
-                theme_bw(12)
+                theme_bw()
         
         
         # - associations of total abundance and log10(total_counts_of_ASV) to sparsity/prevalence -
@@ -216,9 +254,10 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
         
         Tr_prev_vs_log10_ab <- ggplot(df_ab_prev, aes(x = total_counts_of_ASV, y = prevalence))
         if (is.null(col)) {
-                Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+                Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab + geom_point(col = cbPalette[2], size = 2, alpha = 0.95) 
         } else {
-                Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+                Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab + geom_point(aes_string(col = col), size = 2, alpha = 0.95)
+                Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab + scale_color_manual(values = custom_colors)
         }
         Tr_prev_vs_log10_ab <- Tr_prev_vs_log10_ab +
                 scale_x_log10() +
@@ -264,9 +303,10 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
         
         Tr_prev_vs_log10_meanab <- ggplot(df_ab_prev, aes(x = mean_count_nonzero, y = prevalence))
         if (is.null(col)) {
-                Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+                Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab + geom_point(col = cbPalette[2], size = 2, alpha = 0.95) 
         } else {
-                Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+                Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab + geom_point(aes_string(col = col), size = 2, alpha = 0.95)
+                Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab + scale_color_manual(values = custom_colors)
         }
         Tr_prev_vs_log10_meanab <- Tr_prev_vs_log10_meanab +
                 scale_x_log10() +
@@ -278,9 +318,10 @@ plot_correlations_abundance_prev_sparsity <- function(df_ab_prev, col = NULL){ #
         
         Tr_prev_vs_log10_medianab <- ggplot(df_ab_prev, aes(x = median_count_nonzero, y = prevalence))
         if (is.null(col)) {
-                Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab + geom_point(col = cbPalette[2], size = 2, alpha = 0.7) 
+                Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab + geom_point(col = cbPalette[2], size = 2, alpha = 0.95) 
         } else {
-                Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab + geom_point(aes_string(col = col), size = 2, alpha = 0.7)
+                Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab + geom_point(aes_string(col = col), size = 2, alpha = 0.95)
+                Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab + scale_color_manual(values = custom_colors)
         }
         Tr_prev_vs_log10_medianab <- Tr_prev_vs_log10_medianab +
                 scale_x_log10() +

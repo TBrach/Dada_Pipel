@@ -30,7 +30,7 @@ rarefy_sample <- function (sample_cnts, size) {
 #         geom_label(data = df, aes(label = Sample)) +
 #         scale_x_continuous(limits = c(-100, max(df$step) + 2500))
 
-raref_curve_richness <- function(physeq, group_var = NULL, max_total = NULL, step_size = 200, col_levels, seed = 123) {
+raref_curve_richness <- function(physeq, group_var = NULL, max_total = NULL, step_size = 200, color_levels, seed = 123) {
         
         
         if (taxa_are_rows(physeq)) {
@@ -104,10 +104,13 @@ raref_curve_richness <- function(physeq, group_var = NULL, max_total = NULL, ste
                 
                 richness_df$Group <- Group
                 
-                pairwise.tt_richness <- lapply(richness_df[, -ncol(richness_df)], function(step){ 
-                        ptt <- pairwise.t.test(x = step, g = richness_df$Group, alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
-                        ptt$p.value
-                })
+                # pairwise.tt_richness <- lapply(richness_df[, -ncol(richness_df)], function(step){ 
+                #         ptt <- pairwise.t.test(x = step, g = richness_df$Group, alternative = "two", p.adjust.method = "none", var.equal = F, pool.sd = F)
+                #         ptt$p.value
+                # })
+                
+                pairwise.tt_richness <- NA # NB: I currently do not even show these p-values and it is currently a source of error as soon as you do not
+                # have enough samples within a group at a certain step for a t.test (i.e. only 1 sample in each group left.)
                 
                 plot_div_df2 <- function (div_df, type = "richness") {
                         

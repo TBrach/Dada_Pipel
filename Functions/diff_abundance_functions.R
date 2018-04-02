@@ -953,6 +953,8 @@ prepare_diff_abundance_results_for_plotting <- function(res_list, physeq, taxono
         head_values[head_values < 10] <- 10
         head_values[head_values > 25] <- 25
         
+        head_values[head_values > ntaxa(physeq)] <- ntaxa(physeq) # for "Phylum" analysis it is possible that less than 10 taxa are in physeq
+        
         res_table_list <- lapply(1:length(res_list), function(i){
                 df <- head(res_list[[i]], head_values[i])
                 df <- dplyr::select(df, which(colnames(df) == taxonomic_level), 2:ncol(df)) #simply put taxonomic level in front and remove taxon column (= column 1) 
@@ -1342,7 +1344,7 @@ plot_taxa_ratios_levelPairs <- function(TbTmatrixes_list, physeq, group_var, tax
                         if(!identical(length(TbTmatrixes), length(tax_names))){stop("tax_names do not fit in length to TbTmatrixes")}
                 }
                 
-                # names(TbTmatrixes) <- make.unique(tax_names)
+                names(TbTmatrixes) <- make.unique(tax_names)
                 names(TbTmatrixes) <- tax_names #tax_names should be unique
                 
                 TbTmatrix <- TbTmatrixes[[taxa_nom]] # the only relevant matrix for this plot, it is where tax_nom counts have been divided by the counts of all other taxa
@@ -1508,6 +1510,7 @@ plot_taxa_ratios_AllLevels <- function(physeq, group_var, tax_names = NULL,
         
         if(!identical(ntaxa(physeq), length(tax_names))){stop("tax_names do not fit in length to physeq")}
         
+        tax_names <- make.unique(tax_names)
         taxa_names(physeq) <- tax_names
         # --
         
@@ -1679,6 +1682,7 @@ plot_sampleSums_FirmtoBac <- function(physeq, group_var, tax_names = NULL,
         
         if(!identical(ntaxa(physeq), length(tax_names))){stop("tax_names do not fit in length to physeq")}
         
+        tax_names <- make.unique(tax_names)
         taxa_names(physeq) <- tax_names
         # --
         
@@ -1950,6 +1954,7 @@ create_raw_TbT_TilePlots <- function(TbTmatrixes_list, physeq, group_var, tax_na
                         if(!identical(length(TbTmatrixes), length(tax_names))){stop("tax_names do not fit in length to TbTmatrixes")}
                 }
                 
+                tax_names <- make.unique(tax_names)
                 names(TbTmatrixes) <- tax_names
                 
                 TbTmatrixes <- lapply(TbTmatrixes, function(mat){

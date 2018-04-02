@@ -91,7 +91,7 @@ calc_alphadiv_plusLmResids <- function(physeq, measures = c("Observed", "Shannon
         
         DF_alpha$Total <- sample_sums(physeq)
         
-        
+        rownames(DF_alpha) <- sample_names(ps)
         # because linear fits of alpha diversity measures to total counts are often highly significant, I add the residuals of these
         # linear fits. 
 
@@ -108,7 +108,7 @@ calc_alphadiv_plusLmResids <- function(physeq, measures = c("Observed", "Shannon
         names(fitlist) <- measures
         
         
-        DF_alpha <- data.frame(Sample = rownames(DF_alpha), DF_alpha, sample_data(physeq))
+        DF_alpha <- data.frame(DF_alpha, sample_data(physeq))
         
         outlist <- list(DF_alpha = DF_alpha, fitlist = fitlist)
 }

@@ -222,9 +222,34 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
                               round((sum(df_ab_prev_filt$total_counts_of_ASV)/sum(df_ab_prev$total_counts_of_ASV))*100, 1), " %) remain", sep = ""))
         
         
-        Tr_prev_vs_log10_ab_col <- ggplot(df_ab_prev, aes(x = total_counts_of_ASV, y = prevalence))
+        df_ab_prev2 <- df_ab_prev
+        # - adjust color and order of the phyla in the following plot - 
+        col <- "Phylum"
+        CountOrder <- dplyr::group_by_(df_ab_prev2, col) %>% dplyr::summarise(total_count_sum = sum(total_counts_of_ASV)) %>% dplyr::arrange(desc(total_count_sum))
+        
+        CountOrder[[col]] <- as.character(CountOrder[[col]])
+        CountOrder[[col]][is.na(CountOrder[[col]])] <- "NA"
+        df_ab_prev2[[col]] <- as.character(df_ab_prev2[[col]])
+        df_ab_prev2[[col]][is.na(df_ab_prev2[[col]])] <- "NA"
+        df_ab_prev2[[col]] <- factor(df_ab_prev2[[col]], levels = CountOrder[[col]], ordered = TRUE)
+        
+        if (nrow(CountOrder) <= 15) {
+                custom_colors <- QuantColors15[1:nrow(CountOrder)]
+                
+        } else {
+                custom_colors <- viridis(nrow(CountOrder))
+                
+        }
+        
+        names(custom_colors) <- levels(df_ab_prev2[[col]])
+        # --
+        
+        
+        
+        Tr_prev_vs_log10_ab_col <- ggplot(df_ab_prev2, aes(x = total_counts_of_ASV, y = prevalence))
         Tr_prev_vs_log10_ab_col <- Tr_prev_vs_log10_ab_col +
                 geom_point(aes(col = Phylum), size = 2, alpha = 0.7) +
+                scale_color_manual(values = custom_colors) +
                 scale_x_log10() +
                 geom_rect(data = shade_df, xmin = -Inf, xmax = log10(abund_thresh), ymin = -Inf, ymax = prev_thresh, fill = "#660033", alpha = 0.4) +
                 geom_hline(yintercept = (prevalence/100)*nsamples(physeq), col = cbPalette[1], lty = "dashed") +
@@ -293,11 +318,16 @@ plot_abundance_prev_filter <- function(physeq, prevalence, taxa_sums_quantile){
         
         Merged <- dplyr::select(Merged, 1, 20, 21, 2, 11, 3, 12, 4, 13, 5, 14, 6, 15, 7, 16, 8, 17, 9, 18, 10, 19)
         
+        Merged$Phylum <- as.character(Merged$Phylum)
+        Merged$Phylum[is.na(Merged$Phylum)] <- "NA"
         # in case some phyla have been kicked out: you need to reorder like it was "Before" to have total at the last place
         Merged[is.na(Merged)] <- 0 # Phyla that have been removed are NA
         colnames(Merged)[20:21] <- c("tot_ab_bef", "tot_ab_aft")
         Merged[, 20] <- round(Merged[, 20])
         Merged[, 21] <- round(Merged[, 21])
+        
+        Merged <- dplyr::arrange(Merged, desc(tot_ab_bef), desc(ASVs_bef))
+        Merged <- rbind(Merged[2:nrow(Merged),], Merged[1,])
         
         #Merged$tot_ab_bef <- round(Before$total_ab_bef)
         #Merged$tot_ab_aft <- round(After$total_ab_aft)

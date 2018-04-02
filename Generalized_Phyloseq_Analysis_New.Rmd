@@ -56,7 +56,7 @@ PackageVersions <- data.frame(R = version$version.string,
                               DESeq2 = packageVersion("DESeq2"),
                               ggpubr = packageVersion("ggpubr"))
 for (i in 1:ncol(PackageVersions)){PackageVersions[,i] <- as.character(PackageVersions[,i])}
-PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version)
+PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version) %>% arrange(Package)
 ```
 
 
@@ -80,6 +80,7 @@ source(file.path(functionpath, "diff_abundance_functions.R"))
 # NB, NB: when taxaonomic_level = "Species" a lot of ASV will already be pooled in tax_glom because a lot of ASV have usually same taxonomy down to Species. 
 # So if you want ASV level analysis, you have to set taxonomic_level <- NULL
 taxonomic_level <- NULL 
+phylum_NA_removal <- "no" # if yes you remove all ASVs that are Phylum = NA
 # --
 
 # - Define the group variable, i.e. the factor that separates the samples -
@@ -113,6 +114,7 @@ rare_max_total <- NULL # maximal total amplicons value to which rarefaction curv
 
 # - beta diversity inputs -
 dist_methods <- c("jsd", "unifrac") # otions: see unlist(distanceMethodList)
+coord_cor <- TRUE # for the ordination plots
 # --
 
 ```
@@ -121,101 +123,10 @@ dist_methods <- c("jsd", "unifrac") # otions: see unlist(distanceMethodList)
 
 
 ```{r, echo = FALSE, message=FALSE}
-# # - Load the object I got from Tue - 
-# datapath <- "/Users/jvb740/MarieCurie_Work/DanFunDProject/DF_SampleProcessing/TueData_Processing/PhyseqObject"
-# 
-# physeq <- readRDS(file.path(datapath, "Danfund_to_thorsten.rds"))
-# 
-# current_sample_data <- sample_data(physeq)
-# 
-# # many of the 151 variables do not tell me anything, so I get rid of them
-# current_sample_data <- dplyr::select(current_sample_data, 1:44, extract_seq_combi, bmi, bgi_id_new)
-# 
-# # == Einschub: the sample_name to barcode confusion == 
-# # confusing: the rownames(current_sample_data) == sample_names(physeq) seem to consist of DF plus barcodes, but the actual barcodes are different
-# # step by step through this labelling confusion
-# ID_confusion <- cbind(sample_names = rownames(current_sample_data), current_sample_data[, c("bgi_id", "barcode", "bgi_id_new")])
-# # bgi_id and barcodes are identical except for the cases where bgi_id has only 4 digits (ID_confusion[ID_confusion$bgi_id != ID_confusion$barcode, ])
-# # bgi_id_new is the same as bgi_id just with DF as prefix, here the proof:
-# ID_confusion2 <- tidyr::separate(ID_confusion, bgi_id_new, into = c("DF", "bgi_new_number"), sep = "DF")
-# identical(as.character(ID_confusion2$bgi_id), ID_confusion2$bgi_new_number)
-# # in conclusion: the bgi_id (old and new) fits ok to the barcodes with the 4 digit exception
-# # that leaves the confusion with the sample_names, they resemble the bgi_id_new, i.e. they seem to contain barcodes that however to not fit to the barcodes
-# ID_confusion3 <- tidyr::separate(ID_confusion, sample_names, into = c("DF", "sample_names_number"), sep = "DF")
-# sum(ID_confusion3$sample_names_number == ID_confusion3$barcode) # 1 case where the number fits to the barcode
-# sum(ID_confusion3$sample_names_number %in% ID_confusion3$bgi_id)
-# sum(ID_confusion3$barcode %in% ID_confusion3$sample_names_number) # only 3
-# 
-# # confusion conclusion: The sample_names are clearly confusing since they appear to be related to bgi_ids but do not fit to the actual bgi_ids and thus also not to the barcodes
-# rm(ID_confusion, ID_confusion2, ID_confusion3)
-# # ====
-# # Conclusion: I have to live with the confusing sample_names right now and trust that the barcodes are correct and the sample_names do not matter (i.e. are semi-random)
-# # --
-# 
-# # - Load your DF_EvaluationList >> SampleProcessing info and prepare the new sample data for your physeq -
-# DF_EvaluationList <- readRDS(file = file.path("/Users/jvb740/MarieCurie_Work/DanFunDProject/DF_SampleProcessing/DF_EvaluationList/", "DF_EvaluationList.rds"))
-# 
-# MetaData_selectedGroups <- DF_EvaluationList[["MetaData_selectedGroups"]] # "MetaData_selectedGroups_simplified" is the same with some columns removed, see 171228_DanFundMeta.Rmd
-# 
-# # adjust order to current_sample_data
-# MetaData_selectedGroups <- MetaData_selectedGroups[match(current_sample_data$barcode, MetaData_selectedGroups$barcode), ]
-# 
-# # make a few checks that the data fits together well, before replacing sample_data
-# # all.equal(current_sample_data$deltnr, MetaData_selectedGroups$deltnr)
-# # all.equal(current_sample_data$sys1, MetaData_selectedGroups$sys1)
-# # all.equal(current_sample_data$alat, MetaData_selectedGroups$blood_ALT)
-# # all.equal(as.numeric(current_sample_data$ucrea), MetaData_selectedGroups$urine_creatinine)
-# # Conclusion: my MetaData is fine when it comes to the numbers and dates (looked at more variables in view)
-# 
-# # check and add the two batch effects, assumption: the batch column in MetaData_selectedGroups equals extract_batch
-# # MetaData_selectedGroups$batch_check <- "Ext_2"
-# # MetaData_selectedGroups$batch_check[MetaData_selectedGroups$batch == "Batch_2"] <- "Ext_3"
-# # MetaData_selectedGroups$batch_check[MetaData_selectedGroups$batch == "Batch_3"] <- "Ext_4"
-# # MetaData_selectedGroups$batch_check[MetaData_selectedGroups$batch == "Batch_4"] <- "Ext_5"
-# # MetaData_selectedGroups$batch_check[MetaData_selectedGroups$batch == "Batch_5"] <- "Ext_6"
-# # identical(MetaData_selectedGroups$batch_check, as.character(current_sample_data$extract_batch)) #TRUE
-# # so the batches you had in correspond to the extraction batches, just that Batch_1 is Ext_2, so just add both batches
-# MetaData_selectedGroups$extract_batch <- current_sample_data$extract_batch
-# MetaData_selectedGroups$seq_batch <- current_sample_data$seq_batch
-# 
-# # cbind(cd = colnames(current_sample_data), my = colnames(MetaData_selectedGroups))
-# 
-# # Add more info from SampleProcessing
-# # SampleProcessing <- DF_EvaluationList$SampleProcessing
-# # SampleProcessing <- dplyr::select(SampleProcessing, barcode = Barcode, PelletSize, Sample_Pellet_Size, PS_mgpermuL, PS_mgpermuL_flow)
-# 
-# SampleProcessingEval <- DF_EvaluationList$SampleProcessingEval
-# SP_DF <- do.call("rbind", SampleProcessingEval)
-# SP_DF <- dplyr::select(SP_DF, barcode = Barcode, PelletSize, Sample_Pellet_Size, PS_PC_FluoresOfGated_Cor, TotalGated_perG, TotalGated_perG_Cor)
-# 
-# # Test <- merge(SP_DF, SampleProcessing, by = "barcode")
-# # identical(Test$Sample_Pellet_Size.x, Test$Sample_Pellet_Size.y)
-# 
-# SampleDataNew <- merge(MetaData_selectedGroups, SP_DF, by = "barcode")
-# # --
-# 
-# # - prepare and save the new physeq object -
-# rownames(SampleDataNew) <- rownames(current_sample_data)
-# 
-# sample_data(physeq) <- SampleDataNew
-# 
-# # NB: since Tue has simply filtered the samples, there are now a lot of taxa that are not present in a single sample, I filter these out already here:
-# 
-# physeq <- filter_taxa(physeq, flist = function(x){sum(x) != 0}, prune = TRUE) # reduces the thing to 2440 taxa
-# 
-# 
-# saveRDS(physeq, file = file.path(datapath, "Danfund_Own.rds"))
-# # -- 
-# 
-# # - for clarities sake, rm all and load the new physeq object - 
-# rm(list = ls())
-
 
 datapath <- "/Users/jvb740/MarieCurie_Work/DanFunDProject/DF_SampleProcessing/TueData_Processing/PhyseqObject"
 
-physeq <- readRDS(file.path(datapath, "Danfund_Own.rds"))
-
-ps <- physeq
+ps <- readRDS(file.path(datapath, "Danfund_Own.rds"))
 
 sample_data(ps)[[group_var]] <- factor(sample_data(ps)[[group_var]], levels = group_var_levels, ordered = TRUE)
 
@@ -228,6 +139,7 @@ sample_data(ps)[[group_var]] <- factor(sample_data(ps)[[group_var]], levels = gr
 ```{r, echo = FALSE, message = FALSE}
 
 Inputs_phyloseqAnalysis <- list(taxonomic_level = taxonomic_level,
+                                phylum_NA_removal = phylum_NA_removal,
                                 group_var = group_var,
                                 group_var_levels = group_var_levels,
                                 shape = shape,
@@ -241,6 +153,7 @@ Inputs_phyloseqAnalysis <- list(taxonomic_level = taxonomic_level,
                                 rare_type = rare_type,
                                 rare_max_total = rare_max_total,
                                 dist_methods = dist_methods,
+                                coord_cor = coord_cor,
                                 datapath = datapath,
                                 functionpath = functionpath)
 
@@ -267,8 +180,7 @@ knitr::kable(PackageVersionsAnal, caption = "Used packages")
 knitr::kable(Inputs_phyloseqAnalysis, caption = "Input arguments for this phyloseq analysis")
 ```
 
-
-# Explore taxonomic assignment, prevalence and abundances of ASVs (including removal of ASVs for which Phylum = NA)
+# Explore taxonomic assignment, prevalence and abundances of the `r ntaxa(ps)` ASVs (Did you choose to remove ASVs with Phylum = NA here? `r phylum_NA_removal`!)
 
 ## What is the most abundant and prevalent phylum?
 
@@ -291,7 +203,7 @@ Phyla <- dplyr::summarise(group_by(df_ab_prev, Phylum),
                    PC_total_counts = round(100*sum(total_counts_of_ASV)/sum(df_ab_prev$total_counts_of_ASV), 1), 
                    mean_prev_in_PC = round(100*mean(prevalence)/nsamples(ps), 1),
                    mean_total_counts = round(mean(total_counts_of_ASV)),
-                   median_total_counts = round(median(total_counts_of_ASV)))
+                   median_total_counts = round(median(total_counts_of_ASV))) %>% arrange(desc(PC_total_counts), desc(ASVs), desc(PC_total_prev))
 
 ```
 
@@ -301,15 +213,6 @@ knitr::kable(Phyla)
 
 - **Write your conclusion here:** *e.g.: there are more ASV from Firmicutes than Bacteroidetes, but the Bacteroidetes ASVs have on average more counts over all samples. The average ASV is present in less than 10% of the samples.*  
 
-
-### Removal of ASVs with Phylum = NA
-
-```{r, echo = FALSE, message=FALSE}
-# print(xtable(Phyla, align = "|c|c|c|c|", digits = 1), include.rownames = FALSE)
-ps <- phyloseq::subset_taxa(ps, !is.na(Phylum)) # kick out taxa that could not be assigned even at phylum level
-```
-
-- **`r Phyla$ASVs[is.na(Phyla$Phylum)]` ASVs were removed, leaving `r ntaxa(ps)` ASVs.**
 
 
 ## Assignment distribution of ASVs
@@ -323,6 +226,8 @@ knitr::kable(assignment_distribution)
 ```
 
 - **Write your conclusion here:** *e.g.: almost 70% of taxa/ASVs are assigned to Genus level but less than 10% to Species level*  
+
+
 
 
 ### Is the taxonomic assignment better for more abundant/pevalent ASVs?
@@ -343,11 +248,27 @@ grid.arrange(assign_vs_prev[[2]], assign_vs_ab[[2]], nrow = 2)
 - **Write your conclusion here:** *e.g.: very clear yes, there is a trend that the more abundant and especially more prevalent ASVs are more often assigned to species level* 
 
 
-## Abundance and prevalence distributions of the remaining `r ntaxa(ps)` amplicon sequence variants (ASVs) in `r nsamples(ps)` samples
+## Possible removal of `r Phyla$ASVs[is.na(Phyla$Phylum)]` ASVs with Phylum = NA, here: `r phylum_NA_removal`
 
 
 ```{r, echo = FALSE, message=FALSE}
-TrrList <- plot_correlations_abundance_prev_sparsity(df_ab_prev, col = "Phylum")
+# - remove ASVs with Phylum == NA -
+if (phylum_NA_removal == "yes"){
+        ps <- phyloseq::subset_taxa(ps, !is.na(Phylum)) # kick out taxa that could not be assigned even at phylum level
+}
+# --
+
+```
+
+- **`r sum(Phyla$ASVs) - ntaxa(ps)` ASVs were removed, leaving `r ntaxa(ps)` ASVs.**
+
+
+
+## Abundance and prevalence distributions of the `r ntaxa(ps)` amplicon sequence variants (ASVs) in `r nsamples(ps)` samples
+
+
+```{r, echo = FALSE, message=FALSE}
+TrrList <- plot_correlations_abundance_prev_sparsity(physeq = ps, col = "Phylum")
 # TrList <- plotSVdistributions(seqtab = as(otu_table(ps), "matrix"), prevalence = prevalence)
 ```
 
@@ -385,7 +306,7 @@ if (!is.null(taxonomic_level)){
 
 - **`r ntaxa(ps)` remain after the tax_glom**
 
-## Prevalence and abundance of the taxa after tax_glom in relation to the chosen prevalence that you later use for filtering
+## Prevalence and abundance of the `r ntaxa(ps)` taxa after tax_glom in relation to the chosen prevalence (no samples: `r nsamples(ps)`) that you later use for filtering
 
 ```{r, echo = FALSE, message=FALSE}
 TrList <- plotSVdistributions(seqtab = as(otu_table(ps), "matrix"), prevalence = prevalence)
@@ -552,7 +473,7 @@ if (is.null(rare_max_total)){
         rare_max_total <- quantile(sample_sums(ps), probs = .25)
 }
 
-rarefaction_curves <- raref_curve_richness(physeq = ps, group_var = group_var, max_total = rare_max_total, step_size = step_size, col_levels = col_levels, seed = seed)
+rarefaction_curves <- raref_curve_richness(physeq = ps, group_var = group_var, max_total = rare_max_total, step_size = step_size, color_levels = color_levels, seed = seed)
 ```
 
 ```{r, fig.width = 12, fig.height = 20, warning = FALSE, message = FALSE, echo = FALSE}
@@ -664,7 +585,7 @@ adonis_list2 <- lapply(dist_list2, function(dist_obj){
 # --
 
 # - construct ordination plots -
-pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, color_levels = color_levels, ordination_type = "PCoA", group_var = group_var, shape = shape, coord_cor = TRUE) 
+pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, color_levels = color_levels, ordination_type = "PCoA", group_var = group_var, shape = shape, coord_cor = coord_cor) 
 
 TrList_ra <- vector(mode = "list", length = 2*length(pcoas[["ordination_Tr_samples"]])) 
 counter <- 0
@@ -675,7 +596,7 @@ for (i in 1:length(pcoas[["ordination_Tr_samples"]])) {
         TrList_ra[[counter]] <- pcoas[["ordination_Tr_taxa"]][[i]]
 }
 
-pcoas2 <- calc_ordination_from_distances(ps_tca_filt, dist_list = dist_list2, color_levels = color_levels, ordination_type = "PCoA", group_var = group_var, shape = shape, coord_cor = TRUE) 
+pcoas2 <- calc_ordination_from_distances(ps_tca_filt, dist_list = dist_list2, color_levels = color_levels, ordination_type = "PCoA", group_var = group_var, shape = shape, coord_cor = coord_cor) 
 
 TrList_counts <- vector(mode = "list", length = 2*length(pcoas2[["ordination_Tr_samples"]])) 
 counter <- 0
