@@ -43,6 +43,7 @@ library(DESeq2); packageVersion("DESeq2")
 library(ggpubr); packageVersion("ggpubr")
 
 PackageVersions <- data.frame(R = version$version.string,
+                              phyloseq = packageVersion("phyloseq"),
                               dada2 = packageVersion("dada2"),
                               vegan = packageVersion("vegan"),
                               ggplot2 = packageVersion("ggplot2"),
@@ -55,7 +56,11 @@ PackageVersions <- data.frame(R = version$version.string,
                               ggthemes = packageVersion("ggthemes"),
                               DESeq2 = packageVersion("DESeq2"),
                               ggpubr = packageVersion("ggpubr"))
-for (i in 1:ncol(PackageVersions)){PackageVersions[,i] <- as.character(PackageVersions[,i])}
+
+for (i in 1:ncol(PackageVersions)){
+        PackageVersions[,i] <- as.character(PackageVersions[,i])
+}
+
 PackageVersionsAnal <- tidyr::gather(PackageVersions, key = Package, value = Version) %>% arrange(Package)
 ```
 
