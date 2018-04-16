@@ -1,0 +1,194 @@
+# Differential Abundance analysis
+
+- **For all analyses, fisher, DeSeq, wilcoxon: even if no taxon was significantly different between the groups (levels), the ten taxa with the lowest p-value (test stat) are illustrated. Also even if more than 25 taxa are significant, only the 25 top hits are illustrated.**
+- **NB further: if significance levels are shown with asterisk in the violin plots, these are significant levels coming from a t.test or wilcoxon test (ggpubr stat_compare_mean), the significance levels from the actual test are shown in the tables and indicated in the taxon_names of the violin plots (working on improving this)**
+
+
+
+## Differential prevalence analysis with fisher.test
+
+- **simply a fisher exact test testing whether some taxa are more prevalent in one group than the other**
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# - choose the physeq object to run the test on -
+physeq_to_test <- ps_filt_ra 
+# --
+
+# - run the test function resulting in result list -
+res_list <- test_diffs_in_prevalence(physeq = physeq_to_test, group_var = group_var, p.adj.method = "fdr", minCount = 0L)
+# -- 
+
+# - get result tables and inputs for plot functions -
+table_and_plotIntput <- prepare_diff_abundance_results_for_plotting(res_list = res_list, physeq = physeq_to_test, taxonomic_level = taxonomic_level)
+# -- 
+
+# - generate plots for result visualisation -
+heat_maps <- lapply(1:length(res_list), function(i){
+        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, color_levels = color_levels, max_abundance_for_color = .05, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps[[i]]
+})
+# --
+```
+
+
+- the number of significantly different taxa found:
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+knitr::kable(table_and_plotIntput[["original_head_values"]], row.names = FALSE)
+```
+
+
+- list the most differently "abundant" taxa for all group_var level combinations (**NB: even if no taxon is significant the 10 with the lowest p_values are shown**)
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+for (i in 1:length(res_list)){
+        print(knitr::kable(table_and_plotIntput[["res_table_list"]][[i]], caption = names(res_list)[i]))
+}
+```
+
+- show heat maps fo the most differently "abundant = prevalent" taxa for all group_var level combinations (again 10 shown if less are actually significant)
+
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(table_and_plotIntput[["head_values"]])), warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(heat_maps, ncol = 1))
+```
+
+- **Write your conclusion here:** *e.g: Some taxa were indeed more prevalent in the one group or the other*
+
+
+
+## DeSeq2 analysis
+
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# - choose the physeq object to run the test on -
+physeq_to_test <- ps_filt 
+# --
+
+# - run the test function resulting in result list - NB: a bit special for DESeq because you also get a new physeq
+out_list <- DESeq2Apply_physeq(physeq = physeq_to_test, group_var = group_var, SFs = SFs, p.adjust.method = "fdr", symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")))
+res_list <- out_list[[1]]
+physeq_to_test <- out_list[[2]]
+# -- 
+
+# - get result tables and inputs for plot functions -
+table_and_plotIntput <- prepare_diff_abundance_results_for_plotting(res_list = res_list, physeq = physeq_to_test, taxonomic_level = taxonomic_level)
+# -- 
+
+# - generate plots for result visualisation -
+heat_maps <- lapply(1:length(res_list), function(i){
+        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, color_levels = color_levels, max_abundance_for_color = NULL, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps[[i]]
+})
+
+
+violin_plots <- lapply(1:length(res_list), function(i){
+        plotlist <- plot_toptaxa_boxAndviolin(physeq = table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_levels = color_levels, ttestp = "yes")
+        plotlist[[i]]
+})
+
+# there are 8 plots per list, only pick violin plot faceted, and logged abundance (with pseudocounts):
+violin_plots <- lapply(violin_plots, `[[`, 8)
+# --
+```
+
+- the number of significantly different taxa found:
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+knitr::kable(table_and_plotIntput[["original_head_values"]], row.names = FALSE)
+```
+
+
+- list of the most differently "abundant" taxa for all level combinations
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+for (i in 1:length(res_list)){
+        print(knitr::kable(table_and_plotIntput[["res_table_list"]][[i]], caption = names(res_list)[i]))
+}
+```
+
+- corresponding heat maps of the most differently abundant taxa
+
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(table_and_plotIntput[["head_values"]])), warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(heat_maps, ncol = 1))
+```
+
+- corresponding violin plots of most differentially abundant taxa (nb: asterisks from t.test)
+
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(table_and_plotIntput[["head_values"]])/5)), warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(violin_plots, ncol = 1))
+```
+
+
+- **Write your conclusion here:** *e.g: the taxa DESeq finds differ mainly in prevalence, i.e. they are not present at all in one of the other group.*
+
+
+
+
+## Wilcoxon test excluding zeros using relative abundances 
+
+- **NB: done with ps_filt_ra, but could also be done with ps_tca_filt, or logged counts**
+
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# - choose the physeq object to run the test on -
+physeq_to_test <- ps_filt_ra
+# --
+
+# - run the test function resulting in result list - NB: a bit special for DESeq because you also get a new physeq
+res_list <- wilcoxTestApply_physeq(physeq = physeq_to_test, group_var = group_var, excludeZeros = TRUE, p.adjust.method = "fdr", symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")))
+# -- 
+
+# - get result tables and inputs for plot functions -
+table_and_plotIntput <- prepare_diff_abundance_results_for_plotting(res_list = res_list, physeq = physeq_to_test, taxonomic_level = taxonomic_level)
+# -- 
+
+# - generate plots for result visualisation -
+heat_maps <- lapply(1:length(res_list), function(i){
+        maps <- make_heat_map_physeq_levels(table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, color_levels = color_levels, max_abundance_for_color = .05, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_sample_names = TRUE, gradient_steps = c(0.15, 0.3, 0.45, 1))
+        maps[[i]]
+})
+
+
+violin_plots <- lapply(1:length(res_list), function(i){
+        plotlist <- plot_toptaxa_boxAndviolin(physeq = table_and_plotIntput[["pruned_physeqs_to_test"]][[i]], group_var = group_var, tax_order = table_and_plotIntput[["tax_orders"]][[i]], tax_names = table_and_plotIntput[["row_names_for_heat_maps"]][[i]], color_levels = color_levels, ttestp = "yes")
+        plotlist[[i]]
+})
+
+# there are 8 plots per list, only pick violin plot faceted, and logged abundance (with pseudocounts):
+violin_plots <- lapply(violin_plots, `[[`, 8)
+# --
+```
+
+- the number of significantly different taxa found:
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+knitr::kable(table_and_plotIntput[["original_head_values"]], row.names = FALSE)
+```
+
+
+- list the most differently "abundant" taxa for all level combinations
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = "asis"}
+for (i in 1:length(res_list)){
+        print(knitr::kable(table_and_plotIntput[["res_table_list"]][[i]], caption = names(res_list)[i]))
+}
+```
+
+
+- the corresponding heat maps of the most differentially abundant taxa
+
+```{r, fig.width = 14, fig.height = (5 + 0.41*sum(table_and_plotIntput[["head_values"]])), warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(heat_maps, ncol = 1))
+```
+
+
+- the corresponding heat maps of the most differentially abundant taxa
+
+```{r, fig.width = 14, fig.height = 2.3*(ceiling(sum(table_and_plotIntput[["head_values"]])/5)), warning = FALSE, message = FALSE, echo = FALSE}
+do.call("grid.arrange", c(violin_plots, ncol = 1))
+```
+
+- **Write your conclusion here:** *e.g.: Since 0s were excluded in this analysis, they should probably be removed from the violin plots as well*
+
+
+

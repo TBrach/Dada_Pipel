@@ -1,73 +1,77 @@
-# Preprocessing and filtering
+# Beta diversity analysis
 
-- **filtering strategy**:
-    - I filter on prevalence (keeping taxa with prevalence > `r prevalence`) and taxa_sums() (keeping taxa whose taxa sums/total counts over all samples are above the `r taxa_sums_quantile` quantile)
-        - prevalence filter: remove taxa that are only in very few samples
-        - taxa_sums_quantile filter: keep very abundant taxa even if they are only present in a few samples.
-    - NG:
-        - because of the taxa_sums_quantile filter, I first do a DeSEQ-like total counts (sample size/library size) adjustment on the samples *using the size factors that have been calculated above on all taxa before tax_glom*. 
-        - this sample size adjustment does not affect prevalence nor relative abundances. So only analyses using ps_tca are affected, not analyses using ps_filt or ps_filt_ra (relative abundance).
-        - *to visualise the size factors, bar plots of the counts at phylum level are shown*
+
+
+## Calculate distances, construct ordination plots, test for significance
+
+- NB: analysis is done on relative abundance here (you could use ps_tca_filt instead)
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, include = FALSE}
+# - calculate the beta diversity distances -
+dist_list <- calc_beta_div_distances(ps_filt_ra, dist_methods) # produces objects of class "dist"
+# --
+
+# - gemerate boxplots always comparing the within to the between group distances -
+# NB: takes also time for many samples, so you might want to take it out if there are many
+dist_analysis_list <- compare_beta_div_distances_directly(dist_list = dist_list, physeq = ps_filt_ra, group_var = group_var, test = "t.test", symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")),
+                               p.adjust.method = "BH", hide.ns = FALSE)
+
+# --
+
+
+# - add Permutational Multivariate Analysis of Variance Using Distance Matrix and vegan::adonis -
+adonis_list <- lapply(dist_list, function(dist_obj){
+        loop_vegan_adonis(dist_obj = dist_obj, group_fac = sample_data(ps_filt_ra)[[group_var]])
+})
+# --
+
+# - construct ordination plots -
+pcoas <- calc_ordination_from_distances(ps_filt_ra, dist_list = dist_list, color_levels = color_levels, ordination_type = "PCoA", group_var = group_var, shape = shape, coord_cor = coord_cor) 
+
+TrList_ra <- pcoas[["ordination_Tr_samples"]]
+# --
+```
+
+## Beta diversity results for relative abundance (ps_filt_ra)
+
+- **Distance boxplots**
+
+```{r, fig.width = 14, fig.height = 10*length(dist_analysis_list[["DistanceBoxplots"]]), warning = FALSE, message = FALSE, echo = FALSE}
+# pdf(file = "beta_p_0prev.pdf", width = 10, height = 8)
+do.call("grid.arrange", c(dist_analysis_list[["DistanceBoxplots"]], nrow = length(dist_analysis_list[["DistanceBoxplots"]])))
+# dev.off()
+```
+
+
+- **Write your conclusion here:** *e.g.: with many samples it is almost always significant. The between groups distances should be higher if there is real clustering by group*
+
+
 
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-# - filtering  -
-# NB: SFs were already calculated in exploratory analysis before tax_glom!
-library_size_adjust_list <- simply_adjust_LS(ps, SFs = SFs) 
-ps_tca <- library_size_adjust_list[[1]] # tca: total counts adjusted
-
-ps_tca_filt <- phyloseq::filter_taxa(ps_tca, function(x){
-        (sum(x > min_obs) > (prevalence/100)*length(x)) || 
-                (sum(x) > quantile(taxa_sums(ps_tca), probs = taxa_sums_quantile/100))
-        }, prune = TRUE)
-
-ps_filt <- phyloseq::prune_taxa(taxa_names(ps_tca_filt), ps) # you need ps_filt for DESeq2Apply_physeq
-
-ps_filt_ra <- phyloseq::transform_sample_counts(ps_filt, function(x){x/sum(x)}) 
-# --
-
-# - Generate a visual overview of the filtering step -
-filterList <- visualize_filtering(physeq = ps_tca, prevalence = prevalence, taxa_sums_quantile = taxa_sums_quantile)
-# --
-
-# - generate barplot representations of counts before and after filtering - 
-bar_plot_ps_vs_ps_tca <- plot_sample_bars_compare(physeq = ps, physeq2 = ps_tca, x = "Sample", y = "Abundance", group_var = group_var, color_levels = color_levels, fill = "Phylum", color_sample_names = TRUE)
-# --
-
-# - Plots on the question: Were the size factors different between the groups -
-SFList <- plot_sizeFactors(physeq = ps, SFs = SFs, group_var = group_var, color_levels = color_levels, shape = shape, test = "t.test", p_adjust_method = "fdr", symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")))
-# --
-```
-
-- taxa within the shaded area were removed:
-
-```{r, fig.width = 8, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
-filterList[[1]]
-```
-
-```{r, fig.width = 10, fig.height = 8, warning = FALSE, message = FALSE, echo = FALSE}
-filterList[[2]]
+for (i in 1:length(dist_analysis_list[["DistancePValuesDirect"]])){
+        print(knitr::kable(dist_analysis_list[["DistancePValuesDirect"]][[i]], caption = names(dist_analysis_list[["DistancePValuesDirect"]])[i]))
+}
 ```
 
 
-- **`r ntaxa(ps_filt)` out of `r ntaxa(ps)` taxa survived the filter (`r round(100*ntaxa(ps_filt)/ntaxa(ps), 1)` %)**
-- **`r sum(otu_table(ps_tca_filt))` out of `r sum(otu_table(ps_tca))` counts survived the filter (`r round(100*sum(otu_table(ps_tca_filt))/sum(otu_table(ps_tca)), 1)` %)** (based on ps_tca vs ps_tca_filt, not ps vs ps_filt)
+- **Ordination Plots**
 
-- the following plot shows how the total counts (sample sizes) changed by the say factor adjustment
-
-```{r, fig.width = 14, fig.height = 14, warning = FALSE, message = FALSE, echo = FALSE}
-bar_plot_ps_vs_ps_tca
-```
-
-- the following plots show the distribution of the size factors between the groups.
-
-```{r, fig.width = 14, fig.height = 6, warning = FALSE, message = FALSE, echo = FALSE}
-grid.arrange(SFList[[2]], SFList[[3]], ncol = 2)
+```{r, fig.width = 10, fig.height = 3.5*length(TrList_ra), warning = FALSE, message = FALSE, echo = FALSE}
+#pdf(file = "pcoa_ra.pdf", width = 10, height = 8)
+do.call("grid.arrange", c(TrList_ra, ncol = 1))
+# TrList_ra[[1]]
+# dev.off()
 ```
 
 
-- **Write your conclusion here:** *e.g.: size factors look reasonable when they are around 1. If some size factors are very small or low, something might be weird with those samples. Remember size factor adjustment affects DeSeq analysis, but not analyses on relative abundance*
+- **adonis, Permutational Multivariate Analysis of Variance Using Distance Matrix**:
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+for (i in 1:length(adonis_list)){
+        print(knitr::kable(adonis_list[[i]], caption = names(adonis_list)[i]))
+}
+```
 
 
-
-
+- **Write your conclusion here:** *also permanova tests are sometimes significant, but check R2 also*

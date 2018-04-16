@@ -33,7 +33,7 @@ calc_beta_div_distances <- function(physeq, dist_methods = c("bray")) {
 # the levels in group_var are compared individually always within_gr1 vs between vs within_gr2
 
 compare_beta_div_distances_directly <- function(dist_list, physeq, group_var, test = "t.test", symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")),
-                               p.adjust.method = "BH") {
+                               p.adjust.method = "BH", hide.ns = FALSE) {
         
         TrList <- vector(mode = "list", length = length(dist_list))
         pValListAll <- vector(mode = "list", length = length(dist_list))
@@ -135,8 +135,11 @@ compare_beta_div_distances_directly <- function(dist_list, physeq, group_var, te
                         # --
                         
                         Tr <- ggplot(df_plot, aes(x = Type2, y = Distance, col = Type))
-                        Tr <- Tr + geom_boxplot(outlier.color = NA) + 
-                                geom_jitter(position = position_jitter(width = 0.3, height = 0), alpha = 0.65) +
+                        Tr <- Tr + geom_boxplot(outlier.color = NA)
+                        if (nsamples(physeq) < 100) {
+                                Tr <- Tr + geom_jitter(position = position_jitter(width = 0.3, height = 0), alpha = 0.65)
+                        }
+                        Tr <- Tr +
                                 facet_wrap(~ Level, ncol = 2, scales = "free_x") +
                                 xlab("") +
                                 ylab(paste(names(dist_list)[i], "distance", sep = " ")) +
@@ -146,14 +149,17 @@ compare_beta_div_distances_directly <- function(dist_list, physeq, group_var, te
                         
                         my_comparisons <- list(c("within_gr1", "between"), c("within_gr1", "within_gr2"), c("within_gr2", "between"))
                         
-                        Tr <- Tr + stat_compare_means(comparisons = my_comparisons, label = "p.signif", method = test, hide.ns = TRUE) # alternative: "p.format"
+                        Tr <- Tr + stat_compare_means(comparisons = my_comparisons, label = "p.signif", method = test, hide.ns = hide.ns) # alternative: "p.format"
                 
                         
                 } else {
                         
                         Tr <- ggplot(df, aes(x = GroupToGroup, y = Distance, col = Type))
-                        Tr <- Tr + geom_boxplot(outlier.color = NA) + 
-                                geom_jitter(position = position_jitter(width = 0.3, height = 0), alpha = 0.65) +
+                        Tr <- Tr + geom_boxplot(outlier.color = NA)
+                        if (nsamples(physeq) < 100) {
+                                Tr <- Tr + geom_jitter(position = position_jitter(width = 0.3, height = 0), alpha = 0.65)
+                        }
+                        Tr <- Tr +
                                 xlab("") +
                                 ylab(paste(names(dist_list)[i], "distance", sep = " ")) + 
                                 scale_color_manual("", values = c("within" = cbPalette[6], "between" = cbPalette[7])) +
@@ -164,7 +170,7 @@ compare_beta_div_distances_directly <- function(dist_list, physeq, group_var, te
                         # there is probably a less clumsy way to get to the my_comparisons
                         comparisonList <- get_unique_facLevel_combinations(GroupToGroupLevels)
                         
-                        Tr <- Tr + stat_compare_means(comparisons = comparisonList, label = "p.format", method = test, hide.ns = TRUE)
+                        Tr <- Tr + stat_compare_means(comparisons = comparisonList, label = "p.signif", method = test, hide.ns = hide.ns)
                         
                         pValListDirect[[i]] <- df_p
                         
@@ -179,8 +185,11 @@ compare_beta_div_distances_directly <- function(dist_list, physeq, group_var, te
         out <- list(DistanceBoxplots = TrList, DistancePValuesAll = pValListAll, DistancePValuesDirect = pValListDirect)
         
 }
+# --
 
 
+
+# --
 #######################################
 ### FUNCTION: loop_vegan_adonis
 #######################################
@@ -208,20 +217,10 @@ loop_vegan_adonis <- function(dist_obj, group_fac, nperm = 999,
         
         # - get all level combinations within group_fac - # changed this so that I think order is more logical, check regularly if correct
         fac_levels <- levels(group_fac)
-        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels) # see pairwise.table
-        
-        i_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
-                sapply(seq_along(jvec), function(x){
-                        i <- jvec[x]
-                })
-        })
-        j_s <- outer(fac_levels_num, fac_levels_num, function(ivec, jvec){
-                sapply(seq_along(ivec), function(x){
-                        j <- ivec[x]
-                })
-        })
-        i_s <- i_s[lower.tri(i_s)]
-        j_s <- j_s[lower.tri(j_s)]
+        fac_levels_num <- setNames(seq_along(fac_levels), fac_levels)
+        i_sAndj_s <- get_unique_facLevel_combis(fac_levels)
+        i_s <- i_sAndj_s[["i_s"]]
+        j_s <- i_sAndj_s[["j_s"]]
         # -- 
         
         p_vals <- vector(mode = "numeric", length = length(i_s))
@@ -263,8 +262,11 @@ loop_vegan_adonis <- function(dist_obj, group_fac, nperm = 999,
         # --
         
 }
+# --
 
 
+
+# --
 #######################################
 ### FUNCTION: calc_ordination_from_distances
 #######################################
@@ -366,7 +368,7 @@ calc_ordination_from_distances <- function(physeq, dist_list, color_levels, ordi
         names(ordination_list) <- names(TrList_taxa) <- names(DFList) <- names(DF_taxa_List) <- names(TrList_own) <- names(dist_list)
         out <- list(ordination_list = ordination_list, DFList = DFList, DF_taxa_List = DF_taxa_List, ordination_Tr_samples = TrList_own, ordination_Tr_taxa = TrList_taxa)
 }
-
+# --
 
 
 

@@ -94,9 +94,19 @@ options(knitr.table.format = "latex")
 
 
 ```{r, echo = FALSE, message=FALSE}
+# - source all functions -
+functionpath <- "./Functions"
+source(file.path(functionpath, "000_helper_functions.R"))
+source(file.path(functionpath, "010_explore_ps_functions.R"))
+source(file.path(functionpath, "020_preprocess_filtering_functions.R"))
+source(file.path(functionpath, "030_alpha_diversity_functions.R"))
+source(file.path(functionpath, "040_beta_diversity_functions.R"))
+source(file.path(functionpath, "050_diff_abundance_functions.R"))
+source(file.path(functionpath, "060_phylum_analysis_functions.R"))
+
 # - load your phyloseq object - 
 # NB: USER INPUT
-name_phyloseq_rds <- "microdiab.rds"
+name_phyloseq_rds <- "microdiab_DK.rds"
 # NB: USER INPUT
 datapath <- "./Example_phyloseq_objects"
 
@@ -106,6 +116,7 @@ if(! file.exists(file.path(datapath, name_phyloseq_rds))){
 }
 
 ps <- readRDS(file.path(datapath, name_phyloseq_rds))
+
 # --
 
 # - Define the group variable for sample comparisons -
