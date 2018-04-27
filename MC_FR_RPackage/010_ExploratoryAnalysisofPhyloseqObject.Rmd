@@ -6,13 +6,14 @@
 
 ## Removal of taxa that are not present in a single sample
 
+
 ```{r, echo = FALSE, message=FALSE}
 # - remove taxa with Phylum == NA -
 ps <- phyloseq::subset_taxa(ps, taxa_sums(ps) != 0) 
 # --
 ```
 
-- there are `r ntaxa(ps)` taxa and `r nsamples(ps)` samples in the phyloseq object
+- there are `r ntaxa(ps)` taxa and `r nsamples(ps)` samples in the phyloseq object after removal of taxa that were not present in a single sample
 
 
 
@@ -22,15 +23,15 @@ ps <- phyloseq::subset_taxa(ps, taxa_sums(ps) != 0)
 Phyla <- check_phyla_distribution(ps)
 ```
 
-- Table \@ref(tab:phyla_before_adjust) shows an overview of the phyla representation in the data set.
+- Table \@ref(tab:phyla-before-adjust) shows an overview of the phyla representation in the data set.
     - PC_of_counts is basically the relative abundance of the phylum in the entrie data set.
     - PC_of_prevalence is the percentage of non zero counts that belong to the phylum
     - mean/median_taxa_sum are the mean/median of the taxa_sums (total counts over all samples) of the taxa in the respective phylum.
     - *NB: There was no adjustment of sample sizes yet, so PC_of_counts, median_taxa_sum, and mean_taxa_sum were calculated based on the unadjusted raw counts in the phyloseq object.*
     
     
-```{r phyla_before_adjust, echo = FALSE, message=FALSE}
-knitr::kable(Phyla)
+```{r phyla-before-adjust, echo = FALSE, message=FALSE}
+knitr::kable(Phyla, caption = "Phyla Distribution")
 ```
 
 - **Write your conclusion here:** *e.g.: most taxa belong to Firmicutes but the Bacteroidetes taxa have on average higher taxa_sums (counts over all samples). The average Firmicutes taxon is present in ca 25% of the samples.*
@@ -75,7 +76,7 @@ grid.arrange(assign_vs_prev[[2]], assign_vs_ab[[2]], nrow = 2)
 
 ## Removal of taxa that were not assigned to a phylum 
 
-- **NB: only if you chose "yes" for "phylum_NA_removal"**
+- *NB: only if you chose "yes" for "phylum_NA_removal", your choice was: `r phylum_NA_removal`*
 
 ```{r, echo = FALSE, message=FALSE}
 # - remove taxa with Phylum == NA -
@@ -106,7 +107,7 @@ grid.arrange(TrrList[[3]], TrrList[[4]], ncol = 2)
 
 
 
-# Perform tax_glom to the chosen taxonomic_level, which is: `r if (is.null(taxonomic_level)) {"all taxa"} else {taxonomic_level}`
+## Perform tax_glom to the chosen taxonomic_level, which is: `r if (is.null(taxonomic_level)) {"all taxa"} else {taxonomic_level}`
 
 - *NB: also the size factors for the subsequent total count adjustment (a la DESeq2) are calculated here based on all taxa in the phyloseq object. This is because size factors are less reliable when calculated on less taxa, since they are based on a median ratio calculation*
 
@@ -130,7 +131,7 @@ if (!is.null(taxonomic_level)){
 
 
 
-## Prevalence and abundance distributions of the`r ntaxa(ps)` taxa after tax_glom in relation to the chosen prevalence that is later used for filtering
+### Prevalence and abundance distributions of the`r ntaxa(ps)` taxa after tax_glom in relation to the chosen prevalence that is later used for filtering
 
 
 ```{r, echo = FALSE, message=FALSE}
@@ -148,20 +149,19 @@ grid.arrange(TrList[[1]], TrList[[2]], TrList[[3]] + scale_y_log10(), TrList[[4]
 
 
 
-## Check whether sample_sums/sample sizes differ between groups
+### Check whether sample_sums/sample sizes differ between groups
 
-- 
+
 
 ```{r, message = FALSE, warning = FALSE, echo = FALSE}
-
 SampleSumList <- boxplot_sampleSums(physeq = ps, group_var = group_var, color_levels = color_levels, shape = shape, test = "t.test", p_adjust_method = "fdr",
                                     symnum.args = list(cutpoints = c(0, 1e-04, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")))
-
 ```
 
 ```{r, fig.width = 7, fig.height = 5, warning = FALSE, message = FALSE, echo = FALSE}
 SampleSumList[["Tr"]]
 ```
+
 
 - **Write your conclusion here:** *e.g.: no significant differences in the sample_sums between the groups.*
 

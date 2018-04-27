@@ -124,7 +124,7 @@ check_assignment_vs_abundance <- function(physeq, abundanceQuantiles = seq(0, 90
 #######################################
 # checks if there is a trend for better assignment for more prealent SVs
 
-check_assignment_vs_prevalence <- function(ps, prevalences = seq(0, 90, by = 10)){
+check_assignment_vs_prevalence <- function(physeq, prevalences = seq(0, 90, by = 10)){
         
         if (phyloseq::taxa_are_rows(physeq)) {
                 physeq <- t(physeq)

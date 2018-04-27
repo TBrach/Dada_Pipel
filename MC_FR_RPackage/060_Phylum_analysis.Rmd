@@ -59,9 +59,7 @@ FirmicutesRatiosAllLevels[[6]] # in this version I plot the boxplot again the lo
 - the p-vals for the ratios
 
 ```{r, warning = FALSE, message = FALSE, echo = FALSE}
-for (i in 1:length(FirmicutesRatios)){
-        print(knitr::kable(FirmicutesRatios[[i]][["pValsLog"]], caption = names(FirmicutesRatios)[i]))
-}
+FirmicutesRatiosAllLevels[["pValsLog"]] 
 ```
 
 

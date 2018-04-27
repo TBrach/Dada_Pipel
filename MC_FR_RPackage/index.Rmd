@@ -1,8 +1,13 @@
 --- 
-title: "Example analysis of a phyloseq object with microbiomeX"
-author: "CBMR Team"
+title: "Example analysis of a phyloseq object"
+author: "Thorsten Brach"
 date: "`r Sys.Date()`"
 site: bookdown::bookdown_site
+# -- Define the output option, i.e. whether you want to build a html document, a pdf, or a gitbook
+output: bookdown::html_document2
+# output: bookdown::gitbook
+# output: bookdown::pdf_book
+# --
 documentclass: book
 classoption: a4paper
 #bibliography: [book.bib, packages.bib]
@@ -11,25 +16,40 @@ link-citations: yes
 # description: "MicrobDiab Analysis"
 #output: bookdown::pdf_book
 #  fig_width: 7
+# output: html_document
 ---
 
 
 
 
-# Introduction
+# Introduction and User input 
 
-The document uses example data to illustrate how analyses of a phyloseq object can be done with microbiomeX.
+## How the document works
 
-How it works:
+The document illustrates a streamlined analysis of microbiome data starting with a phyloseq object. 
+The analysis includes exploratory analysis, alpha-diversity analysis, beta-diversity (ordination) analysis, and comparison of phyla ratios.
 
-- you need a phyloseq object saved as **.rds** object (via saveRDS).
-    - the sample_data of your phyloseq object needs to contain a variable to group the samples (the name of that column will be your group_var) 
-- In the section **Load phyloseq object and set your input parameters for the analysis** you define the path to your phyloseq object and set important input parameters such as group_var. 
-- in the end you get a nice html file
+To perform the analysis with your own data, or to recapitulate this example analysis on your own computer:
+
+- Where to start?: 
+    - The pipeline makes use of "R Projects" and the "bookdown package". 
+        - Start a new project in R Studio using this folder as "from existing directory". Then open the index.Rmd file in R studio.
+        - When you later build the final document with bookdown, all Rmd files (the Chapters) in the folder are considered in alphabetic order. For more info: <https://www.rstudio.com/resources/webinars/introducing-bookdown/>
+- What you need?:
+    - make sure that all packages under **Load packages (and color schemes)** are installed and up to date.
+    - you need a prepared phyloseq object, saved as **.rds** file on your computer (saveRDS command) (best in the project folder). Just like the one in Example_phyloseq_objects. Info: <https://joey711.github.io/phyloseq/import-data.html>
+- What then?
+    - Adjust the input parameters for the analysis under **Load phyloseq object and set input**. I hope most input is self-explanatory in particular with the annotation given in the section. In this section: all lines where user user input is required or possible are marked with **NB: USER INPUT** and **NB: user input**, respectively
+       - NB: In the section: **Load phyloseq object and set input**, I intentionally put the input tests directly after the input is given. That way it takes longer to write the input. I did so, because I think it is a good idea to go once through the entire section for each analysis. It helps in understanding the input and discovering potential problems.
+- How to run it?
+    - When you are certain about the input, you build the document in Rstudio with bookdown. You do so under Build >> Build All. Or by using the Build tab >> Build Book. This will run the entire analysis and produce the output document.
+        - By default I use bookdown::html_document2, so an html file **_main.html (look at it in your browser)** is created.
+        - You can change the output to pdf or gitbook by setting the output: on top of the document to bookdown::pdf_book or bookdown::gitbook, respectively. However, wide tables that are wider than the page size are currently only fully visible in html.
 
 
+*NB: The project leading to this application has received funding from the European Union's Horizon 2020 research and innovation programme under the Marie Sklodowska-Curie grant agreement No 707300.*  
 
-# Load packages, and two color schemes
+## Load packages (and color schemes)
 
 <!-- Load required packages -->
 
@@ -58,19 +78,19 @@ library(DESeq2); # packageVersion("DESeq2")
 library(ggpubr); # packageVersion("ggpubr")
 
 # - packaged from Mani's analysis that I could add -
-library(cowplot)
-library(coin)
-library(ade4)
-library(ggrepel)
-library(ggforce)
-library(bookdown)
-library(kableExtra)
-library(RColorBrewer)
-library(bindrcpp)
-library(stringr)
-library(pheatmap)
-library(BiocParallel)
-library(microbiomeX)
+# library(cowplot)
+# library(coin)
+# library(ade4)
+# library(ggrepel)
+# library(ggforce)
+# library(bookdown)
+# library(kableExtra)
+# library(RColorBrewer)
+# library(bindrcpp)
+# library(stringr)
+# library(pheatmap)
+# library(BiocParallel)
+# library(microbiomeX)
 # --
 
 # - define cbPalette and QuantColors15 schemes -
@@ -80,17 +100,13 @@ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
 tol15rainbow=c("#114477", "#4477AA", "#77AADD", "#117755", "#44AA88", "#99CCBB", "#777711", "#AAAA44", "#DDDD77", "#771111", "#AA4444", "#DD7777", "#771144", "#AA4477", "#DD77AA") # ref: https://tradeblotter.wordpress.com/2013/02/28/the-paul-tol-21-color-salute/
 QuantColors15 <- tol15rainbow[c(1, 12, 4, 7, 13, 2, 11, 5, 8, 14, 3, 10, 6, 9, 15)]
 # --
-
-# - define style options for the html document -
-options(knitr.table.format = "latex")
-# --
 ```
 
 
 
-# Load your phyloseq object and set and test your input parameters
+## Load phyloseq object and set input
 
-- all lines where user user input is required or possible are marked with NB: USER INPUT and NB: user input, respectively
+<!-- all lines where user user input is required or possible are marked with NB: USER INPUT and NB: user input, respectively -->
 
 
 ```{r, echo = FALSE, message=FALSE}
@@ -106,7 +122,7 @@ source(file.path(functionpath, "060_phylum_analysis_functions.R"))
 
 # - load your phyloseq object - 
 # NB: USER INPUT
-name_phyloseq_rds <- "microdiab_DK.rds"
+name_phyloseq_rds <- "microdiab_ngt.rds"
 # NB: USER INPUT
 datapath <- "./Example_phyloseq_objects"
 
@@ -116,12 +132,11 @@ if(! file.exists(file.path(datapath, name_phyloseq_rds))){
 }
 
 ps <- readRDS(file.path(datapath, name_phyloseq_rds))
-
 # --
 
 # - Define the group variable for sample comparisons -
 # NB: USER INPUT
-group_var <- "Status" # MANDATORY: a variable in sample_data(ps) based on which samples will be compared
+group_var <- "Country" # MANDATORY: a variable in sample_data(ps) based on which samples will be compared
 
 # Test your input:
 if(! group_var %in% colnames(sample_data(ps))) {
@@ -131,7 +146,7 @@ if(! group_var %in% colnames(sample_data(ps))) {
 
 # - Define the order of the groups in your group_var -
 # NB: USER INPUT
-group_var_levels <- c("NGT", "T2D") # defines the order of the groups in all plots. If set to NULL:
+group_var_levels <- c("DK", "IN") # defines the order of the groups in all plots. If set to NULL:
 if (is.null(group_var_levels)) { 
         group_var_levels <- unique(sample_data(ps)[[group_var]])
 }
@@ -189,7 +204,7 @@ if (!is.null(shape)) {
 # phyloseq::taxglom to that level will be used.
 # if you set taxonomic_leve to NULL, all taxa will be analysed (i.e. strain/species/ASV level analysis)
 # NB user input
-taxonomic_level <- NULL
+taxonomic_level <- "Genus"
 # NB user input
 phylum_NA_removal <- "no" # if yes you remove all taxa for which Phylum = NA before the analyses
 
@@ -201,7 +216,7 @@ if (!is.null(taxonomic_level) && !(taxonomic_level %in% colnames(tax_table(ps)))
 
 # - Filtering inputs -
 # NB: user input
-prevalence <- 5 # in percent, for prevalence filtering of taxa 
+prevalence <- 0 # in percent, for prevalence filtering of taxa 
 # NB: user input
 min_obs <- 0L # in counts, a taxon will be considered present (for prevalence) if count > min_obs
 # NB: user input
@@ -271,18 +286,6 @@ if (! is.logical(coord_cor)){
 ```
 
 
-<!-- Command for building the book in the end -->
-
-```{r, eval = FALSE, include=FALSE}
-# Use this command for building the book in the end.
-bookdown::render_book("index.Rmd", "bookdown::pdf_book")
-#rmarkdown::render_site(output_format = 'bookdown::pdf_book', encoding = 'UTF-8')
-```
-
-
-
-# Print package versions and input parameters
-
 
 ```{r, echo = FALSE, message=FALSE}
 # - record used R and package versions in a data frame -
@@ -347,7 +350,7 @@ rownames(Inputs_phyloseqAnalysis) <- NULL
 ```
 
 
-- the following package veersions have been used:
+- the following package versions have been used:
 
 ```{r, echo = FALSE, message = FALSE}
 knitr::kable(PackageVersions_l)

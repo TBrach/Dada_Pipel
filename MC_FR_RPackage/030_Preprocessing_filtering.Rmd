@@ -53,7 +53,7 @@ filterList[[2]]
 - **`r ntaxa(ps_filt)` out of `r ntaxa(ps)` taxa survived the filter (`r round(100*ntaxa(ps_filt)/ntaxa(ps), 1)` %)**
 - **`r sum(otu_table(ps_tca_filt))` out of `r sum(otu_table(ps_tca))` counts survived the filter (`r round(100*sum(otu_table(ps_tca_filt))/sum(otu_table(ps_tca)), 1)` %)** (based on ps_tca vs ps_tca_filt, not ps vs ps_filt)
 
-- the following plot shows how the total counts (sample sizes) changed by the say factor adjustment
+- the following plot shows how the total counts (sample sizes) changed by the size factor adjustment
 
 ```{r, fig.width = 14, fig.height = 14, warning = FALSE, message = FALSE, echo = FALSE}
 bar_plot_ps_vs_ps_tca

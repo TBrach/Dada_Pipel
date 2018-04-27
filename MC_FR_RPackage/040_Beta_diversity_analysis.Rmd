@@ -32,6 +32,8 @@ TrList_ra <- pcoas[["ordination_Tr_samples"]]
 # --
 ```
 
+
+
 ## Beta diversity results for relative abundance (ps_filt_ra)
 
 - **Distance boxplots**
