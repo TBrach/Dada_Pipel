@@ -64,6 +64,9 @@ ps2 <- prune_taxa(taxa = rowSums(count_table == 0) > 0, x = ps)
 ps2
 # "only" the 836 taxa with at least one zero count
 
+# - for later, also have one wher you only keep the taxa with 100% prevalence -
+ps3 <- prune_taxa(taxa = rowSums(count_table == 0) == 0, x = ps)
+# --
 ```
 
 - Now use ps2 to go through the DESeq2 library size adjustment options
@@ -74,11 +77,18 @@ DES = phyloseq_to_deseq2(ps2, formula(paste("~", group_var)))
 
 # UNCOMMENT THIS AND YOU WILL GET THE ERROR:
 # estimateSizeFactors(DES, type = "ratio")
+
+DES2 = phyloseq_to_deseq2(ps, formula(paste("~", group_var)))
 ```
 
 - **NB: when you had used the original ps, you would not get the error, but only 26 out of your 862 taxa would have been considered for sizeFactor estimation!**
 
 ## Therefore you should always use the geoMeans option and give your own geometric mean as reference sample when using type = "ratio" OR use the new option type == "poscounts" when you would like to include zeros for your GM_reference sample, which I don't)
+
+- NEW (180717): As shown in the following: 
+    - the reason I did not want to include the zeros (i.e. take the n-numberzeros root and not n-th rooth for geometric mean) was that otherwise the size-factors (coverages) should get too big, because the geometric means would be too small
+    - then I realized here that the size factors produced by DESeq were actually not generally bigger when using geoMeans and giving the geometric means with or without zeros.counts. How could that be:
+    - the reason is, as can be found in the code of estimateSizeFactorsForMatrix, that DeSeq normalizes the Size factors by their geometric mean in the end (provided you use geoMeans). That means size factors estimated by DESeq have prod(SFs) = 1
 
 ```{r}
 # I use this gm function that I found and adjusted
@@ -155,37 +165,46 @@ SFsDeS_Normed <- SFsDeS/exp(mean(log(SFsDeS)))
 identical(SFs_zerosCount, SFsDeS_Normed)# TRUE
 # ----
 
-
-
+# so far you learned that all size factors calculated by DeSeq2 with geoMEans given have a product of 1, since they are normalised that way (type = "ratio")
+#
+SFs3 <- sizeFactors(estimateSizeFactors(DES2, type = "ratio")) # NB: these size factors are the same whether you use ps or ps3 for DES2, which makes sense since all genes/taxa with a 0 are ignored anyway
+prod(SFs3) # clearly bigger than 1
+# So why does DeSeq2 normalize when geoMeans is used, or when poscounts is used?
+# I would think they simply had to because they keep taking the n-th root for the geometric mean (zeros.count = TRUE) even if there are many zeros, which would result in very big size factors (coverage for most samples!)
 # --
 ```
 
 
 - in conclusion: the "poscounts" option is identical to giving your own geometric mean and counting zeros in for the GM calculation
-- **I would vote for NOT counting zeros hin, so I do not like the "poscounts" option as it is implemented** because for a taxon with many zeros the GM get's too small imo.
+- **I would vote for NOT counting zeros in (i.e. calculating the geometric mean not with the n-th root but with n-numberZeros-root), so I do not like the "poscounts" option as it is implemented** because for a taxon with many zeros the GM get's too small. In consequence the ratio of the samples with that taxon get very high. So these taxa will dominate the size factor (median) calculation of the samples.
+    - In fact this would result in very hihgh size factors coverages for many samples, and this is the reason why
 
 
 ## The iterate option is annoyingly slow and results in SizeFactors that correlate well to using type = "ratio" with a GM given that ignores zero counts
 
 - to be honest, I do not really get the iterate option
 - but it is slow
+- it also uses the geometric mean normalisation
+- I found it even fails for
 
 
 ```{r}
 # takes about a minute or two on my MAC:
 SF_iterate <- sizeFactors(estimateSizeFactors(DES, type = "iterate"))
-
-cor(SF_iterate, SFs)
-
+prod(SF_iterate) # also here they normalize by geometric mean
+cor(SF_iterate, SFs) # 0.934
+cor(SF_iterate, SFs2) # 0.946
+cor(SFs, SFs2) # 0.91
 ```
 
 # Summary
 
 - do not use the default type = "ratio" without giving geoMeans, you will usually use very few taxa for calculating your size factors
 - I recommend using type = "ratio", geoMeans = GM calculated with ignoring zeros
+- you should strongly consider how many taxa you want to include, I would recommend a prevalence threshold of at least 40
 - when you prefer to not ignore the zeros, use "poscounts"
-- iterate is a slow option that I do not understand, but the size factors correlate well with the method I prefer. So I use the fast option that I do understand.
-- OF note: in case of "ratio" and "poscounts": for calculating the actual size factors, i.e. the median of SampleCounts/Ref_Sample, all zeros are actually ignored by DESeq2.
+- iterate is a slow option that I do not understand, but the size factors correlate well with the method I prefer (and also poscounts). So I use the fast option that I do understand.
+- OF note: in case of "ratio" and "poscounts": for calculating the actual size factors, i.e. the median of SampleCounts/Ref_Sample, all zeros are actually ignored by DESeq2 AND DESeq2 normalizes the final size factor by their geometric mean so their product is 1!
 
 
 

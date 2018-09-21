@@ -1,5 +1,5 @@
 # source seqtab data and function
-datapath <- "/Users/jvb740/MarieCurie_Work/DanFunDProject/Pretest/Pretest_DadaAnalysis_FilterRarified_Pooled/"
+datapath <- "/Users/jvb740/MarieCurie_Work/NormalizationProjectNastya/Results/16S_Sequencing_Pre/Dada_Analysis"
 load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
 
 functpath <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions"
@@ -11,6 +11,6 @@ if(!exists("seqtab.nochim")){
 }
 
 construct_phylogenetic_tree(seqtab.nochim = seqtab.nochim, 
-                            savepath = "/Users/jvb740/MarieCurie_Work/DanFunDProject/Pretest/Pretest_DadaAnalysis_FilterRarified_Pooled/Dada_phylogenetic_tree")
+                            savepath = "/Users/jvb740/MarieCurie_Work/NormalizationProjectNastya/Results/16S_Sequencing_Pre/Dada_Analysis/Dada_phylogenetic_tree/")
 
 message("DONE!")

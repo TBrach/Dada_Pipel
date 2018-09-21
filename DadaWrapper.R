@@ -23,13 +23,13 @@ source(file.path(pathToFunctions, "Dada_WrapFunctions.R"))
 # ----
 
 # ---- Calling the wrap function (Adjust INPUTS) ----
-Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/DanFunDProject/Pretest/F17FTSEUHT0815-01_GUTelgM/Clean",
+Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/Galaxy_Mouse_Project/16S_Analysis/BGI_results/Clean_Data",
            F_pattern = "1.fq.gz", 
            R_pattern = "2.fq.gz",
-           path2 = "/Users/jvb740/MarieCurie_Work/DanFunDProject/Pretest/Pretest_DadaAnalysis_FilterRarified_Pooled/", #"/emc/cbmr/data/MICROBIOME/raw/mouse/stool/Pooled2"
+           path2 = "/Users/jvb740/MarieCurie_Work/Galaxy_Mouse_Project/16S_Analysis/BGI_results/Dada_Analysis", #"/emc/cbmr/data/MICROBIOME/raw/mouse/stool/Pooled2"
            trimLeft = c(10,10), # how many nucleotides will be clipped from the beginning of the FW and RV reads, respectively
-           truncLen = c(230, 175), # how many nucleotides will be clipped from the end of the FW and RV reads, respectively
-           maxEE = 0.8, # After truncation, reads with higher than maxEE "expected errors" will be discarded
+           truncLen = c(230, 190), # how many nucleotides will be clipped from the end of the FW and RV reads, respectively
+           maxEE = 1, # After truncation, reads with higher than maxEE "expected errors" will be discarded
            maxN = 0, # After truncation, sequences with more than maxN Ns will be discarded, NB: Dada2 requires no Ns!
            truncQ = 2,# Truncate reads at the first instance of a quality score less than or equal to truncQ 
            # NB: see: https://github.com/benjjneb/dada2/issues/140 
@@ -38,7 +38,7 @@ Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/DanFunDProject/Pretest/F17FTSEU
            nreadsLearn = 1.2e+06, # the number of reads (distributed over far less unique reads) used to learn the error matrixes, i.e. nreads in dada2:::learnErrors
            err_F = NULL, # when error matrix given, the error matrix estimation is skipped
            err_R = NULL,
-           minOverlap = 20, # minOverlap from the mergePairs command
+           minOverlap = 30, # minOverlap from the mergePairs command
            maxMismatch = 0, # maxMismatch from the mergePairs command
            F_QualityStats = NULL, # if given e.g. from Dada_QualityCheck the quality stats collection part is jumped over
            R_QualityStats = NULL,

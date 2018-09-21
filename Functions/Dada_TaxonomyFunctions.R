@@ -2083,7 +2083,7 @@ test_differential_prevalence <- function(physeq, group_var, p.adj.method = "fdr"
                 p_val_df <- data.frame(p_vals, p_vals_adj, significance, prev_PC_1, prev_PC_2, direction)
                 colnames(p_val_df)[1:2] <- paste(c("p_val_", "p_val_adj_"), fac_levels[i], "_vs_", fac_levels[j], sep = "")
                 colnames(p_val_df)[4:5] <- paste(c("prev_PC_"), c(fac_levels[i], fac_levels[j]), sep = "")
-                p_val_df <- cbind(as.data.frame(p_val_df), tax_table(physeq))
+                p_val_df <- cbind(as.data.frame(p_val_df), as.data.frame(unclass(tax_table(physeq))))
                 p_val_df$Taxon <- colnames(CT)
                 p_val_df <- arrange(p_val_df, p_val_df[,1])
                 p_val_df <- select(p_val_df, Taxon, 1:(ncol(p_val_df)-1))
@@ -2249,7 +2249,7 @@ wilcoxTestApply_physeq <- function(physeq, group_var, excludeZeros = FALSE, p.ad
                 # teststat/standStat2 version:
                 # DF <- dplyr::select(DF, 1:2, 19, 3, 20:22, 17, 23:25, 4:7, 10:15, 8:9, 16, 18)
 
-                DF <- cbind(DF, tax_table(physeq))
+                DF <- cbind(DF, as.data.frame(unclass(tax_table(physeq))))
                 # DF <- dplyr::arrange(DF, desc(abs(teststat)))
                 DF <- dplyr::arrange(DF, p_val)
                 
@@ -2396,7 +2396,7 @@ DESeq2Apply_physeq <- function(physeq, group_var, SFs = NULL, type = "ratio", p.
                                      Mean_grp2, Present_grp1, Present_grp2, Zeros_grp1, Zeros_grp2, prev_grp1, prev_grp2, 
                                      n1, n2, baseMean, log2FoldChange, lfcSE, oddsRatioFisher)
                 # NB: I dropped here padj from DESeq since same as p_val_adj in case of p.adjust.method = "fdr"
-                res <- cbind(res, tax_table(physeq))
+                res <- cbind(res, as.data.frame(unclass(tax_table(physeq))))
                 res <- dplyr::arrange(res, desc(abs(teststat)))
                 # res <- res[order(res$p_val),]
                 result_list[[k]] <- res
@@ -2620,7 +2620,7 @@ evaluate_TbTmatrixes <- function(TbTmatrixes_list, physeq, group_var, p.adjust.m
                                      n1, n2, sumGrp1, sumGrp2, sumAll, oddsRatioFisher)
                 
                 
-                DF <- cbind(DF, tax_table(physeq))
+                DF <- cbind(DF, as.data.frame(unclass(tax_table(physeq))))
                 DF <- dplyr::arrange(DF, desc(abs(TbT_groupSum)))
                 result_list[[k]] <- DF
                 names(result_list)[[k]] <- paste(fac_levels[i], "_vs_", fac_levels[j], sep = "")
@@ -2796,7 +2796,7 @@ evaluate_TbTmatrixes_wilcoxTest <- function(TbTmatrixes_list, physeq, group_var,
                 # teststat/standStat2 version:
                 # DF <- dplyr::select(DF, 1:2, 19, 3, 20:22, 17, 23:25, 4:7, 10:15, 8:9, 16, 18)
                 
-                DF <- cbind(DF, tax_table(physeq))
+                DF <- cbind(DF, as.data.frame(unclass(tax_table(physeq))))
                 # DF <- dplyr::arrange(DF, desc(abs(teststat)))
                 DF <- dplyr::arrange(DF, p_val)
                 

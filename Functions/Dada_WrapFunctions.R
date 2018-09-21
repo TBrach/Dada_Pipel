@@ -300,11 +300,11 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         dev.off()
         
         pdf(file = file.path(PlotFolder, "MedianQScore_R_AllNucleotides.pdf"), width = 7, height = 6)
-        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames))
+        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames, Prefix = "RV"))
         dev.off()
         
         pdf(file = file.path(PlotFolder, "MedianQScore_R_150to240.pdf"), width = 7, height = 6)
-        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames, xlim_low = 150, xlim_high = 240))
+        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames, Prefix = "RV", xlim_low = 150, xlim_high = 240))
         dev.off()
         
         message("*********************** Plots generated start filtering ***********************
@@ -929,11 +929,11 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
         dev.off()
         
         pdf(file = file.path(PlotFolder, "MedianQScore_R_AllNucleotides.pdf"), width = 7, height = 6)
-        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames))
+        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames, Prefix = "RV"))
         dev.off()
         
         pdf(file = file.path(PlotFolder, "MedianQScore_R_150to240.pdf"), width = 7, height = 6)
-        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames, xlim_low = 150, xlim_high = 240))
+        print(QS_Median_OverviewPlot(R_QualityStats, SampleNames, Prefix = "RV", xlim_low = 150, xlim_high = 240))
         dev.off()
         
         message("*********************** Quality plots generated ***********************

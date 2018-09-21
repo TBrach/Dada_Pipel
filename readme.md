@@ -3,7 +3,7 @@
 - the "pool" option of the dada() command has been added: pool = TRUE in Dada_Wrapper 
 	- <https://benjjneb.github.io/dada2/pool.html>
 	- NB: pooling for e.g. 70 samples makes the code really slow
-	- it might however tackle dada2 assumed issue of favoring samples with high total amplicons when it comes to alpha diversity
+	- it might however tackle dada2 assumed issue of alpha diversity by ignoring singletons.
 
 # Requirements
 
