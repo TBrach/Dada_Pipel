@@ -45,12 +45,12 @@ QS_Median_OverviewPlot <- function(QStatsList, SampleNames, Prefix = "FW", xlim_
                 stop("not all SampleNames were found in the QStatsList")
         }
         
-        ReadLengths <- sapply(1:length(SampleNames), function(x) dim(QStatsList[[SampleNames[x]]])[1])
-        x <- range(ReadLengths)/mean(ReadLengths)
-        if (!isTRUE(all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5))) {
-                
-                stop("Samples are of different read lengths") 
-        }
+        # ReadLengths <- sapply(1:length(SampleNames), function(x) dim(QStatsList[[SampleNames[x]]])[1])
+        # x <- range(ReadLengths)/mean(ReadLengths)
+        # if (!isTRUE(all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5))) {
+        #         
+        #         stop("Samples are of different read lengths") 
+        # }
         
         cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
         
@@ -92,12 +92,12 @@ QS_Mean_OverviewPlot <- function(QStatsList, SampleNames, Prefix = "FW", xlim_lo
                 stop("not all SampleNames were found in the QStatsList")
         }
         
-        ReadLengths <- sapply(1:length(SampleNames), function(x) dim(QStatsList[[SampleNames[x]]])[1])
-        x <- range(ReadLengths)/mean(ReadLengths)
-        if (!isTRUE(all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5))) {
-                
-                stop("Samples are of different read lengths") 
-        }
+        # ReadLengths <- sapply(1:length(SampleNames), function(x) dim(QStatsList[[SampleNames[x]]])[1])
+        # x <- range(ReadLengths)/mean(ReadLengths)
+        # if (!isTRUE(all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5))) {
+        #         
+        #         stop("Samples are of different read lengths") 
+        # }
         
         cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
         
@@ -349,8 +349,9 @@ NoReads_StepsSimple <- function(ReadSummary, SampleNames, sort = TRUE) {
         
         ## Construct the plotting data frame
         
-        ReadSummary <- subset(ReadSummary, select = c("Sample", "NoReads", "FilteredReads", "MergedReads", "MergedReadsWOBimera"))
+        ReadSummary <- subset(ReadSummary, select = c("Sample", "NoReads", "FilteredReads", "NoDenoisedReads_FW", "NoDenoisedReads_RV", "MergedReads", "MergedReadsWOBimera"))
         
+       # ReadSummary <- subset(ReadSummary, select = c("Sample", "NoReads", "FilteredReads", "MergedReads", "MergedReadsWOBimera"))
         
         if (sort) {
                 
@@ -362,14 +363,22 @@ NoReads_StepsSimple <- function(ReadSummary, SampleNames, sort = TRUE) {
                 
         }
         
-        colnames(ReadSummary)[2:5] <- c("all", "filtered", "merged", "nochim")
+        colnames(ReadSummary)[2:7] <- c("all", "filtered", "denoised_FW", "denoised_RV", "merged", "nochim")
+        # colnames(ReadSummary)[2:5] <- c("all", "filtered", "merged", "nochim")
         ReadSummary <- tidyr::gather(ReadSummary, key = Type, value = NoReads, -Sample)
+        
+        ReadSummary$Type <- factor(ReadSummary$Type, levels = c("all", "filtered", "denoised_FW", "denoised_RV", "merged", "nochim"), ordered = T)
+        
+        
+        color_levels <- cbPalette[2:7]
+        names(color_levels) <- c("all", "filtered", "denoised_FW", "denoised_RV", "merged", "nochim")
+        
         
         Tr <- ggplot(data = ReadSummary, aes(x = Sample, y = NoReads, color = Type))  
         Tr <- Tr + 
                 geom_hline(yintercept = 10000, color = 'darkred', linetype = "dashed", size = .35) +
                 geom_point(size = 2) +
-                scale_color_manual(values = c(cbPalette[2:4],cbPalette[7])) +
+                scale_color_manual(values = color_levels) +
                 ylab("No Reads") + 
                 xlab("") +
                 theme_bw() + 
@@ -381,6 +390,74 @@ NoReads_StepsSimple <- function(ReadSummary, SampleNames, sort = TRUE) {
         Tr
         
 }
+# --
+
+
+
+#######################################
+#### NoUniques_StepsSimple
+#######################################
+
+NoUniques_StepsSimple <- function(ReadSummary, SampleNames, sort = TRUE) {
+        
+        
+        if (!all(SampleNames %in% ReadSummary$Sample)) {
+                stop("not all SampleNames were found in the given ReadSummary")
+        }
+        
+        ReadSummary <- ReadSummary[ReadSummary$Sample %in% SampleNames,]
+        
+        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+        
+        if (sort) {
+                
+                ReadSummary <- dplyr::arrange(ReadSummary, desc(NoReads))
+                LevelsWant <- as.character(ReadSummary$Sample)
+                for (i in seq_along(LevelsWant)) {
+                        ReadSummary$Sample <- relevel(ReadSummary$Sample, ref = LevelsWant[i])
+                }
+                
+        }
+        
+        ## Construct the plotting data frame
+        
+        #ReadSummary <- subset(ReadSummary, select = c("Sample", "UniqueSequences_F", "UniqueSequences_R", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera"))
+        
+        ReadSummary <- subset(ReadSummary, select = c("Sample", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera"))
+        
+        # colnames(ReadSummary)[2:5] <- c("all", "filtered", "denoised_FW", "denoised_RV", "merged", "nochim")
+        # colnames(ReadSummary)[2:5] <- c("all", "filtered", "merged", "nochim")
+        ReadSummary <- tidyr::gather(ReadSummary, key = Type, value = NoReads, -Sample)
+        
+        #color_levels <- cbPalette[2:7]
+        #names(color_levels) <- c("UniqueSequences_F", "UniqueSequences_R", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera")
+        #ReadSummary$Type <- factor(ReadSummary$Type, levels = c("UniqueSequences_F", "UniqueSequences_R", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera"), ordered = T)
+        
+        
+        color_levels <- cbPalette[2:5]
+        names(color_levels) <- c("DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera")
+        ReadSummary$Type <- factor(ReadSummary$Type, levels = c("DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera"), ordered = T)
+        
+        
+        Tr <- ggplot(data = ReadSummary, aes(x = Sample, y = NoReads, color = Type))  
+        Tr <- Tr + 
+                # geom_hline(yintercept = 10000, color = 'darkred', linetype = "dashed", size = .35) +
+                geom_point(size = 2) +
+                scale_color_manual(values = color_levels) +
+                ylab("No Unique Sequences") + 
+                xlab("") +
+                theme_bw() + 
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15),
+                      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
+                      legend.title = element_blank())
+        Tr
+        
+}
+
+
+
 
 
 

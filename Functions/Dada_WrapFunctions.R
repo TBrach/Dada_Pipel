@@ -25,6 +25,8 @@
 # F_QualityStats and R_QualityStats: NULL by default, if given e.g. from Dada_QualityCheck the quality stats collection part is jumped over
 # filtFs and filtRs: NULL by default, if given and FilteredFolder with files exist, Filtering can be jumped over.
 # pool: pool option of dada command
+# randomize: whether the samples used for error matrix estimation should be picked in order or randomly
+# filteredQualityStats: allows you to make also quality plots of the filtered reads
 ## Output
 # PLOTS:
 # Several Plots saved as pdfs in generated Dada_Plots folder # NB: the plots are currently assuming 250 nt
@@ -36,6 +38,7 @@
 # FILTERED FASTQ files
 # are stored in the generated folder Dada_FilteredFastqs
 # NB the filtered fastq files are currently named "SampleName"_F_Filtered.fastq.gz and "SampleName"_R_Filtered.fastq.gz
+
 
 Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                        trimLeft = c(10,10), truncLen = c(220, 160), 
@@ -49,7 +52,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                        R_QualityStats = NULL,
                        filtFs = NULL,
                        filtRs = NULL,
-                       pool = FALSE) {
+                       pool = FALSE,
+                       randomize = FALSE,
+                       filteredQualityStats = TRUE) {
         
         ##############################
         ### call the required packages
@@ -339,7 +344,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         
                         message(paste("**Filtering sample No:", i, "called:", SampleNames[i]), " **")
                         cat(paste("\n**Filtering sample No:", i, "called:", SampleNames[i]), file = LogFile, append = TRUE)
-                        fastqPairedFilter(c(F_fastq[i], R_fastq[i]), c(filtFs[i], filtRs[i]), trimLeft = trimLeft, 
+                        fastqPairedFilter(fn = c(F_fastq[i], R_fastq[i]), fout = c(filtFs[i], filtRs[i]), trimLeft = trimLeft, 
                                           truncLen = truncLen, maxN = maxN, maxEE = maxEE, truncQ = truncQ, 
                                           compress=TRUE, verbose=TRUE)
                 }
@@ -383,7 +388,129 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
         TimePassed <- proc.time()-ptm
         cat(paste("Time Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
-        cat("\n*** Start estimating err_F if not given ***", file = LogFile, append = TRUE)
+        cat("\n*** Start estimating err_F if not given or first quality stats of filtered reads ***", file = LogFile, append = TRUE)
+        
+        
+        
+        ##############################
+        ### Determine the quality scores of filtered Reads and save the stats in Data folder
+        ##############################
+        
+        # Collect quality Score data of the fastQ files and store a data.frame for each sample in the lists FW_QualityStats and RV_QualityStats ####################
+        
+        if (filteredQualityStats) {
+                
+                F_QualityStats_filtered <- list()
+                R_QualityStats_filtered <- list()
+                
+                for (i in seq_along(filtFs)) {
+                        
+                        Current_FWfq <- filtFs[i]
+                        Current_dfFW <- qa(Current_FWfq, n = 1e06)[["perCycle"]]$quality
+                        # df is a data frame containing for each cycle (nt) the distribution of Quality scores
+                        # e.g. Cycle 1 had 7 different quality scores, then 7 rows of cycle one, for each score the count says how many reads had this score
+                        Current_dfFW <- dplyr::group_by(Current_dfFW, Cycle)
+                        
+                        Current_dfQStatsFW <- dplyr::summarise(
+                                Current_dfFW,
+                                NoReads = sum(Count),
+                                Mean_QS = sum(Count*Score)/sum(Count),
+                                SD_QS = sqrt(sum(Count*((Score-Mean_QS)^2))/(NoReads-1)),
+                                Median_QS = Score[which(cumsum(Count)/sum(Count) >= .5)][[1]],
+                                q25_QS = Score[which(cumsum(Count)/sum(Count) >= .25)][[1]],
+                                q75_QS = Score[which(cumsum(Count)/sum(Count) >= .75)][[1]])
+                        
+                        # Check that all reads are of same length
+                        x <- range(Current_dfQStatsFW$NoReads)
+                        if (!all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5)) {
+                                stop("Not all reads of same length in file", F_fastq[i])
+                        }
+                        
+                        F_QualityStats_filtered[[i]] <- as.data.frame(Current_dfQStatsFW)
+                        # as.data.frame to un-dplyr the data.frame
+                        
+                        # collect the same stats for the RV FastQ files
+                        Current_RVfq <- filtFs[i]
+                        Current_dfRV <- qa(Current_RVfq, n = 1e06)[["perCycle"]]$quality
+                        
+                        Current_dfRV <- dplyr::group_by(Current_dfRV, Cycle)
+                        
+                        Current_dfQStatsRV <- dplyr::summarise(
+                                Current_dfRV,
+                                NoReads = sum(Count),
+                                Mean_QS = sum(Count*Score)/sum(Count),
+                                SD_QS = sqrt(sum(Count*((Score-Mean_QS)^2))/(NoReads-1)),
+                                Median_QS = Score[which(cumsum(Count)/sum(Count) >= .5)][[1]],
+                                q25_QS = Score[which(cumsum(Count)/sum(Count) >= .25)][[1]],
+                                q75_QS = Score[which(cumsum(Count)/sum(Count) >= .75)][[1]])
+                        
+                        ## Check that all reads are of same length
+                        x <- range(Current_dfQStatsRV$NoReads)
+                        if (!all.equal(x[1], x[2], tolerance = .Machine$double.eps ^ 0.5)) {
+                                stop("Not all reads of same length in file", R_fastq[i])
+                        }
+                        
+                        R_QualityStats_filtered[[i]] <- as.data.frame(Current_dfQStatsRV)
+                        
+                        rm(Current_FWfq, Current_dfFW, Current_dfQStatsFW,
+                           Current_RVfq, Current_dfRV, Current_dfQStatsRV, x)
+                        
+                }
+                
+                # add the sample names as names to the lists:
+                names(F_QualityStats_filtered) <- SampleNames
+                names(R_QualityStats_filtered) <- SampleNames
+                
+                message("*********************** Quality Stats of filtered reads Collected ***********************
+                        ********************************************************************")
+                cat("\n*** Quality Stats of filtered reads Collected ***", file = LogFile, append = TRUE)
+                
+        } else {
+                
+                F_QualityStats_filtered <- NULL
+                R_QualityStats_filtered <- NULL
+                
+                message("*********************** No Quality Stats of filtered reads Collected ***********************
+                        ********************************************************************")
+                cat("\n*** No Quality Stats of filtered reads Collected ***", file = LogFile, append = TRUE)
+                
+        }
+        
+        save(PackageVersions, F_QualityStats, R_QualityStats, F_QualityStats_filtered, R_QualityStats_filtered, Input, file = file.path(DataFolder, "QualityStats.RData"))
+        
+        TimePassed <- proc.time()-ptm
+        cat("\nTime after Quality Stats filtered collection: ", file = LogFile, append = TRUE)
+        cat(paste(Sys.time(), "\n"), file = LogFile, append = TRUE)
+        cat(paste("Time Passed in total: ", TimePassed[3]), file = LogFile, append = TRUE)
+        cat("\n*** Start generating filtered Quality Plots ***", file = LogFile, append = TRUE)
+        
+        
+        ##############################
+        ### Generate and save filtered Quality plots if wished for
+        ##############################
+        
+        
+        if (!is.null(F_QualityStats_filtered) && !is.null(R_QualityStats_filtered)) {
+                
+                pdf(file = file.path(PlotFolder, "MedianQScore_F_filtered_AllNucleotides.pdf"), width = 7, height = 6)
+                print(QS_Median_OverviewPlot(F_QualityStats_filtered, SampleNames))
+                dev.off()
+                
+                
+                pdf(file = file.path(PlotFolder, "MedianQScore_R_filtered_AllNucleotides.pdf"), width = 7, height = 6)
+                print(QS_Median_OverviewPlot(R_QualityStats_filtered, SampleNames, Prefix = "RV"))
+                dev.off()
+        
+                
+                message("*********************** Plots of filtered reads generated start error matrix extimation ***********************
+                        ********************************************************************")
+                
+                cat("\n*** Plots of filtered reads generated ***", file = LogFile, append = TRUE)
+                cat("\n*** Start estimating err_F if not given  ***", file = LogFile, append = TRUE)
+                
+        }
+        
+        
         
         ##############################
         ### Estimate err_F matrix
@@ -396,7 +523,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 # learnErrorsAdj is basically dada2::learnErrors, just adds the NREADS from the function to the output list and also adds
                 # dreplicated (drps) and denoised (dds) datasets if all samples were used for error matrix estimation. If not drps and dds
                 # remain NULL
-                errorsFW <- learnErrorsAdj(fls = filtFs, nreads = nreadsLearn, multithread = TRUE)
+                errorsFW <- learnErrorsAdj(fls = filtFs, nreads = nreadsLearn, multithread = TRUE, randomize = randomize)
                 
                 message(paste("**", errorsFW$NREADS, "reads have been used for err_F estimation **"))
                 
@@ -406,7 +533,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 print(plotErrors(errorsFW, nominalQ=TRUE))
                 dev.off()
                 
-                save(err_F, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
+                save(err_F, PackageVersions, F_QualityStats, R_QualityStats, F_QualityStats_filtered, R_QualityStats_filtered, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
                 
                 message("*********************** err_F has been estimated ***********************
                         ********************************************************************")
@@ -421,7 +548,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         }
         
         # in case both err_F and err_R had been given, they would not have been saved if not:
-        save(err_F, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
+        save(err_F, PackageVersions, F_QualityStats, R_QualityStats, F_QualityStats_filtered, R_QualityStats_filtered, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
         
         ##############################
         ### Estimate err_R matrix
@@ -430,7 +557,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         if(is.null(err_R)){
                 
                 
-                errorsRV <- learnErrorsAdj(fls = filtRs, nreads = nreadsLearn, multithread = TRUE)
+                errorsRV <- learnErrorsAdj(fls = filtRs, nreads = nreadsLearn, multithread = TRUE, randomize = randomize)
                 
                 message(paste("**", errorsRV$NREADS, "reads have been used for err_R estimation **"))
                 
@@ -440,7 +567,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 print(plotErrors(errorsRV, nominalQ=TRUE))
                 dev.off()
                 
-                save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
+                save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, F_QualityStats_filtered, R_QualityStats_filtered, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
                 
                 message("*********************** err_R has been estimated ***********************
                         ********************************************************************")
@@ -454,7 +581,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 
         }
         
-        save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
+        save(err_F, err_R, PackageVersions, F_QualityStats, R_QualityStats, F_QualityStats_filtered, R_QualityStats_filtered, filtFs, filtRs, Input, file = file.path(DataFolder, "QualityStats.RData"))
+        
+        
         
         ##############################
         ### Denoising (dada command for all samples)
@@ -471,7 +600,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 dd_R <- dada(drp_R, err = err_R, pool = pool, multithread = TRUE)
                 
                 
-                # NB: the following demands that the samples were denoised in the given order, I therefore removed tha randomize option from learnErrorsAdj
+                # NB: the following demands that the samples were denoised in the given order
                 names(dd_F) <- SampleNames
                 names(drp_F) <- SampleNames
                 names(dd_R) <- SampleNames
@@ -483,6 +612,8 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 Denoised_F <- sapply(dd_F, function(x) length(x$denoised))
                 Denoised_R <- sapply(dd_R, function(x) length(x$denoised))
                 NoFilteredReads <- sapply(drp_F, function(x) sum(x$uniques)) # would be the same for drp_R, or sum dd_F$denoised
+                NoDenoisedReads_FW <- sapply(dd_F, function(x) sum(x$denoised))
+                NoDenoisedReads_RV <- sapply(dd_R, function(x) sum(x$denoised))
                 
                 mergers <- mergePairs(dd_F, drp_F, dd_R, drp_R, minOverlap = minOverlap, maxMismatch = maxMismatch)
                 
@@ -503,7 +634,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 errorsRV$dds <- NULL
                 errorsRV$drps <- NULL
                 
-                # NB: the following demands that the samples were denoised in the given order, I therefore removed tha randomize option from learnErrorsAdj
+                # NB: the following demands that the samples were denoised in the given order, I therefore used an own randomize version in learnErrorsAdj
                 names(dd_F) <- SampleNames
                 names(drp_F) <- SampleNames
                 names(dd_R) <- SampleNames
@@ -515,6 +646,9 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 Denoised_F <- sapply(dd_F, function(x) length(x$denoised))
                 Denoised_R <- sapply(dd_R, function(x) length(x$denoised))
                 NoFilteredReads <- sapply(drp_F, function(x) sum(x$uniques)) # would be the same for drp_R, or sum dd_F$denoised
+                NoDenoisedReads_FW <- sapply(dd_F, function(x) sum(x$denoised))
+                NoDenoisedReads_RV <- sapply(dd_R, function(x) sum(x$denoised))
+                
                 
                 mergers <- mergePairs(dd_F, drp_F, dd_R, drp_R, minOverlap = minOverlap, maxMismatch = maxMismatch)
                 
@@ -535,6 +669,10 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 names(mergers) <- SampleNames
                 NoFilteredReads <- vector("numeric", length(SampleNames))
                 names(NoFilteredReads) <- SampleNames
+                NoDenoisedReads_FW <- vector("numeric", length(SampleNames))
+                names(NoDenoisedReads_FW) <- SampleNames
+                NoDenoisedReads_RV <- vector("numeric", length(SampleNames))
+                names(NoDenoisedReads_RV) <- SampleNames
                 Uniques_F <- vector("numeric", length(SampleNames))
                 names(Uniques_F) <- SampleNames
                 Uniques_R <- vector("numeric", length(SampleNames))
@@ -548,15 +686,16 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         cat("Processing:", sam, "\n")
                         cat(paste("\nDenoising sample:", sam), file = LogFile, append = TRUE)
                         derepF <- derepFastq(filtFs[[sam]])
-                        NoFilteredReads[sam] <- sum(derepF$uniques)
+                        NoFilteredReads[sam] <- sum(derepF$uniques) # == length(derepF$map)
                         ddF <- dada(derepF, err=err_F, multithread=TRUE) 
                         Uniques_F[sam] <- length(derepF$uniques)
                         Denoised_F[sam] <- length(ddF$denoised)
-                        
+                        NoDenoisedReads_FW[sam] <- sum(ddF$denoised)
                         derepR <- derepFastq(filtRs[[sam]])
                         ddR <- dada(derepR, err=err_R, multithread=TRUE)
                         Uniques_R[sam] <- length(derepR$uniques)
                         Denoised_R[sam] <- length(ddR$denoised)
+                        NoDenoisedReads_RV[sam] <- sum(ddR$denoised)
                         merger <- mergePairs(ddF, derepF, ddR, derepR, minOverlap = minOverlap, maxMismatch = maxMismatch)
                         mergers[[sam]] <- merger
                         
@@ -614,6 +753,8 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ReadSummary <- data.frame(Sample = SampleNames, NoReads = sapply(F_QualityStats, function(df){df$NoReads[1]}))
         # NB, No total reads would be the same from R_QualityStats, could be used for sanity check
         ReadSummary$FilteredReads <- NoFilteredReads
+        ReadSummary$NoDenoisedReads_FW <- NoDenoisedReads_FW
+        ReadSummary$NoDenoisedReads_RV <- NoDenoisedReads_RV
         ReadSummary$MergedReads <- rowSums(seqtab)
         ReadSummary$MergedReadsWOBimera <- rowSums(seqtab.nochim)
         ReadSummary$UniqueSequences_F <- Uniques_F
@@ -699,6 +840,17 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         pdf(file = file.path(PlotFolder, "HistogramAmpliconsinNoSamples.pdf"), width = 7, height = 6)
         print(Trr)
         dev.off()
+        
+        # - also print the unqiue reads in the different steps -
+        pdf(file = file.path(PlotFolder, "NoUniques_AllSamples.pdf"), width = width, height = 6)
+        print(NoUniques_StepsSimple(ReadSummary = ReadSummary, SampleNames = SampleNames, sort = TRUE))
+        dev.off()
+        
+        # --
+        
+        
+        
+        
         cat("\n*** Summary Plots generated, Function done ***", file = LogFile, append = TRUE)
         message("*********************** Dada_wrap done ***********************
                         ********************************************************************")
@@ -951,26 +1103,28 @@ Dada2_QualityCheck <- function(path, F_pattern, R_pattern, path2 = NULL) {
 
 
 learnErrorsAdj <- function (fls, nreads = 1e+06, errorEstimationFunction = loessErrfun, 
-                            multithread = FALSE) #, randomize = FALSE 
+                            multithread = FALSE, randomize = FALSE) #, randomize = FALSE 
 {
         NREADS <- 0
         drps <- vector("list", length(fls))
-        # if (randomize) {
-        #         fls <- sample(fls)
-        # }
+        sample_order <- 1:length(fls)
+        if (randomize) {
+                sample_order <- sample(sample_order)
+        }
         for (i in seq_along(fls)) {
+                e <- sample_order[i]
                 if (dada2:::is.list.of(fls, "derep")) {
-                        drps[[i]] <- fls[[i]]
+                        drps[[e]] <- fls[[e]]
                 }
                 else {
-                        drps[[i]] <- derepFastq(fls[[i]])
+                        drps[[e]] <- derepFastq(fls[[e]])
                 }
-                NREADS <- NREADS + sum(drps[[i]]$uniques)
+                NREADS <- NREADS + sum(drps[[e]]$uniques)
                 if (NREADS > nreads) {
                         break
                 }
         }
-        drps <- drps[1:i]
+        drps <- drps[sort(sample_order[1:i])]
         dds <- dada(drps, err = NULL, selfConsist = TRUE, multithread = multithread)
         # cat("Total reads used: ", NREADS, "\n")
         ErrorList <- getErrors(dds, detailed = TRUE)

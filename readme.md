@@ -1,9 +1,18 @@
 # What to update or recent updates:
 
+- 2018-10-25: added the randomize argument in again, that allows the samples to be randomized for error_matrix estimation (in learnErrorsAdj)
+- 2018-10-25: added filteredQualityStats = TRUE option that simply allows to also make quality plots of the filtered Reads.
 - the "pool" option of the dada() command has been added: pool = TRUE in Dada_Wrapper 
 	- <https://benjjneb.github.io/dada2/pool.html>
 	- NB: pooling for e.g. 70 samples makes the code really slow
 	- it might however tackle dada2 assumed issue of alpha diversity by ignoring singletons.
+- learnErrors uses now nbases instead of nreads, depending on the trimming you get indeed shorter reads in some cases than in others, but I think it is fine to not directly update to nbases in learnErrorsAdj
+- you should also plot the quality of the filtered reads
+- add the randomize option to learnErrorsAdj
+	
+# OF NOte
+
+ - I removed the equal length requirment in the QualityCheck.R. So you should use the quality stats to record whether the reads from all samples had the same length!
 
 # Requirements
 
@@ -46,16 +55,27 @@ To run the function from the terminal, use:
 ### Steps of the Dada2_wrap function
 
 - 1.) Construct character vectors to the FW and RV fastq files
+    - Requires that your samples are in individual folders within the path folder. 
+    - Generates F_fastq and R_fastq.
 - 2.) Determine the quality scores and save the stats in Data folder
+    - uses ShortRead:qa funtion on F_fastq[i] and R_fastq[i] to get a quality overview of each cycle. It checks whether the reads within a sample are all of the same length, but not whether the reads between different samples are of the same length.
+    - generates F_QualityStats and R_QualityStats
 - 3.) Generate and save some quality plots
+    - uses F_QualityStats and R_QualityStats to generate some overview plots of the cycle quality.
 - 4.) Filtering:
     - uses fastqPairedFilter (could use filterAndTrim wrapper but makes no difference) and saves filtered files in created Dada_FilteredFastqs folder
+    - uses inputs trimLeft, truncLen, maxEE, maxN, truncQ
+    - first uses truncLen, i.e. trims at the end (e.g. when your read is 250 bp and you set truncLen to 230 it will cleave of the last 20 bp), then it uses trimLeft, e.g. when you set it to 10 it will cut the first 10 bp, so leaving 220 from the intitially 250, then probably checking maxEE and so on. 
 - 5.) Estimate err_F matrix and then err_R matrix
-    - uses learnErrorsAdj which is basically learnErrors (NB: runs derepFastq() and dada() inside) from dada2 but saves dds and drps in the outcome in case all samples are used for error estimation. This allows in that case to not repeat derepFastq() and dada() in step 6. NB: to allow this the randomize option of learnErrors was removed. 
-- 6.) dereplication, denoising, merging, (bimera identification in case of Dada2_wrap_BimFWRV)
-    - 6a.) In case all samples have been used for error estimation, i.e. dd_F, drp_F, dd_R, drp_R were saved as drp and dds in errorsRV and errorsFW. These are lists of the drp and dd of all samples.
-        - The number of filtered reads, unique reads (drp), and denoised reads are saved for each sample using sapply.
-        - mergePairs is used directly on the lists to merge the reads of the different samples: See: **UnderstandMergers.R** for understanding the resulting abundances.
+    - uses learnErrorsAdj which is basically learnErrors (NB: runs derepFastq() and dada() inside) from dada2 but saves dds and drps in the outcome in case all samples are used for error estimation. This allows in that case to not repeat derepFastq() and dada() in step 6. NB: It is possible to randomize the samples for error matrix estimation.
+    - NB also: this is basically calling dada() without pool. NB also it is the number of unique reads that nreadsLearn refers to. This is on a per sample basis, so reads from different samples could be the same.
+- 6.) dereplication, denoising, merging
+    - dereplicate all filtered reads for a sample and then make use of the error matrix to denoise. 
+        - so first derepFastq is used for dereplication resulting in a derep_class object drp_F, where length(drp_F$map) tells you how many filtered reads there were, and length(drp_F$uniques) how many unique reads there are. Also the average quality of each unique read at each cycle is saved in drp_F$quals.
+        - then dada() is run using err_F or err_R, resulting in a dada-class object dd_F. NB: dd_F$denoised contains the denoised sequencing, sum(dd_F$denoised) <= sum(drp_F$uniques) showing that some unique reads are considered errors but are not assigned to a denoised sequence, so maybe these are the singletons that get removed. 
+        - then mergePairs is used that uses drp_F, dd_F, drp_R, and dd_R as inputs. It basically first tries to pair each denoised FW sequence with each denoised RW sequence. So not each FW could be paired with several RV sequences. How you get to the actual abundances is via the two maps, you can see it in **20170712_UnderstandmergePairs.svg**  and 20170712_UnderstandmergePairsandMergers.R
+    - 6a.) In case all samples have been used for error estimation, then dd_F, drp_F, dd_R, drp_R were saved as drp and dds in errorsRV and errorsFW. These are lists of the drp and dd of all samples and mergePairs allows list inputs.
+        - mergePairs is used directly on the lists to merge the reads of the different samples: 
     - 6b.) In case err_F and err_R have been estimated only on a subset of samples, so errorsFW$dd and errorsRV$dd are NULL
         - derepFastq() and dada() (with the estimated (or given) err_F and err_R) and then mergePairs are run individually on the filtered reads of each sample.
 - NB: on the chimera removal: 
@@ -65,6 +85,10 @@ To run the function from the terminal, use:
 - 8.) remove bimeras: 
     - (NB: from tutorial: Fortunately, the accuracy of the sequences after denoising makes identifying chimeras simpler than it is when dealing with fuzzy OTUs: all sequences which can be exactly reconstructed as a bimera (two-parent chimera) from more abundant sequences.)
     -  If a majority of reads failed to pass the chimera check, you may need to revisit the removal of primers, as the ambiguous nucleotides in unremoved primers interfere with chimera identification.
+    - See 20170117_UnderstandremoveBimeraDenovo
+
+
+
 
 ## Parameters to Consider
 

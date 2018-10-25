@@ -26,8 +26,8 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.98994949"
-     inkscape:cx="154.95155"
-     inkscape:cy="802.84271"
+     inkscape:cx="233.21558"
+     inkscape:cy="883.65491"
      inkscape:document-units="px"
      inkscape:current-layer="g9702"
      showgrid="false"
@@ -44,7 +44,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -265,27 +265,83 @@
            y="-31.68659">mergePairs says: denoised F1 is paired with R1, here is how abundance is found</tspan></text>
       <text
          xml:space="preserve"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:15px;line-height:125%;font-family:Arial;-inkscape-font-specification:'Arial, Bold';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:middle;fill:#800000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         x="-119.5807"
-         y="151.14735"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15px;line-height:125%;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:middle;fill:#800000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+         x="-172.10864"
+         y="97.609268"
          id="text6549-0-1-3-5-0-4-7-8-8-1-9"
          sodipodi:linespacing="125%"><tspan
            sodipodi:role="line"
-           id="tspan10107"
-           x="-117.50062"
-           y="151.14735">abundance = intersection </tspan><tspan
+           id="tspan5082"
+           x="-169.72095"
+           y="97.609268">abundance = intersection </tspan><tspan
            sodipodi:role="line"
-           id="tspan10109"
-           x="-119.5807"
-           y="169.89735">of FW and RV IDs, to find actually</tspan><tspan
+           id="tspan5084"
+           x="-172.10864"
+           y="116.35927">of FW and RV IDs, to find actually</tspan><tspan
            sodipodi:role="line"
-           id="tspan10111"
-           x="-119.5807"
-           y="188.64735">paired reads, NB: demands FW and</tspan><tspan
+           id="tspan5086"
+           x="-172.10864"
+           y="135.10927">paired reads, NB: demands FW and</tspan><tspan
            sodipodi:role="line"
-           id="tspan10113"
-           x="-119.5807"
-           y="207.39735">RV IDs in same order!</tspan></text>
+           id="tspan5088"
+           x="-172.10864"
+           y="153.85927">RV IDs in same order!</tspan><tspan
+           sodipodi:role="line"
+           id="tspan5090"
+           x="-172.10864"
+           y="172.60927">NB2: it is well possible that the same FW denoised</tspan><tspan
+           sodipodi:role="line"
+           id="tspan5092"
+           x="-172.10864"
+           y="191.35927">sequence has paired with several R denoised sequences!</tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15px;line-height:125%;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+         x="-409.04797"
+         y="-364.99298"
+         id="text4138-1-0-9-43-2-0-2-9-5"
+         sodipodi:linespacing="125%"><tspan
+           sodipodi:role="line"
+           id="tspan5009"
+           x="-409.04797"
+           y="-364.99298">F_drp is the output of derepFastq, a derep_class object</tspan><tspan
+           sodipodi:role="line"
+           id="tspan5011"
+           x="-409.04797"
+           y="-346.24298">$uniques: what unique reads were there and how abundant</tspan><tspan
+           sodipodi:role="line"
+           id="tspan5013"
+           x="-409.04797"
+           y="-327.49298">$quals: the average quality of each unique read at each cycle</tspan><tspan
+           sodipodi:role="line"
+           id="tspan5015"
+           x="-409.04797"
+           y="-308.74298">$maps: an integer of the length of the filtered reads telling to which unique read it is mapped</tspan><tspan
+           sodipodi:role="line"
+           id="tspan5017"
+           x="-409.04797"
+           y="-289.99298">   &gt;&gt; length($maps) tells you how many filtered reads there were</tspan><tspan
+           sodipodi:role="line"
+           id="tspan5019"
+           x="-409.04797"
+           y="-271.24298">  &gt;&gt; length($unique) tells you how many unique reads there were</tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15px;line-height:125%;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;"
+         x="-411.62845"
+         y="-231.8521"
+         id="text4138-1-0-9-43-2-0-2-9-5-5"
+         sodipodi:linespacing="125%"><tspan
+           sodipodi:role="line"
+           id="tspan5070">F_dd is a dada_class object the output of the dada command:</tspan><tspan
+           sodipodi:role="line"
+           id="tspan5072">$denoised: the number of denoised reads/sequencing and how abundant they are, so length($denoised) = so many final reads are considered real, </tspan><tspan
+           sodipodi:role="line"
+           id="tspan5074">NB: sum($denoised) &lt;= sum(F_drp$uniques), meaning that some unique reads must be considered errors without being assigned to a denoised sequence. </tspan><tspan
+           sodipodi:role="line"
+           id="tspan5076">Maybe that is the singleton removal.</tspan><tspan
+           sodipodi:role="line"
+           id="tspan5078">$map: an integer of the length of the unique reads telling to which denoised sequence it is mapped</tspan></text>
     </g>
     <g
        id="g9619-4"
