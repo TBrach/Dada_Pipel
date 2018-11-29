@@ -62,7 +62,8 @@ QS_Median_OverviewPlot <- function(QStatsList, SampleNames, Prefix = "FW", xlim_
         # combine all df in the list to one big df
         df <- do.call("rbind", QList)
         
-        ggplot(data = df, aes(x = Cycle, y = Median_QS, colour = NoReads, group = Sample))  + 
+        Tr <- ggplot(data = df, aes(x = Cycle, y = Median_QS, colour = NoReads, group = Sample)) 
+        Tr <- Tr +
                 geom_hline(yintercept = 25, color = 'darkred', linetype = "dashed", size = .35) +
                 geom_line() +
                 #geom_point() +
@@ -70,13 +71,15 @@ QS_Median_OverviewPlot <- function(QStatsList, SampleNames, Prefix = "FW", xlim_
                 xlab("Cycle") +
                 coord_cartesian(xlim=c(xlim_low, xlim_high),
                                 ylim = c(8,42), expand = FALSE) +
-                scale_color_gradient2(name = "No reads", limits = c(10000, 60000), midpoint = 35000, low = "#009E73", high = "#E69F00", mid = "#999999") +
+                scale_color_gradient2(name = "No reads", limits = c(min(df$NoReads), max(df$NoReads)), midpoint = mean(df$NoReads), low = "#0072B2", high = "#E69F00", mid = "#999999") +
                 #scale_color_gradient2(name = "No reads", limits = c(min(df$NoReads), max(df$NoReads)), midpoint = min(df$NoReads) + (range(df$NoReads)[2]- range(df$NoReads)[1])/2, low = "#009E73", high = "#E69F00", mid = "#999999")
                 ggtitle(paste(Prefix, "reads, Median_QS, NoSamples:", length(SampleNames))) +
                 theme_bw() + 
                 theme(panel.grid.minor = element_blank(),
                       panel.grid.major.x = element_blank(),
                       panel.grid.major.y = element_line(color = "#999999", size = .15))
+        
+        Tr
 }
 
 #######################################
@@ -117,7 +120,7 @@ QS_Mean_OverviewPlot <- function(QStatsList, SampleNames, Prefix = "FW", xlim_lo
                 xlab("Cycle") +
                 coord_cartesian(xlim=c(xlim_low, xlim_high),
                                 ylim = c(8,42), expand = FALSE)  +
-                scale_color_gradient2(name = "No reads", limits = c(10000, 60000), midpoint = 35000, low = "#009E73", high = "#E69F00", mid = "#999999") +
+                scale_color_gradient2(name = "No reads", limits = c(min(df$NoReads), max(df$NoReads)), midpoint = mean(df$NoReads), low = "#0072B2", high = "#E69F00", mid = "#999999") +
                 #scale_color_gradient2(name = "No reads", limits = c(min(df$NoReads), max(df$NoReads)), midpoint = min(df$NoReads) + (range(df$NoReads)[2]- range(df$NoReads)[1])/2, low = "#009E73", high = "#E69F00", mid = "#999999")
                 ggtitle(paste(Prefix, " reads, Mean_QS, NoSamples", length(SampleNames))) +
                 theme_bw() + 
@@ -395,6 +398,71 @@ NoReads_StepsSimple <- function(ReadSummary, SampleNames, sort = TRUE) {
 
 
 #######################################
+#### NoReads_StepsSimple
+#######################################
+
+NoReads_StepsSimple_Old <- function(ReadSummary, SampleNames, sort = TRUE) {
+        
+        
+        if (!all(SampleNames %in% ReadSummary$Sample)) {
+                stop("not all SampleNames were found in the given ReadSummary")
+        }
+        
+        ReadSummary <- ReadSummary[ReadSummary$Sample %in% SampleNames,]
+        
+        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+        
+        ## Construct the plotting data frame
+        
+        # ReadSummary <- subset(ReadSummary, select = c("Sample", "NoReads", "FilteredReads", "NoDenoisedReads_FW", "NoDenoisedReads_RV", "MergedReads", "MergedReadsWOBimera"))
+        
+        ReadSummary <- subset(ReadSummary, select = c("Sample", "NoReads", "FilteredReads", "MergedReads", "MergedReadsWOBimera"))
+        
+        if (sort) {
+                
+                ReadSummary <- dplyr::arrange(ReadSummary, desc(NoReads))
+                LevelsWant <- as.character(ReadSummary$Sample)
+                for (i in seq_along(LevelsWant)) {
+                        ReadSummary$Sample <- relevel(ReadSummary$Sample, ref = LevelsWant[i])
+                }
+                
+        }
+        
+        #colnames(ReadSummary)[2:7] <- c("all", "filtered", "denoised_FW", "denoised_RV", "merged", "nochim")
+        colnames(ReadSummary)[2:5] <- c("all", "filtered", "merged", "nochim")
+        ReadSummary <- tidyr::gather(ReadSummary, key = Type, value = NoReads, -Sample)
+        
+        ReadSummary$Type <- factor(ReadSummary$Type, levels = c("all", "filtered", "denoised_FW", "denoised_RV", "merged", "nochim"), ordered = T)
+        
+        
+        color_levels <- cbPalette[2:7]
+        names(color_levels) <- c("all", "filtered", "denoised_FW", "denoised_RV", "merged", "nochim")
+        
+        
+        Tr <- ggplot(data = ReadSummary, aes(x = Sample, y = NoReads, color = Type))  
+        Tr <- Tr + 
+                geom_hline(yintercept = 10000, color = 'darkred', linetype = "dashed", size = .35) +
+                geom_point(size = 2) +
+                scale_color_manual(values = color_levels) +
+                ylab("No Reads") + 
+                xlab("") +
+                theme_bw() + 
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15),
+                      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
+                      legend.title = element_blank())
+        Tr
+        
+}
+# --
+
+
+
+
+
+
+#######################################
 #### NoUniques_StepsSimple
 #######################################
 
@@ -455,6 +523,128 @@ NoUniques_StepsSimple <- function(ReadSummary, SampleNames, sort = TRUE) {
         Tr
         
 }
+
+
+
+
+
+#######################################
+#### NoUniques_StepsSimple2
+#######################################
+
+
+
+NoUniques_StepsSimple2 <- function(ReadSummary, SampleNames, sort = TRUE) {
+        
+        
+        if (!all(SampleNames %in% ReadSummary$Sample)) {
+                stop("not all SampleNames were found in the given ReadSummary")
+        }
+        
+        ReadSummary <- ReadSummary[ReadSummary$Sample %in% SampleNames,]
+        
+        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+        
+        if (sort) {
+                
+                ReadSummary <- dplyr::arrange(ReadSummary, desc(NoReads))
+                LevelsWant <- as.character(ReadSummary$Sample)
+                for (i in seq_along(LevelsWant)) {
+                        ReadSummary$Sample <- relevel(ReadSummary$Sample, ref = LevelsWant[i])
+                }
+                
+        }
+        
+        ## Construct the plotting data frame
+        
+        #ReadSummary <- subset(ReadSummary, select = c("Sample", "UniqueSequences_F", "UniqueSequences_R", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera"))
+        
+        ReadSummary <- subset(ReadSummary, select = c("Sample", "FilteredReads", "UniqueSequences_F", "UniqueSequences_R", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera"))
+        
+        # colnames(ReadSummary)[2:5] <- c("all", "filtered", "denoised_FW", "denoised_RV", "merged", "nochim")
+        # colnames(ReadSummary)[2:5] <- c("all", "filtered", "merged", "nochim")
+        ReadSummary <- tidyr::gather(ReadSummary, key = Type, value = NoReads, -Sample)
+        
+        #color_levels <- cbPalette[2:7]
+        #names(color_levels) <- c("UniqueSequences_F", "UniqueSequences_R", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera")
+        #ReadSummary$Type <- factor(ReadSummary$Type, levels = c("UniqueSequences_F", "UniqueSequences_R", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera"), ordered = T)
+        
+        
+        color_levels <- cbPalette
+        names(color_levels) <- c("FilteredReads", "UniqueSequences_F", "UniqueSequences_R", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera")
+        ReadSummary$Type <- factor(ReadSummary$Type, levels = c("FilteredReads", "UniqueSequences_F", "UniqueSequences_R", "DenoisedSequences_F", "DenoisedSequences_R", "Unique_Amplicons", "UniqueAmpliconsWOBimera"), ordered = T)
+        
+        
+        Tr <- ggplot(data = ReadSummary, aes(x = Sample, y = NoReads, color = Type))  
+        Tr <- Tr + 
+                # geom_hline(yintercept = 10000, color = 'darkred', linetype = "dashed", size = .35) +
+                geom_point(size = 2) +
+                scale_color_manual(values = color_levels) +
+                ylab("No Unique Sequences") + 
+                xlab("") +
+                theme_bw() + 
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15),
+                      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
+                      legend.title = element_blank()) +
+                scale_y_log10()
+        Tr
+        
+}
+
+
+
+
+
+#######################################
+#### Percentage_NonSingletonUniqueFilteredReads
+#######################################
+
+
+
+Percentage_NonSingletonUniqueFilteredReads <- function(ReadSummary, SampleNames, sort = FALSE) {
+        
+        
+        if (!all(SampleNames %in% ReadSummary$Sample)) {
+                stop("not all SampleNames were found in the given ReadSummary")
+        }
+        
+        ReadSummary <- ReadSummary[ReadSummary$Sample %in% SampleNames,]
+        
+        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+        
+        if (sort) {
+                
+                ReadSummary <- dplyr::arrange(ReadSummary, desc(NoReads))
+                LevelsWant <- as.character(ReadSummary$Sample)
+                for (i in seq_along(LevelsWant)) {
+                        ReadSummary$Sample <- relevel(ReadSummary$Sample, ref = LevelsWant[i])
+                }
+                
+        }
+        
+        ReadSummary2 <- mutate(ReadSummary, PC_NonSingletonUniqueFilteredReads_F = 100*(1-UniqueFilteredReadSingletons_F/UniqueSequences_F),
+                               PC_NonSingletonUniqueFilteredReads_R = 100*(1-UniqueFilteredReadSingletons_R/UniqueSequences_R))
+        ReadSummary2 <- select(ReadSummary2, Sample, PC_NonSingletonUniqueFilteredReads_F, PC_NonSingletonUniqueFilteredReads_R)
+        ReadSummary2 <- gather(ReadSummary2, key = Type, value = PC, -Sample)
+        cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+        Tr <- ggplot(ReadSummary2, aes(x = Sample, y = PC, col = Type))
+        Tr <- Tr +
+                geom_point(size = 2) +
+                scale_color_manual("", values = c(cbPalette[2], cbPalette[4])) +
+                ylab("PC of unique filtered reads that are not singletons") + 
+                xlab("") +
+                theme_bw() + 
+                theme(panel.grid.minor = element_blank(),
+                      panel.grid.major.y = element_blank(),
+                      panel.grid.major.x = element_line(color = "#999999", size = .15),
+                      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6),
+                      legend.title = element_blank())
+        Tr
+        
+}
+
 
 
 

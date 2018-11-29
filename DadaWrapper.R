@@ -1,6 +1,6 @@
 # # ---- Sourcing the plot and wrapper functions ----
 # # datapath <- "/emc/cbmr/data/MICROBIOME/raw/mouse/stool/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
-datapath <- "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis"
+datapath <- "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis_filteredReads42500/"
 load(file.path(datapath, "Dada_Data/QualityStats.RData"))
 # load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
 
@@ -14,6 +14,11 @@ load(file.path(datapath, "Dada_Data/QualityStats.RData"))
 # names(filtFs) <- namesF
 # names(filtRs) <- namesR
 
+filtFs <- list.files("/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis_filteredReads42500/Dada_FilteredFastqs_42500", full.names = T)
+filtRs <- filtFs[seq(2, 12, by = 2)]
+filtFs <- filtFs[seq(1, 11, by = 2)]
+names(filtFs) <- names(F_QualityStats)
+names(filtRs) <- names(F_QualityStats)
 
 # CHANGE pathToFunctions here:
 pathToFunctions <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions"
@@ -24,10 +29,10 @@ source(file.path(pathToFunctions, "Dada_WrapFunctions.R"))
 # ----
 
 # ---- Calling the wrap function (Adjust INPUTS) ----
-Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Clean",
+Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Clean/",
            F_pattern = "1.fq.gz", 
            R_pattern = "2.fq.gz",
-           path2 = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis_Pooled/", #"/emc/cbmr/data/MICROBIOME/raw/mouse/stool/Pooled2"
+           path2 = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis_filteredReads42500_Test/", #"/emc/cbmr/data/MICROBIOME/raw/mouse/stool/Pooled2"
            trimLeft = c(10,10), # how many nucleotides will be clipped from the beginning of the FW and RV reads, respectively
            truncLen = c(230, 200), # how many nucleotides will be clipped from the end of the FW and RV reads, respectively
            maxEE = 1, # After truncation, reads with higher than maxEE "expected errors" will be discarded
@@ -45,8 +50,8 @@ Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Health
            R_QualityStats = NULL,
            filtFs = filtFs, # if given and FilteredFolder with files exist, Filtering can be jumped over
            filtRs = filtRs,
-           pool = TRUE,
-           randomize = FALSE,
+           pool = FALSE,
+           randomize = TRUE,
            filteredQualityStats = TRUE)
 
 # Then call on terminal: Rscript DadaWrapper.R

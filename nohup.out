@@ -157,36 +157,28 @@ R: R version 3.5.1 (2018-07-02); dada2: 1.8.0; ShortRead: 1.38.0; ggplot2: 3.0.0
                         ********************************************************************
 *********************** Start denoising and bimera detection ***********************
                         ********************************************************************
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/1_F_Filtered.fastq.gz
-Encountered 104795 unique sequences from 162568 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/2_F_Filtered.fastq.gz
-Encountered 79388 unique sequences from 121808 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/3_F_Filtered.fastq.gz
-Encountered 37039 unique sequences from 61156 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/4_F_Filtered.fastq.gz
-Encountered 51722 unique sequences from 72350 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/5_F_Filtered.fastq.gz
-Encountered 25994 unique sequences from 47535 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/6_F_Filtered.fastq.gz
-Encountered 57474 unique sequences from 84253 total sequences read.
-6 samples were pooled: 549670 reads in 312161 unique sequences.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/1_R_Filtered.fastq.gz
-Encountered 110933 unique sequences from 162568 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/2_R_Filtered.fastq.gz
-Encountered 82519 unique sequences from 121808 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/3_R_Filtered.fastq.gz
-Encountered 39112 unique sequences from 61156 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/4_R_Filtered.fastq.gz
-Encountered 54496 unique sequences from 72350 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/5_R_Filtered.fastq.gz
-Encountered 27832 unique sequences from 47535 total sequences read.
-Dereplicating sequence entries in Fastq file: /Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/6_R_Filtered.fastq.gz
-Encountered 56778 unique sequences from 84253 total sequences read.
-6 samples were pooled: 549670 reads in 328306 unique sequences.
+Processing: 1 
+Sample 1 - 42500 reads in 31331 unique sequences.
+Sample 1 - 42500 reads in 32685 unique sequences.
+Processing: 2 
+Sample 1 - 42500 reads in 30698 unique sequences.
+Sample 1 - 42500 reads in 31804 unique sequences.
+Processing: 3 
+Sample 1 - 42500 reads in 26864 unique sequences.
+Sample 1 - 42500 reads in 28304 unique sequences.
+Processing: 4 
+Sample 1 - 42500 reads in 31993 unique sequences.
+Sample 1 - 42500 reads in 33476 unique sequences.
+Processing: 5 
+Sample 1 - 42500 reads in 23623 unique sequences.
+Sample 1 - 42500 reads in 25252 unique sequences.
+Processing: 6 
+Sample 1 - 42500 reads in 31011 unique sequences.
+Sample 1 - 42500 reads in 30688 unique sequences.
 *********************** all samples denoised mergerd amplicons generated ***********************
                         ********************************************************************
 The sequences being tabled vary in length.
-Identified 2284 bimeras out of 2871 input sequences.
+Identified 509 bimeras out of 807 input sequences.
 *********************** Seq table generated and Bimeras removed ***********************
                 ********************************************************************
 *********************** Sequence table generated, Data saved ***********************

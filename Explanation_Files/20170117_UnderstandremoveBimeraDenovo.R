@@ -51,3 +51,6 @@ identical(NoBimerasConsensus, sum(Fraction >= 0.9, na.rm = T)) # sometimes TRUE
 # MatOuts2 <- matB[,ExtraOutByConsensus]
 # SeqOuts <- seqtab[,ExtraOutByConsensus]
 
+
+seqtab.nochim.PooledS1 <- removeBimeraDenovo(seqtabS1, method="pooled", verbose = T)
+seqtab.nochim.PerSampleS1 <- removeBimeraDenovo(seqtabS1, method="per-sample", verbose = T)

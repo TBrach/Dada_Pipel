@@ -430,7 +430,7 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         # as.data.frame to un-dplyr the data.frame
                         
                         # collect the same stats for the RV FastQ files
-                        Current_RVfq <- filtFs[i]
+                        Current_RVfq <- filtRs[i]
                         Current_dfRV <- qa(Current_RVfq, n = 1e06)[["perCycle"]]$quality
                         
                         Current_dfRV <- dplyr::group_by(Current_dfRV, Cycle)
@@ -615,6 +615,13 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 NoDenoisedReads_FW <- sapply(dd_F, function(x) sum(x$denoised))
                 NoDenoisedReads_RV <- sapply(dd_R, function(x) sum(x$denoised))
                 
+                UniqueFilteredReadSingletons_F <- sapply(drp_F, function(x) sum(x$uniques == 1))   
+                UniqueFilteredReadSingletons_R <- sapply(drp_R, function(x) sum(x$uniques == 1))
+                MinAbundanceDenoised_F <- sapply(dd_F, function(x)min(x$denoised))
+                MinAbundanceDenoised_R <- sapply(dd_R, function(x)min(x$denoised))
+                
+                
+                
                 mergers <- mergePairs(dd_F, drp_F, dd_R, drp_R, minOverlap = minOverlap, maxMismatch = maxMismatch)
                 
                 rm(drp_F, drp_R, dd_F, dd_R)
@@ -652,6 +659,11 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 
                 mergers <- mergePairs(dd_F, drp_F, dd_R, drp_R, minOverlap = minOverlap, maxMismatch = maxMismatch)
                 
+                UniqueFilteredReadSingletons_F <- sapply(drp_F, function(x) sum(x$uniques == 1))   
+                UniqueFilteredReadSingletons_R <- sapply(drp_R, function(x) sum(x$uniques == 1))
+                MinAbundanceDenoised_F <- sapply(dd_F, function(x)min(x$denoised))
+                MinAbundanceDenoised_R <- sapply(dd_R, function(x)min(x$denoised))
+                
                 rm(drp_F, drp_R, dd_F, dd_R)
                 
         } else {
@@ -681,6 +693,20 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                 names(Denoised_F) <- SampleNames
                 Denoised_R <- vector("numeric", length(SampleNames))
                 names(Denoised_R) <- SampleNames
+                # 20181129: added these parameters mainly because I considered them interesting for the normalisation project
+                # record how many of the unique Filtered reads are singletons
+                UniqueFilteredReadSingletons_F <- vector("numeric", length(SampleNames))
+                names(UniqueFilteredReadSingletons_F) <- SampleNames
+                UniqueFilteredReadSingletons_R <- vector("numeric", length(SampleNames))
+                names(UniqueFilteredReadSingletons_R) <- SampleNames
+                # record the minimum Abundance of the denoised reads
+                MinAbundanceDenoised_F <- vector("numeric", length(SampleNames))
+                names(MinAbundanceDenoised_F) <- SampleNames
+                MinAbundanceDenoised_R <- vector("numeric", length(SampleNames))
+                names(MinAbundanceDenoised_R) <- SampleNames
+                
+                
+                # -- 
                 
                 for(sam in SampleNames) {
                         cat("Processing:", sam, "\n")
@@ -698,6 +724,13 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
                         NoDenoisedReads_RV[sam] <- sum(ddR$denoised)
                         merger <- mergePairs(ddF, derepF, ddR, derepR, minOverlap = minOverlap, maxMismatch = maxMismatch)
                         mergers[[sam]] <- merger
+                        
+                        # the newcomers
+                        UniqueFilteredReadSingletons_F[sam] <- sum(derepF$uniques == 1)
+                        UniqueFilteredReadSingletons_R[sam] <- sum(derepR$uniques == 1)
+                        MinAbundanceDenoised_F[sam] <- min(ddF$denoised)
+                        MinAbundanceDenoised_R[sam] <- min(ddR$denoised)
+                        #
                         
                         rm(derepF, derepR, ddF, ddR, merger)
                 }
@@ -763,6 +796,13 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         ReadSummary$DenoisedSequences_R <- Denoised_R
         ReadSummary$Unique_Amplicons <- rowSums(seqtab != 0)
         ReadSummary$UniqueAmpliconsWOBimera <- rowSums(seqtab.nochim != 0)
+        
+        ReadSummary$UniqueFilteredReadSingletons_F <- UniqueFilteredReadSingletons_F
+        ReadSummary$UniqueFilteredReadSingletons_R <- UniqueFilteredReadSingletons_R
+        ReadSummary$MinAbundanceDenoised_F <- MinAbundanceDenoised_F
+        ReadSummary$MinAbundanceDenoised_R <- MinAbundanceDenoised_R
+        
+        
         rownames(ReadSummary) <- NULL
         
         # I now also save errorsFW and RV to be able to recapitulate the error plots in later analyses
@@ -848,6 +888,18 @@ Dada2_wrap <- function(path, F_pattern, R_pattern, path2 = NULL,
         
         # --
         
+        
+        # - print the unique reads again, including Unique Filtered Reads and log -
+        pdf(file = file.path(PlotFolder, "NoUniques_AllSamplesWUniqueFilteredReads.pdf"), width = width, height = 6)
+        print(NoUniques_StepsSimple2(ReadSummary = ReadSummary, SampleNames = SampleNames, sort = TRUE))
+        dev.off()
+        # -- 
+        
+        # - print the percentage of unique filtered reads that are not singletons -
+        pdf(file = file.path(PlotFolder, "PCofUniqueFilteredReadsThatAreNotSingletons.pdf"), width = width, height = 6)
+        print(Percentage_NonSingletonUniqueFilteredReads(ReadSummary = ReadSummary, SampleNames = SampleNames))
+        dev.off()
+        # -- 
         
         
         
