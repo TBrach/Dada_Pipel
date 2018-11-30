@@ -1,3 +1,23 @@
+# Some kind of summary here:
+# - they claim that thanks to the precision of ASVs it is much easier to detect bimera based on ASV than with OTUs. Note however, it seems that they
+# completely ignore multimera and restrict themselves to bimera
+# - for a short description of the algorithm see help isBimeraDenovo
+# - I describe here the differences between Pooled PerSample and Consensus based on an example seqtab with 6 samples and 807 ASV but any seqtab should do
+
+
+
+
+
+
+
+datapath <- 
+
+
+
+
+
+
+
 # you have a seqtab (on which no bimera removal has been taken place)
 
 seqtab.nochim.Pooled <- removeBimeraDenovo(seqtab, method="pooled", verbose = T)

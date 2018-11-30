@@ -1,6 +1,6 @@
 # # ---- Sourcing the plot and wrapper functions ----
 # # datapath <- "/emc/cbmr/data/MICROBIOME/raw/mouse/stool/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
-datapath <- "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis_filteredReads42500/"
+datapath <- "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis_filteredReads42500_Pooled/"
 load(file.path(datapath, "Dada_Data/QualityStats.RData"))
 # load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
 
@@ -32,7 +32,7 @@ source(file.path(pathToFunctions, "Dada_WrapFunctions.R"))
 Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Clean/",
            F_pattern = "1.fq.gz", 
            R_pattern = "2.fq.gz",
-           path2 = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis_filteredReads42500_Test/", #"/emc/cbmr/data/MICROBIOME/raw/mouse/stool/Pooled2"
+           path2 = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis_FilteredReads_42500_PooledTest/", #"/emc/cbmr/data/MICROBIOME/raw/mouse/stool/Pooled2"
            trimLeft = c(10,10), # how many nucleotides will be clipped from the beginning of the FW and RV reads, respectively
            truncLen = c(230, 200), # how many nucleotides will be clipped from the end of the FW and RV reads, respectively
            maxEE = 1, # After truncation, reads with higher than maxEE "expected errors" will be discarded
@@ -50,7 +50,7 @@ Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Health
            R_QualityStats = NULL,
            filtFs = filtFs, # if given and FilteredFolder with files exist, Filtering can be jumped over
            filtRs = filtRs,
-           pool = FALSE,
+           pool = TRUE,
            randomize = TRUE,
            filteredQualityStats = TRUE)
 
