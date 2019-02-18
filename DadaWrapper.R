@@ -1,8 +1,8 @@
-# # ---- Sourcing the plot and wrapper functions ----
-# # datapath <- "/emc/cbmr/data/MICROBIOME/raw/mouse/stool/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
-datapath <- "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/"
-load(file.path(datapath, "Dada_Data/QualityStats.RData"))
-# load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
+# # - Source previous data if you want to re-use filtered reads or quality data -
+# # # datapath <- "/emc/cbmr/data/MICROBIOME/raw/mouse/stool/2017-07-13_DK_age_ManiAging/Dada2_Analysis"
+# datapath <- "/Users/jvb740/MarieCurie_Work/Project_DanFundIgA/"
+# load(file.path(datapath, "Dada_Data/QualityStats.RData"))
+# # load(file.path(datapath, "Dada_Data/DenoisedData.RData"))
 
 # namesF <- names(filtFs)
 # namesR <- names(filtRs)
@@ -14,25 +14,27 @@ load(file.path(datapath, "Dada_Data/QualityStats.RData"))
 # names(filtFs) <- namesF
 # names(filtRs) <- namesR
 
-filtFs <- list.files("/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/", full.names = T)
-filtRs <- filtFs[seq(2, 12, by = 2)]
-filtFs <- filtFs[seq(1, 11, by = 2)]
-names(filtFs) <- names(F_QualityStats)
-names(filtRs) <- names(F_QualityStats)
+# filtFs <- list.files("/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis/Dada_FilteredFastqs/", full.names = T)
+# filtRs <- filtFs[seq(2, 12, by = 2)]
+# filtFs <- filtFs[seq(1, 11, by = 2)]
+# names(filtFs) <- names(F_QualityStats)
+# names(filtRs) <- names(F_QualityStats)
+# --
 
+# - source the functions -
 # CHANGE pathToFunctions here:
 pathToFunctions <- "/Users/jvb740/MarieCurie_Work/BackgroundKnowledge/16S_Learning/Dada_Pipel/Functions"
 # pathToFunctions <- "/home/jvb740/Dada_Pipel/Functions"
 
 source(file.path(pathToFunctions, "Dada_PlotFunctions.R"))
 source(file.path(pathToFunctions, "Dada_WrapFunctions.R"))
-# ----
+# --
 
-# ---- Calling the wrap function (Adjust INPUTS) ----
-Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Clean/",
+# - Calling the wrap function (Adjust INPUTS) -
+Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/Project_DanFundIgA/20180928_DK_Age_DanFundIgA/Clean/",
            F_pattern = "1.fq.gz", 
            R_pattern = "2.fq.gz",
-           path2 = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Healthy_Normalization_20181023_Reads/Dada_Analysis_N2/", #"/emc/cbmr/data/MICROBIOME/raw/mouse/stool/Pooled2"
+           path2 = "/Users/jvb740/MarieCurie_Work/Project_DanFundIgA/20180928_DK_Age_DanFundIgA/Dada_Analysis_20190205/", #"/emc/cbmr/data/MICROBIOME/raw/mouse/stool/Pooled2"
            trimLeft = c(10,10), # how many nucleotides will be clipped from the beginning of the FW and RV reads, respectively
            truncLen = c(230, 200), # how many nucleotides will be clipped from the end of the FW and RV reads, respectively
            maxEE = 1, # After truncation, reads with higher than maxEE "expected errors" will be discarded
@@ -42,14 +44,14 @@ Dada2_wrap(path = "/Users/jvb740/MarieCurie_Work/Project_Normalization/DK_Health
            # ? I did not understand this because I thought it should clash with dada2 not allowing sequences of variable length, but this i now supported:
            # https://github.com/benjjneb/dada2/issues/55 (at the end)
            nreadsLearn = 1.2e+06, # the number of reads (distributed over far less unique reads) used to learn the error matrixes, i.e. nreads in dada2:::learnErrors
-           err_F = err_F, # when error matrix given, the error matrix estimation is skipped
-           err_R = err_R,
+           err_F = NULL, # when error matrix given, the error matrix estimation is skipped
+           err_R = NULL,
            minOverlap = 30, # minOverlap from the mergePairs command
            maxMismatch = 0, # maxMismatch from the mergePairs command
            F_QualityStats = NULL, # if given e.g. from Dada_QualityCheck the quality stats collection part is jumped over
            R_QualityStats = NULL,
-           filtFs = filtFs, # if given and FilteredFolder with files exist, Filtering can be jumped over
-           filtRs = filtRs,
+           filtFs = NULL, # if given and FilteredFolder with files exist, Filtering can be jumped over
+           filtRs = NULL,
            pool = FALSE,
            randomize = TRUE,
            filteredQualityStats = TRUE)
